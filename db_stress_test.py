@@ -41,6 +41,4 @@ async def main():
     print("✅ Stress Test Complete. Zero deadlocks detected.")
 
 if __name__ == "__main__":
-    # Windows/WSL specific fix for asyncio
-    # asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy()) if os.name == 'nt' else None
     asyncio.run(main())

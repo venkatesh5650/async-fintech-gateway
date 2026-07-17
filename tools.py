@@ -1,17 +1,17 @@
+import asyncio
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 
-# ==========================================
-# 1. DEFINE THE STRICT INPUT SCHEMA
-# ==========================================
-# We force the LLM to adhere to this schema so it can never pass bad data types
+from database import get_db
+from models import MarketPricing, Ticker
+
+# Enforces a strict schema boundary on LLM generation. 
+# Prevents hallucinated arguments from causing downstream database query exceptions.
 class PriceHistoryInput(BaseModel):
     ticker: str = Field(..., description="The stock ticker symbol, e.g., 'AAPL' or 'NVDA'")
     days_back: int = Field(default=50, description="How many days of historical data to retrieve")
 
-# ==========================================
-# 2. DEFINE THE EXECUTABLE TOOL
-# ==========================================
 @tool("get_historical_prices", args_schema=PriceHistoryInput)
 def get_historical_prices(ticker: str, days_back: int) -> dict:
     """
@@ -20,15 +20,45 @@ def get_historical_prices(ticker: str, days_back: int) -> dict:
     """
     print(f"\n[TOOL EXECUTING] 🛠️ Agent invoked get_historical_prices for {ticker} (Last {days_back} days)")
     
-    # Tomorrow, we will replace this block with your actual crud.get_market_data async function.
-    # For today's structural binding, we simulate the database ping.
+    # LangGraph tools natively execute in a synchronous thread. 
+    # This explicit event loop bridge safely routes the tool execution into the async database driver.
+    loop = asyncio.get_event_loop()
     
-    mock_db_response = {
-        "ticker": ticker,
-        "current_price": 195.00,
-        "fifty_day_sma": 180.50,
-        "volume_spike_detected": True,
-        "data_source": "PostgreSQL_Engine"
-    }
-    
-    return mock_db_response
+    async def fetch_live_data():
+        async for session in get_db():
+            
+            # Relational translation: Maps the string ticker to the primary key 
+            # to hit the highly optimized composite index on the MarketPricing table.
+            ticker_query = select(Ticker).where(Ticker.symbol == ticker)
+            result = await session.execute(ticker_query)
+            target_ticker = result.scalar_one_or_none()
+            
+            if not target_ticker:
+                return {"error": f"Ticker {ticker} not found in live database."}
+                
+            price_query = (
+                select(MarketPricing)
+                .where(MarketPricing.ticker_id == target_ticker.id)
+                .order_by(MarketPricing.timestamp.desc())
+                .limit(days_back)
+            )
+            price_result = await session.execute(price_query)
+            prices = price_result.scalars().all()
+            
+            if not prices:
+                return {"error": f"No pricing data available for {ticker}."}
+                
+            # Deterministic math execution. Offloads calculation to the Python runtime 
+            # to absolutely prevent LLM arithmetic hallucinations.
+            current_price = float(prices[0].close_price)
+            avg_moving = sum(float(p.close_price) for p in prices) / len(prices)
+            
+            return {
+                "ticker": ticker,
+                "current_price": round(current_price, 2),
+                "fifty_day_sma": round(avg_moving, 2),
+                "data_points_analyzed": len(prices),
+                "data_source": "Live_PostgreSQL_Engine"
+            }
+            
+    return loop.run_until_complete(fetch_live_data())

@@ -4,15 +4,14 @@ from models import MarketPricing
 
 async def upsert_market_data(session: AsyncSession, pricing_data: list[dict]):
     """
-    Safely ingests high-frequency market data. 
-    If a record for the exact ticker and timestamp already exists, it updates it.
+    Idempotent time-series ingestion handler. 
+    Guarantees exactly-once write semantics during high-frequency webhook retries or concurrent backfills.
     """
     
-    # 1. Build the PostgreSQL-specific INSERT statement
+    # Utilizing native PostgreSQL ON CONFLICT for atomic upserts.
+    # This completely bypasses ORM read-modify-write race conditions under heavy concurrent load.
     stmt = insert(MarketPricing).values(pricing_data)
 
-    # 2. Define the exact behavior upon a collision (The Upsert)
-    # 'excluded' refers to the new data payload we *tried* to insert
     update_dict = {
         "open_price": stmt.excluded.open_price,
         "high_price": stmt.excluded.high_price,
@@ -20,13 +19,11 @@ async def upsert_market_data(session: AsyncSession, pricing_data: list[dict]):
         "close_price": stmt.excluded.close_price,
         "volume": stmt.excluded.volume
     }
-
     
     stmt = stmt.on_conflict_do_update(
-        constraint="uix_ticker_timestamp",  # The exact string from  UniqueConstraint in models.py
+        constraint="uix_ticker_timestamp", 
         set_=update_dict
     )
 
-    # 4. Execute asynchronously and commit the transaction
     await session.execute(stmt)
     await session.commit()

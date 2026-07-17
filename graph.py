@@ -5,90 +5,66 @@ from langchain_groq import ChatGroq
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode, tools_condition
 
-# 1. IMPORT YOUR CUSTOM TOOL (The "Hands")
 from tools import get_historical_prices
 
-# ==========================================
-# 2. DEFINE THE AGENT STATE (The "Memory")
-# ==========================================
+# State object defining the memory payload passed between nodes during cyclic execution.
+# operator.add enforces an append-only message stack to strictly preserve the interaction history.
 class AgentState(TypedDict):
-    # 'Annotated' and 'operator.add' tell the graph to APPEND messages to the list, not overwrite them.
-    # This creates the AI's short-term memory during the loop.
     messages: Annotated[List[BaseMessage], operator.add]
     ticker: str
     analysis_report: str
 
-# ==========================================
-# 3. INITIALIZE THE LLM & BIND TOOLS (The "Brain")
-# ==========================================
-# We use temperature=0 to force the AI to be deterministic and analytical, not creative.
+# Deterministic LLM configuration mapped to the internal proxy. 
+# Temperature 0 enforces strict adherence to system prompts and limits hallucinatory drift.
 llm = ChatGroq(model="openai/gpt-oss-20b", temperature=0)
 
-# We explicitly give the LLM the instruction manual for your database functions
 tools = [get_historical_prices]
 llm_with_tools = llm.bind_tools(tools)
 
-# ==========================================
-# 4. DEFINE THE COMPUTATIONAL NODES
-# ==========================================
 def intelligence_node(state: AgentState):
     """
-    The Brain Layer. 
-    It looks at the current messages, decides if it needs to use a tool, or formulates an answer.
+    Primary reasoning router. Evaluates the current message stack and either 
+    yields a structured tool call or synthesizes the final response for extraction.
     """
     print("\n[NODE: INTELLIGENCE] 🧠 Agent is reasoning...")
     messages = state.get("messages", [])
     ticker = state.get("ticker")
     
-    # The LLM processes the history. If it needs data, it will return a "ToolCall"
     response = llm_with_tools.invoke(messages)
     
-    # We append the LLM's response to the memory
     return {"messages": [response]}
 
 def reporting_node(state: AgentState):
     """
-    The Output Layer.
-    Extracts the final text from the LLM after it has finished all its tool queries.
+    Terminal extraction node. Isolates the final resolved text from the graph state 
+    for clean downstream API consumption.
     """
     print("\n[NODE: REPORTING] 📊 Finalizing alpha signal report...")
     final_message = state["messages"][-1].content
     return {"analysis_report": final_message}
 
-# ==========================================
-# 5. COMPILE THE AUTONOMOUS GRAPH
-# ==========================================
+# Directed Cyclic Graph (DCG) configuration for autonomous state machine execution.
 workflow = StateGraph(AgentState)
 
-# Register the logic nodes
 workflow.add_node("agent", intelligence_node)
 workflow.add_node("reporting", reporting_node)
-
-# Register the Pre-Built Tool Node (This physically executes any tool the LLM requests)
 workflow.add_node("tools", ToolNode(tools))
 
-# Map the Directed Paths
 workflow.set_entry_point("agent")
 
-# THE AUTONOMOUS ROUTER: 
-# The graph looks at the agent's output. If the agent requested a tool, it routes to the "tools" node.
-# If the agent gave a final text answer, it routes to the "reporting" node.
+# Native routing condition: Evaluates the AI's AIMessage for a 'tool_calls' payload.
+# If present, routes to the execution perimeter. If empty, forces the graph termination sequence.
 workflow.add_conditional_edges(
     "agent",
     tools_condition, 
     {"tools": "tools", "__end__": "reporting"}
 )
 
-# After a tool executes, force the loop back to the agent so it can read the tool's output
 workflow.add_edge("tools", "agent")
 workflow.add_edge("reporting", END)
 
-# Compile the engine
 app = workflow.compile()
 
-# ==========================================
-# 6. DETERMINISTIC RUNTIME TEST BED
-# ==========================================
 if __name__ == "__main__":
     print("=============================================")
     print("IGNITING AUTONOMOUS INTELLIGENCE ENGINE")
@@ -96,7 +72,7 @@ if __name__ == "__main__":
     
     ticker = "AAPL"
     
-    # Initialize the engine with the System Prompt permanently locked into global memory
+    # Initial execution payload injecting the immutable system prompt and dynamic user parameters.
     execution_payload = {
         "ticker": ticker,
         "messages": [
@@ -110,7 +86,6 @@ if __name__ == "__main__":
         "analysis_report": ""
     }
     
-    # Invoke the execution machine synchronously
     final_output_state = app.invoke(execution_payload)
     
     print("\n=============================================")
