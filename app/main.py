@@ -1,7 +1,7 @@
-from fastapi import FastAPI, HTTPException, status, Request, BackgroundTasks
+from fastapi import FastAPI, HTTPException, status, Request, BackgroundTasks, Depends
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 import httpx
 import uuid
 import logging
@@ -9,14 +9,17 @@ import os
 import time
 import json
 import redis.asyncio as redis
-from graph import app as intelligence_graph  # Your LangGraph state machine
-from schemas import IntelligenceResponse, JobAcceptedResponse, JobStatusResponse     # Your zero-trust output boundary
+from graph import app as intelligence_graph
+from schemas import JobAcceptedResponse, JobStatusResponse
 from langchain_core.messages import HumanMessage
+from firewall import RateLimiter
 
-app = FastAPI(title="Fintech Data Ingestion firewall")
+app = FastAPI(title="Fintech Intelligence Gateway")
 
-# Override default 422 Unprocessable Entity to enforce strict corporate API contracts.
-# Masks internal Pydantic schema traces from potential bad actors while providing structured debugging.
+# Perimeter Defense: Hard ceiling of 5 RPM per IP to prevent LLM API token exhaustion.
+limiter = RateLimiter(requests_per_minute=5)
+
+# Intercept default 422 errors to prevent internal Pydantic schema leakage to unauthenticated clients.
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     errors = []
@@ -36,96 +39,85 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         }
     )
 
-# Zero-trust perimeter schema. Enforces strict type casting and boundary checks 
-# before the payload enters the asyncio event loop or downstream storage.
+# Strict boundary model. Prevents malformed data from reaching the async event loop.
 class MarketDataPayload(BaseModel):
     ticker: str = Field(..., description="Equity ticker symbol (e.g., AAPL, TSLA)")
     asset_class: str = Field(..., description="Asset type classification")
     current_price: float = Field(..., gt=0.0, description="Current spot price, must be strictly positive")
     volume: int = Field(..., gt=0, description="24-hour trading volume")
 
-    # Normalize external inputs to prevent SQL injection or routing errors downstream.
     @field_validator("ticker")
     @classmethod
-    def validate_ticker_format(cls,value:str) -> str:
-        clean_ticker=value.upper().strip()
-        if not clean_ticker.isalpha() or not (1<=len(clean_ticker)<=5):
+    def validate_ticker_format(cls, value: str) -> str:
+        clean_ticker = value.upper().strip()
+        if not clean_ticker.isalpha() or not (1 <= len(clean_ticker) <= 5):
             raise ValueError("Ticker must be 1-5 alphabetic characters only.")
         return clean_ticker
     
-    # Restrict downstream processing to supported institutional asset classes.
     @field_validator("asset_class")
     @classmethod
-    def validate_class_method(cls,value:str) -> str:
-        allowed={"CRYPTO","FOREX","EQUITY","COMMODITY"}
-        clean_vlaue=value.upper().strip()
-        if clean_vlaue not in allowed:
+    def validate_class_method(cls, value: str) -> str:
+        allowed = {"CRYPTO", "FOREX", "EQUITY", "COMMODITY"}
+        clean_value = value.upper().strip()
+        if clean_value not in allowed:
             raise ValueError(f"Asset class must be one of {allowed}")
-        return clean_vlaue
+        return clean_value
 
-ALPHA_VANTAGE_KEY=os.getenv("ALPHA_VANTAGE_KEY")
+ALPHA_VANTAGE_KEY = os.getenv("ALPHA_VANTAGE_KEY")
 
 async def fetch_live_market_content(payload: MarketDataPayload):
     """
-    Delegates outbound network I/O to a non-blocking background thread.
-    Prevents external API latency from starving the primary FastAPI event loop.
+    Non-blocking background I/O. Prevents upstream provider latency from starving the primary thread pool.
     """
-    url=f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={payload.ticker}&apikey={ALPHA_VANTAGE_KEY}"
-
-    logging.warning(f"[OUTBOUND ASYNC] Reaching out to Alpha Vantage for upstream validation on {payload.ticker}...")
+    url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={payload.ticker}&apikey={ALPHA_VANTAGE_KEY}"
+    logging.warning(f"[OUTBOUND ASYNC] Validating {payload.ticker} against Alpha Vantage...")
 
     try:
-        # Enforce strict timeouts to prevent hanging sockets if the upstream provider goes down
+        # Enforce strict 10s timeout. Fail fast if upstream provider degrades.
         async with httpx.AsyncClient(timeout=10.0) as client:
-            response=await client.get(url)
+            response = await client.get(url)
 
-            if response.status_code==200:
-                market_data=response.json()
-                global_quote=market_data.get("Global_Quote",{})
+            if response.status_code == 200:
+                market_data = response.json()
+                global_quote = market_data.get("Global_Quote", {})
 
                 if global_quote:
-                    logging.warning(f"✅ [INTEGRATION SUCCESS] Upstream verification complete for {payload.ticker}. Real-world data verified.")
-                    logging.warning(f"📊 Live Data Dump: {global_quote}")
+                    logging.warning(f"✅ [INTEGRATION SUCCESS] Upstream verified for {payload.ticker}.")
                 else:
-                    logging.warning(f"⚠️ [API DATA WARN] API responded, but data structure was empty or rate-limited: {market_data}")
+                    logging.warning(f"⚠️ [API DATA WARN] Provider rate-limited or returned empty payload: {market_data}")
             else:
-                logging.error(f"❌ [API ERROR] Upstream provider returned non-200 status code: {response.status_code}")
+                logging.error(f"❌ [API ERROR] Upstream returned non-200: {response.status_code}")
 
     except httpx.RequestError as exc:
-        logging.error(f"❌ [NETWORK FAILURE] Failed to communicate with upstream API tier: {exc}")
+        logging.error(f"❌ [NETWORK FAILURE] Upstream tier unreachable: {exc}")
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "firewall": "active", "scope":"fintech"}
+    return {"status": "healthy", "firewall": "active", "scope": "fintech"}
 
 @app.post("/v1/market-data/ingest", status_code=status.HTTP_202_ACCEPTED)
 async def ingest_market_data(payload: MarketDataPayload, background_tasks: BackgroundTasks):
     """
-    Ingestion gateway. Designed for O(1) synchronous execution time. 
-    Instantly releases the client connection to maintain high throughput under heavy webhook load.
+    O(1) synchronous ingestion. Immediately releases client connection to sustain high webhook throughput.
     """
     background_tasks.add_task(fetch_live_market_content, payload)
-    
     return {
         "status": "allowed",
-        "message": f"Asset metrics for {payload.ticker} verified. Offloaded to downstream analytics pipeline.",
+        "message": f"Asset metrics for {payload.ticker} queued for downstream analytics.",
         "tracking_id": "async_task_dispatched"
     }
 
 # ==============================================================================
-# WEEK 4: THE ASYNCHRONOUS POLLING ARCHITECTURE (REDIS QUEUE)
+# DISTRIBUTED QUEUE & MULTI-AGENT STATE MACHINE
 # ==============================================================================
 
-# 1. Initialize the Async Redis Connection Pool
-# decode_responses=True ensures Redis returns standard Python strings instead of raw bytes
+# Internal Docker network connection. decode_responses=True avoids byte-parsing overhead.
 REDIS_URL = os.getenv("REDIS_URL", "redis://fintech_redis:6379/0")
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 
-# THE ASYNCHRONOUS WORKER
 async def run_intelligence_worker(job_id: str, ticker: str):
     """
-    Background worker that executes the LangGraph engine.
-    Writes the final state to the central Redis cache with a 1-hour expiration.
+    Executes ReAct graph logic. Writes final state to centralized Redis for stateless client polling.
     """
     start_time = time.perf_counter()
     try:
@@ -137,11 +129,10 @@ async def run_intelligence_worker(job_id: str, ticker: str):
             "analysis_report": ""
         }
         
-        # Execute the heavy AI Graph
         final_state = await intelligence_graph.ainvoke(initial_state)
         report = final_state.get("analysis_report", "ERROR: No report generated.")
         
-        # Strict Deterministic Signal Extraction
+        # Enforce deterministic signal extraction from LLM string output
         report_upper = report.upper()
         if "SIGNAL: BUY" in report_upper: extracted_signal = "BUY"
         elif "SIGNAL: SELL" in report_upper: extracted_signal = "SELL"
@@ -150,7 +141,6 @@ async def run_intelligence_worker(job_id: str, ticker: str):
             
         execution_time = (time.perf_counter() - start_time) * 1000
         
-        # Construct the final payload
         payload = {
             "status": "completed",
             "result": {
@@ -161,7 +151,7 @@ async def run_intelligence_worker(job_id: str, ticker: str):
             }
         }
         
-        # Write to Redis with an expiration time (TTL) of 3600 seconds (1 hour)
+        # TTL set to 3600s (1 hour) to force automated memory garbage collection
         await redis_client.set(job_id, json.dumps(payload), ex=3600)
         
     except Exception as e:
@@ -173,35 +163,34 @@ async def run_intelligence_worker(job_id: str, ticker: str):
         }
         await redis_client.set(job_id, json.dumps(error_payload), ex=3600)
 
-# THE HIGH-PERFORMANCE GATEWAY ROUTES
 @app.post("/v1/intelligence/jobs/{ticker}", response_model=JobAcceptedResponse, status_code=status.HTTP_202_ACCEPTED, tags=["Intelligence Engine"])
-async def submit_analysis_job(ticker: str, background_tasks: BackgroundTasks):
+async def submit_analysis_job(
+    ticker: str, 
+    background_tasks: BackgroundTasks,
+    _: None = Depends(limiter)  # Perimeter Firewall Injection
+):
     """
-    O(1) execution time. Instantly registers a job in Redis and offloads heavy AI compute.
+    O(1) job registration. Offloads LangGraph execution to background workers.
     """
     job_id = str(uuid.uuid4())
     
-    # 1. Initialize job state in Redis IMMEDIATELY so the polling route doesn't 404
+    # Pre-warm Redis state to prevent 404 race conditions during immediate client polling
     initial_payload = {"status": "processing", "result": None}
     await redis_client.set(job_id, json.dumps(initial_payload), ex=3600)
     
-    # 2. Handoff to background worker
     background_tasks.add_task(run_intelligence_worker, job_id, ticker)
-    
     return JobAcceptedResponse(job_id=job_id)
 
 @app.get("/v1/intelligence/jobs/{job_id}", response_model=JobStatusResponse, status_code=status.HTTP_200_OK, tags=["Intelligence Engine"])
 async def get_job_status(job_id: str):
     """
-    Stateless polling endpoint. Queries Redis directly, completely bypassing FastAPI's local memory.
+    Stateless horizontal scaling route. Bypasses Python memory and hits Redis directly.
     """
-    # 1. Query the central Redis cache
     cached_data = await redis_client.get(job_id)
     
     if not cached_data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job ID not found or has expired.")
     
-    # 2. Deserialize the JSON string back into a Python dictionary
     job_data = json.loads(cached_data)
     
     if job_data["status"] == "failed":
