@@ -31,13 +31,15 @@ def gatekeeper_node(state: AgentState):
     print("[NODE: GATEKEEPER] 🔍 Validating report quality...")
     report = state["analysis_report"]
     
-    # The Gatekeeper now accepts BUY, SELL, or a conscious INVALID rejection
-    if "SIGNAL: BUY" in report or "SIGNAL: SELL" in report or "SIGNAL: INVALID" in report:
+    # The Gatekeeper now accepts BUY, SELL, HOLD, or a conscious INVALID rejection
+    valid_signals = ["SIGNAL: BUY", "SIGNAL: SELL", "SIGNAL: HOLD", "SIGNAL: INVALID"]
+    
+    if any(signal in report for signal in valid_signals):
         print("[NODE: GATEKEEPER] ✅ Valid schema detected.")
         return {"is_sufficient": True}
         
     print("[NODE: GATEKEEPER] ⚠️ Schema violated. Forcing pivot...")
-    feedback = HumanMessage(content="GATEKEEPER REJECTION: You failed to output a valid signal. Try alternative tools or output 'SIGNAL: INVALID'.")
+    feedback = HumanMessage(content="GATEKEEPER REJECTION: You failed to output a valid signal. You must strictly output 'SIGNAL: BUY', 'SIGNAL: SELL', 'SIGNAL: HOLD', or 'SIGNAL: INVALID' based on the data.")
     return {"is_sufficient": False, "messages": [feedback]}
 
 # 1. Initialize Graph

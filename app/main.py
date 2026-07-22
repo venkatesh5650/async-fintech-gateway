@@ -3,8 +3,13 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr, Field, field_validator
 import httpx
+import uuid
 import logging
 import os
+import time
+from graph import app as intelligence_graph  # Your LangGraph state machine
+from schemas import IntelligenceResponse, JobAcceptedResponse, JobStatusResponse     # Your zero-trust output boundary
+from langchain_core.messages import HumanMessage
 
 app = FastAPI(title="Fintech Data Ingestion firewall")
 
@@ -104,3 +109,100 @@ async def ingest_market_data(payload: MarketDataPayload, background_tasks: Backg
         "message": f"Asset metrics for {payload.ticker} verified. Offloaded to downstream analytics pipeline.",
         "tracking_id": "async_task_dispatched"
     }
+
+# ==============================================================================
+# WEEK 4: THE INTELLIGENCE GATEWAY (LANGGRAPH AI AGENT INTEGRATION)
+# ==============================================================================
+
+
+# ==============================================================================
+# WEEK 4: THE ASYNCHRONOUS POLLING ARCHITECTURE (ENTERPRISE QUEUE)
+# ==============================================================================
+
+# THE IN-MEMORY JOB STORE (Replaces Redis for Phase 1)
+job_store = {}
+
+# THE ASYNCHRONOUS WORKER
+async def run_intelligence_worker(job_id: str, ticker: str):
+    """
+    Background worker that executes the LangGraph engine.
+    Updates the global job_store dictionary upon completion or failure.
+    """
+    start_time = time.perf_counter()
+    try:
+        initial_state = {
+            "ticker": ticker.upper(),
+            "messages": [
+                HumanMessage(content=f"Execute a fundamental analysis on the ticker {ticker.upper()}. Evaluate the data and determine a final signal.")
+            ],
+            "analysis_report": ""
+        }
+        
+        # Heavy compute happens here, disconnected from the client's HTTP request
+        final_state = await intelligence_graph.ainvoke(initial_state)
+        report = final_state.get("analysis_report", "ERROR: No report generated.")
+        
+        # Strict Deterministic Signal Extraction
+        report_upper = report.upper()
+        if "SIGNAL: BUY" in report_upper: extracted_signal = "BUY"
+        elif "SIGNAL: SELL" in report_upper: extracted_signal = "SELL"
+        elif "SIGNAL: HOLD" in report_upper: extracted_signal = "HOLD"
+        else: extracted_signal = "INVALID"
+            
+        execution_time = (time.perf_counter() - start_time) * 1000
+        
+        # Write the final strict payload into the state store
+        job_store[job_id] = {
+            "status": "completed",
+            "result": {
+                "ticker": ticker.upper(),
+                "signal": extracted_signal,
+                "analysis_report": report,
+                "execution_time_ms": round(execution_time, 2)
+            }
+        }
+        
+    except Exception as e:
+        logging.error(f"❌ [WORKER FAILURE] Job {job_id} crashed: {str(e)}")
+        # Prevent silent failures; log the exact error to the state store
+        job_store[job_id] = {
+            "status": "failed",
+            "result": None,
+            "error": str(e)
+        }
+
+# THE HIGH-PERFORMANCE GATEWAY ROUTES
+@app.post("/v1/intelligence/jobs/{ticker}", response_model=JobAcceptedResponse, status_code=status.HTTP_202_ACCEPTED, tags=["Intelligence Engine"])
+async def submit_analysis_job(ticker: str, background_tasks: BackgroundTasks):
+    """
+    O(1) execution time. Instantly returns a Job ID and offloads heavy AI compute to a background thread.
+    """
+    job_id = str(uuid.uuid4())
+    
+    # Initialize job state
+    job_store[job_id] = {"status": "processing", "result": None}
+    
+    # Handoff to background worker
+    background_tasks.add_task(run_intelligence_worker, job_id, ticker)
+    
+    return JobAcceptedResponse(job_id=job_id)
+
+@app.get("/v1/intelligence/jobs/{job_id}", response_model=JobStatusResponse, status_code=status.HTTP_200_OK, tags=["Intelligence Engine"])
+async def get_job_status(job_id: str):
+    """
+    Client polls this endpoint to retrieve the AI payload without blocking connections.
+    """
+    if job_id not in job_store:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job ID not found in active store.")
+    
+    job_data = job_store[job_id]
+    
+    # If the AI failed, throw a 500 error containing the exact failure reason
+    if job_data["status"] == "failed":
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Intelligence Engine Failed: {job_data.get('error')}")
+        
+    return JobStatusResponse(
+        job_id=job_id,
+        status=job_data["status"],
+        result=job_data.get("result")
+    )
