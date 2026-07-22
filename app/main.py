@@ -7,6 +7,8 @@ import uuid
 import logging
 import os
 import time
+import json
+import redis.asyncio as redis
 from graph import app as intelligence_graph  # Your LangGraph state machine
 from schemas import IntelligenceResponse, JobAcceptedResponse, JobStatusResponse     # Your zero-trust output boundary
 from langchain_core.messages import HumanMessage
@@ -111,22 +113,19 @@ async def ingest_market_data(payload: MarketDataPayload, background_tasks: Backg
     }
 
 # ==============================================================================
-# WEEK 4: THE INTELLIGENCE GATEWAY (LANGGRAPH AI AGENT INTEGRATION)
+# WEEK 4: THE ASYNCHRONOUS POLLING ARCHITECTURE (REDIS QUEUE)
 # ==============================================================================
 
-
-# ==============================================================================
-# WEEK 4: THE ASYNCHRONOUS POLLING ARCHITECTURE (ENTERPRISE QUEUE)
-# ==============================================================================
-
-# THE IN-MEMORY JOB STORE (Replaces Redis for Phase 1)
-job_store = {}
+# 1. Initialize the Async Redis Connection Pool
+# decode_responses=True ensures Redis returns standard Python strings instead of raw bytes
+REDIS_URL = os.getenv("REDIS_URL", "redis://fintech_redis:6379/0")
+redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 
 # THE ASYNCHRONOUS WORKER
 async def run_intelligence_worker(job_id: str, ticker: str):
     """
     Background worker that executes the LangGraph engine.
-    Updates the global job_store dictionary upon completion or failure.
+    Writes the final state to the central Redis cache with a 1-hour expiration.
     """
     start_time = time.perf_counter()
     try:
@@ -138,7 +137,7 @@ async def run_intelligence_worker(job_id: str, ticker: str):
             "analysis_report": ""
         }
         
-        # Heavy compute happens here, disconnected from the client's HTTP request
+        # Execute the heavy AI Graph
         final_state = await intelligence_graph.ainvoke(initial_state)
         report = final_state.get("analysis_report", "ERROR: No report generated.")
         
@@ -151,8 +150,8 @@ async def run_intelligence_worker(job_id: str, ticker: str):
             
         execution_time = (time.perf_counter() - start_time) * 1000
         
-        # Write the final strict payload into the state store
-        job_store[job_id] = {
+        # Construct the final payload
+        payload = {
             "status": "completed",
             "result": {
                 "ticker": ticker.upper(),
@@ -162,27 +161,31 @@ async def run_intelligence_worker(job_id: str, ticker: str):
             }
         }
         
+        # Write to Redis with an expiration time (TTL) of 3600 seconds (1 hour)
+        await redis_client.set(job_id, json.dumps(payload), ex=3600)
+        
     except Exception as e:
         logging.error(f"❌ [WORKER FAILURE] Job {job_id} crashed: {str(e)}")
-        # Prevent silent failures; log the exact error to the state store
-        job_store[job_id] = {
+        error_payload = {
             "status": "failed",
             "result": None,
             "error": str(e)
         }
+        await redis_client.set(job_id, json.dumps(error_payload), ex=3600)
 
 # THE HIGH-PERFORMANCE GATEWAY ROUTES
 @app.post("/v1/intelligence/jobs/{ticker}", response_model=JobAcceptedResponse, status_code=status.HTTP_202_ACCEPTED, tags=["Intelligence Engine"])
 async def submit_analysis_job(ticker: str, background_tasks: BackgroundTasks):
     """
-    O(1) execution time. Instantly returns a Job ID and offloads heavy AI compute to a background thread.
+    O(1) execution time. Instantly registers a job in Redis and offloads heavy AI compute.
     """
     job_id = str(uuid.uuid4())
     
-    # Initialize job state
-    job_store[job_id] = {"status": "processing", "result": None}
+    # 1. Initialize job state in Redis IMMEDIATELY so the polling route doesn't 404
+    initial_payload = {"status": "processing", "result": None}
+    await redis_client.set(job_id, json.dumps(initial_payload), ex=3600)
     
-    # Handoff to background worker
+    # 2. Handoff to background worker
     background_tasks.add_task(run_intelligence_worker, job_id, ticker)
     
     return JobAcceptedResponse(job_id=job_id)
@@ -190,14 +193,17 @@ async def submit_analysis_job(ticker: str, background_tasks: BackgroundTasks):
 @app.get("/v1/intelligence/jobs/{job_id}", response_model=JobStatusResponse, status_code=status.HTTP_200_OK, tags=["Intelligence Engine"])
 async def get_job_status(job_id: str):
     """
-    Client polls this endpoint to retrieve the AI payload without blocking connections.
+    Stateless polling endpoint. Queries Redis directly, completely bypassing FastAPI's local memory.
     """
-    if job_id not in job_store:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job ID not found in active store.")
+    # 1. Query the central Redis cache
+    cached_data = await redis_client.get(job_id)
     
-    job_data = job_store[job_id]
+    if not cached_data:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job ID not found or has expired.")
     
-    # If the AI failed, throw a 500 error containing the exact failure reason
+    # 2. Deserialize the JSON string back into a Python dictionary
+    job_data = json.loads(cached_data)
+    
     if job_data["status"] == "failed":
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Intelligence Engine Failed: {job_data.get('error')}")
         

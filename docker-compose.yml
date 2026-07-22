@@ -7,13 +7,16 @@ services:
       - "8000:8000"
     depends_on:
       db:
-        condition: service_healthy # <--- FORCES THE API TO WAIT FOR THE DB TO BE FULLY READY
+        condition: service_healthy # FORCES THE API TO WAIT FOR THE DB TO BE FULLY READY
+      redis:
+        condition: service_started # <--- ADDED: FORCES API TO WAIT FOR REDIS
     environment:
       - DATABASE_URL=${DATABASE_URL}
       - GROQ_API_KEY=${GROQ_API_KEY}
+      - REDIS_URL=redis://redis:6379/0 # <--- ADDED: THE INTERNAL NETWORK URL FOR REDIS
     volumes:
       - ./:/app # Maps local directory to container root
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-exclude '.venv/*' # <--- FORCES UVICORN TO WATCH FOR CHANGES
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-exclude '.venv/*'
     networks:
       - fintech_network
 
@@ -38,11 +41,21 @@ services:
     networks:
       - fintech_network
 
-# 3. Persistent Storage
+  # 3. Your Redis Central Cache (Day 25 Addition)
+  redis:
+    image: redis:7-alpine
+    container_name: fintech_redis
+    ports:
+      - "6379:6379"
+    command: redis-server --save 60 1 --loglevel warning
+    networks:
+      - fintech_network # <--- Crucial: Maps Redis to the same internal bridge network
+
+# 4. Persistent Storage
 volumes:
   postgres_data:
 
-# 4. Isolated Networking
+# 5. Isolated Networking
 networks:
   fintech_network:
     driver: bridge
