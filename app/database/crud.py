@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.dialects.postgresql import insert
-from models import MarketPricing
+from app.models import MarketPricing
 
 async def upsert_market_data(session: AsyncSession, pricing_data: list[dict]):
     """

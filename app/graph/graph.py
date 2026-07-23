@@ -5,7 +5,7 @@ from langchain_groq import ChatGroq
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode, tools_condition
 
-from tools import get_historical_prices, get_market_sentiment
+from graph.tools import get_historical_prices, get_market_sentiment
 
 class AgentState(TypedDict):
     messages: Annotated[List[BaseMessage], operator.add]

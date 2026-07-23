@@ -5,8 +5,8 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 # Direct database session factory initialization
-from database import AsyncSessionLocal
-from database.models import MarketPricing, Ticker
+from app.database.database import AsyncSessionLocal
+from app.database.models import MarketPricing, Ticker
 
 # ==========================================
 # Tool: Historical Pricing

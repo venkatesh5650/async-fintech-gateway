@@ -4,7 +4,7 @@ from sqlalchemy import String, Boolean, DECIMAL, BigInteger, ForeignKey, DateTim
 from sqlalchemy.orm import Mapped, mapped_column
 
 # Import declarative base
-from database import Base
+from app.database import Base
 
 class Ticker(Base):
     __tablename__ = "tickers"
