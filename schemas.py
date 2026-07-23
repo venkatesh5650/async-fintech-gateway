@@ -1,8 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import Optional
 
-
-
+# Core output schema for intelligence analysis results
 class IntelligenceResponse(BaseModel):
     ticker: str = Field(..., description="The target asset symbol (e.g., AAPL)")
     signal: str = Field(..., description="The final alpha signal: BUY, SELL, HOLD, or INVALID")
@@ -10,13 +9,14 @@ class IntelligenceResponse(BaseModel):
     execution_time_ms: float = Field(..., description="Latency tracking for observability and SLA monitoring")
 
 
-
-
+# Response schema for accepted background tasks
 class JobAcceptedResponse(BaseModel):
     job_id: str = Field(..., description="Unique UUID for tracking the background task")
     status: str = Field(default="processing", description="Current state of the engine")
     message: str = Field(default="Task offloaded to background worker.")
 
+
+# Response schema for polling the status of asynchronous jobs
 class JobStatusResponse(BaseModel):
     job_id: str
     status: str = Field(..., description="'processing', 'completed', or 'failed'")

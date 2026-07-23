@@ -16,7 +16,7 @@ async def simulate_hft_worker(worker_id: int, burst_size: int):
             time_offset = i 
             
             payload.append({
-                "ticker_id": 1, # Points to the AAPL row we just inserted
+                "ticker_id": 1, 
                 "timestamp": base_time + timedelta(milliseconds=time_offset * 100),
                 "open_price": round(random.uniform(150, 155), 4),
                 "high_price": round(random.uniform(150, 155), 4),
@@ -32,7 +32,6 @@ async def main():
     print("🚀 Initiating High-Frequency Concurrency Stress Test...")
     
     # Spawn 50 concurrent workers, each attempting to insert 100 rows simultaneously
-    # This will immediately saturate your 20-connection pool and force the max_overflow
     workers = [simulate_hft_worker(i, 100) for i in range(50)]
     
     # Execute all workers concurrently
