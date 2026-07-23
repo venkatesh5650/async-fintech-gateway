@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 # Direct database session factory initialization
 from database import AsyncSessionLocal
-from models import MarketPricing, Ticker
+from database.models import MarketPricing, Ticker
 
 # ==========================================
 # Tool: Historical Pricing
