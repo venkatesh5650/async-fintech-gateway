@@ -1,0 +1,37 @@
+version: "1"
+
+services:
+  # 1. The FastAPI Docker Web Service
+  - type: web
+    name: fintech-api-gateway
+    env: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      # Automatically injects the internal DB URL from the database below
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fintech-postgres
+          property: connectionString
+      # Automatically injects the internal Redis URL from the cache below
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: fintech-redis
+          property: connectionString
+      # Leaves the API key blank in code. You will paste this securely in the dashboard.
+      - key: GROQ_API_KEY
+        sync: false 
+
+  # 2. The Stateless Redis Queue
+  - type: redis
+    name: fintech-redis
+    plan: free
+    ipAllowList: [] # Secures Redis so it can only be accessed internally by your API
+
+databases:
+  # 3. The PostgreSQL Time-Series Storage
+  - name: fintech-postgres
+    databaseName: fintech_db
+    user: admin
+    plan: free
