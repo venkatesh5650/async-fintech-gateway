@@ -9,7 +9,7 @@ import os
 import time
 import json
 import redis.asyncio as redis
-from graph.graph import app as intelligence_graph
+from graph import app as intelligence_graph
 from database.schemas import JobAcceptedResponse, JobStatusResponse
 from langchain_core.messages import HumanMessage
 from core.firewall import RateLimiter
