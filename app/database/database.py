@@ -6,11 +6,14 @@ from sqlalchemy.orm import declarative_base
 load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Fail-fast on startup if routing credentials are unmapped.
 if not DATABASE_URL:
-    raise ValueError("CRITICAL: DATABASE_URL environment variable is missing from .env")
+    raise ValueError("CRITICAL: DATABASE_URL environment variable is missing from environment")
 
-# Async engine with connection pooling tuned to prevent DB port exhaustion under heavy webhook load.
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
+elif DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+asyncpg://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,          
@@ -18,16 +21,13 @@ engine = create_async_engine(
     max_overflow=10      
 )
 
-# expire_on_commit=False prevents implicit sync lazy-loading outside the async event loop.
 AsyncSessionLocal = async_sessionmaker(
     bind=engine, 
     expire_on_commit=False
 )
 
-# Declarative ORM registry.
 Base = declarative_base()
 
-# Async context manager to guarantee deterministic connection release and prevent pool leaks.
 async def get_db():
     async with AsyncSessionLocal() as session:
         yield session
