@@ -18,7 +18,24 @@ from app.database.database import AsyncSessionLocal
 from sqlalchemy.future import select
 from datetime import datetime, timezone
 
-app = FastAPI(title="Fintech Intelligence Gateway")
+from contextlib import asynccontextmanager
+from app.database.database import engine, Base
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # --- STARTUP LOGIC ---
+    """
+    Forces the cloud database to create the tables if they do not exist at boot.
+    """
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    logging.warning("✅ [DATABASE INIT] Verified/Created all PostgreSQL tables in the cloud.")
+    
+    yield # Hands control back to FastAPI to start accepting requests
+    
+
+app = FastAPI(title="Fintech Intelligence Gateway", lifespan=lifespan)
 
 # Perimeter Defense: Hard ceiling of 5 RPM per IP to prevent LLM API token exhaustion.
 limiter = RateLimiter(requests_per_minute=5)
@@ -229,3 +246,6 @@ async def get_job_status(job_id: str):
         status=job_data["status"],
         result=job_data.get("result")
     )
+
+
+
