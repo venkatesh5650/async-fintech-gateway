@@ -14,7 +14,7 @@ from app.database.schemas import JobAcceptedResponse, JobStatusResponse
 from app.database.models import Ticker, MarketPricing
 from langchain_core.messages import HumanMessage
 from app.core.firewall import RateLimiter
-from app.database.connection import AsyncSessionLocal
+from app.database.database import AsyncSessionLocal
 from sqlalchemy.future import select
 from datetime import datetime, timezone
 
