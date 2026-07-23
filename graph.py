@@ -13,16 +13,16 @@ class AgentState(TypedDict):
     analysis_report: str
     is_sufficient: bool
 
-# CTO FIX 1: Use a valid Groq LPU model
+# Initialize LLM and bind tools
 llm = ChatGroq(model="openai/gpt-oss-20b", temperature=0)
 tools = [get_historical_prices, get_market_sentiment]
 llm_with_tools = llm.bind_tools(tools)
 
-# CTO FIX 2: Async Node to prevent blocking the FastAPI event loop
+# Asynchronous intelligence node for non-blocking execution
 async def intelligence_node(state: AgentState):
     print(f"\n[NODE: INTELLIGENCE] 🧠 Agent is reasoning on {state['ticker']}...")
     
-    # CTO FIX 3: Inject System Instructions directly into the execution context
+    # Inject system instructions into the execution context
     system_prompt = SystemMessage(content=f"""You are an elite quantitative financial analyst evaluating {state['ticker']}. 
     1. You MUST use your tools to fetch live market data from the PostgreSQL database.
     2. PRIMARY STRATEGY: If current_price > fifty_day_sma, output "SIGNAL: BUY". Otherwise, output "SIGNAL: SELL".
@@ -30,10 +30,10 @@ async def intelligence_node(state: AgentState):
     4. REJECTION PROTOCOL: If the data is missing entirely, or you cannot make a mathematical decision, output "SIGNAL: INVALID".
     5. STRICT FORMATTING: You MUST end your report with exactly "SIGNAL: BUY", "SIGNAL: SELL", "SIGNAL: HOLD", or "SIGNAL: INVALID". DO NOT output conversational filler.""")
     
-    # Prepend the system prompt to the user's incoming message history
+    # Prepend the system prompt to the message history
     messages_to_send = [system_prompt] + state.get("messages", [])
     
-    # Use asynchronous invocation
+    # Execute asynchronous invocation
     response = await llm_with_tools.ainvoke(messages_to_send)
     return {"messages": [response]}
 
@@ -56,16 +56,16 @@ def gatekeeper_node(state: AgentState):
     feedback = HumanMessage(content="GATEKEEPER REJECTION: You failed to output a valid signal. You must strictly output 'SIGNAL: BUY', 'SIGNAL: SELL', 'SIGNAL: HOLD', or 'SIGNAL: INVALID' based on the data.")
     return {"is_sufficient": False, "messages": [feedback]}
 
-# 1. Initialize Graph
+# Initialize state graph
 workflow = StateGraph(AgentState)
 
-# 2. Register all Nodes FIRST
+# Register graph nodes
 workflow.add_node("agent", intelligence_node)
 workflow.add_node("reporting", reporting_node)
-workflow.add_node("tools", ToolNode(tools)) # LangGraph natively handles async tools here
+workflow.add_node("tools", ToolNode(tools)) 
 workflow.add_node("gatekeeper", gatekeeper_node)
 
-# 3. Define the Flow (Edges)
+# Define graph edges and conditional routing
 workflow.set_entry_point("agent")
 workflow.add_conditional_edges("agent", tools_condition, {"tools": "tools", "__end__": "reporting"})
 workflow.add_edge("tools", "agent")

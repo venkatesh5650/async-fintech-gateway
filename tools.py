@@ -4,12 +4,12 @@ from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-# Use the Session Factory directly, NOT the FastAPI get_db generator
+# Direct database session factory initialization
 from database import AsyncSessionLocal
 from models import MarketPricing, Ticker
 
 # ==========================================
-# TOOL 1: HISTORICAL PRICING (PURE ASYNC)
+# Tool: Historical Pricing
 # ==========================================
 class PriceHistoryInput(BaseModel):
     ticker: str = Field(..., description="The stock ticker symbol, e.g., 'AAPL' or 'NVDA'")
@@ -23,7 +23,7 @@ async def get_historical_prices(ticker: str, days_back: int) -> str:
     """
     print(f"\n[TOOL EXECUTING] 🛠️ Agent querying PostgreSQL for {ticker} (Last {days_back} days)")
     
-    # 1. Ephemeral, thread-safe session tied to the active event loop
+    # Initialize async database session
     async with AsyncSessionLocal() as session:
         try:
             ticker_query = select(Ticker).where(Ticker.symbol == ticker.upper())
@@ -48,7 +48,7 @@ async def get_historical_prices(ticker: str, days_back: int) -> str:
             current_price = float(prices[0].close_price)
             avg_moving = sum(float(p.close_price) for p in prices) / len(prices)
             
-            # Return a JSON string so the LLM can easily parse the context
+            # Serialize payload for LLM ingestion
             payload = {
                 "ticker": ticker.upper(),
                 "current_price": round(current_price, 2),
@@ -62,7 +62,7 @@ async def get_historical_prices(ticker: str, days_back: int) -> str:
             return f"DATABASE ERROR: {str(e)}"
 
 # ==========================================
-# TOOL 2: MARKET SENTIMENT (PURE ASYNC)
+# Tool: Market Sentiment
 # ==========================================
 class SentimentInput(BaseModel):
     ticker: str = Field(..., description="The stock ticker symbol.")
@@ -75,10 +75,10 @@ async def get_market_sentiment(ticker: str) -> str:
     """
     print(f"\n[TOOL EXECUTING] 🛠️ Agent querying LIVE PostgreSQL sentiment for {ticker}...")
     
-    # 1. Ephemeral, thread-safe session tied to the active event loop
+    # Initialize async database session
     async with AsyncSessionLocal() as session:
         try:
-            # 2. Parameterized text query (safe from SQL injection)
+            # Execute parameterized query
             query = text(
                 "SELECT ticker, sentiment_score, institutional_confidence, warning "
                 "FROM market_sentiment WHERE ticker = :ticker"
@@ -89,8 +89,7 @@ async def get_market_sentiment(ticker: str) -> str:
             if not row:
                 return f"SYSTEM ALERT: No sentiment data found in database for {ticker}."
                 
-            # 3. Serialize the database row into a JSON string for the LLM
-            # Note: We safely handle the fact that sentiment_score is a string (VARCHAR)
+            # Serialize database record into JSON payload
             payload = {
                 "ticker": row.ticker,
                 "sentiment_score": row.sentiment_score,
