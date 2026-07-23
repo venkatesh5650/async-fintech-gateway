@@ -9,10 +9,10 @@ import os
 import time
 import json
 import redis.asyncio as redis
-from graph import app as intelligence_graph
-from database.schemas import JobAcceptedResponse, JobStatusResponse
+from app.graph.graph import app as intelligence_graph
+from app.database.schemas import JobAcceptedResponse, JobStatusResponse
 from langchain_core.messages import HumanMessage
-from core.firewall import RateLimiter
+from app.core.firewall import RateLimiter
 
 app = FastAPI(title="Fintech Intelligence Gateway")
 
