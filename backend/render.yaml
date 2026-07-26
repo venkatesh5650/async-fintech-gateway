@@ -6,6 +6,7 @@ services:
     name: fintech-api-gateway
     env: docker
     plan: free
+    rootDir: backend
     healthCheckPath: /health
     envVars:
       # Automatically injects the internal DB URL from the database below

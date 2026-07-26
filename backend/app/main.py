@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 
 from contextlib import asynccontextmanager
 from app.database.database import engine, Base
+from app.routers import auth
 
 
 @asynccontextmanager
@@ -36,6 +37,7 @@ async def lifespan(app: FastAPI):
     
 
 app = FastAPI(title="Fintech Intelligence Gateway", lifespan=lifespan)
+app.include_router(auth.router)
 
 # Perimeter Defense: Hard ceiling of 5 RPM per IP to prevent LLM API token exhaustion.
 limiter = RateLimiter(requests_per_minute=5)
@@ -207,16 +209,28 @@ async def run_intelligence_worker(job_id: str, ticker: str):
             "error": str(e)
         }
         await redis_client.set(job_id, json.dumps(error_payload), ex=3600)
+from fastapi import APIRouter, BackgroundTasks, Depends, status
+from app.core.security import get_current_user  # Import your security dependency
 
-@app.post("/v1/intelligence/jobs/{ticker}", response_model=JobAcceptedResponse, status_code=status.HTTP_202_ACCEPTED, tags=["Intelligence Engine"])
+@app.post(
+    "/v1/intelligence/jobs/{ticker}", 
+    response_model=JobAcceptedResponse, 
+    status_code=status.HTTP_202_ACCEPTED, 
+    tags=["Intelligence Engine"]
+)
 async def submit_analysis_job(
     ticker: str, 
     background_tasks: BackgroundTasks,
-    _: None = Depends(limiter)  # Perimeter Firewall Injection
+    _: None = Depends(limiter),          # Existing Perimeter Firewall Check
+    current_user: dict = Depends(get_current_user)  # New Zero-Trust JWT Security Guard
 ):
     """
-    O(1) job registration. Offloads LangGraph execution to background workers.
+    O(1) job registration. Secured by cryptographic JWT authentication 
+    and offloads LangGraph execution to background workers.
     """
+    # track which user triggered the job!
+    print(f"🔒 Authenticated user {current_user['email']} triggered analysis for {ticker}")
+
     job_id = str(uuid.uuid4())
     
     # Pre-warm Redis state to prevent 404 race conditions during immediate client polling
