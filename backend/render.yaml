@@ -6,6 +6,7 @@ services:
     name: fintech-api-gateway
     env: docker
     plan: free
+    rootDir: backend
     dockerfilePath: backend/Dockerfile
     healthCheckPath: /health
     envVars:
