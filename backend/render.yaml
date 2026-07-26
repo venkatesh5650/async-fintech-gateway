@@ -7,7 +7,7 @@ services:
     env: docker
     plan: free
     rootDir: backend
-    dockerfilePath: backend/Dockerfile
+    dockerfilePath: Dockerfile
     healthCheckPath: /health
     envVars:
       # Automatically injects the internal DB URL from the database below
