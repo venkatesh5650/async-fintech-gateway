@@ -19,10 +19,10 @@ Most financial AI applications crash in production because they lack stateful me
 
 | Layer | Technology | Purpose |
 | :--- | :--- | :--- |
-| **Edge / UI** | Next.js 15, React, Tailwind v4 | Server-side proxy, UI hydration, Asynchronous Polling |
+| **UI** | Next.js 15, React, Tailwind v4 | Server-side proxy, UI hydration, Asynchronous Polling |
 | **Compute Gateway** | Python 3.11+, FastAPI, Pydantic | Schema validation, Async routing, Background tasks |
 | **AI Architecture** | LangChain, LangGraph, OpenAI | Multi-agent chain-of-thought reasoning |
-| **Message Broker** | Valkey 8 / Redis 7 | In-memory job queue and rate-limiting firewall |
+| **Message Broker** | Redis 7 | In-memory job queue and rate-limiting firewall |
 | **Persistence** | PostgreSQL 15 | Persistent storage for historical financial data |
 | **Infrastructure**| Vercel & Render | Multi-cloud serverless and containerized deployment |
 
