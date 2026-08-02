@@ -47,8 +47,8 @@ The environment is strictly containerized to prevent state corruption. All datab
 
 ```bash
 # 1. Clone the repository
-git clone [https://github.com/your-username/alpha-sentinel.git](https://github.com/your-username/alpha-sentinel.git)
-cd alpha-sentinel
+git clone https://github.com/venkatesh5650/async-fintech-gateway.git
+cd data-firewall
 
 # 2. Boot the backend compute cluster & caches
 cd backend
