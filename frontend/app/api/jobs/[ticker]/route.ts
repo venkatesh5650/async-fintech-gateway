@@ -15,9 +15,9 @@ export async function POST(request: Request, context: Context) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdHJpbmciLCJleHAiOjE3ODU2Nzg3NDB9.pqITzxMcBh95JxEtzjiSXWiwl_d1epYt60LDsrBWOMo`,
+          Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdHJpbmciLCJleHAiOjE3ODU2NzkwMDB9.ell0KScdTxzT79RtwuC5q_q-K9snCO7VO--W0fJnMoQ`,
         },
-      }
+      },
     );
 
     if (!response.ok) {
@@ -60,9 +60,9 @@ export async function GET(request: Request, context: Context) {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdHJpbmciLCJleHAiOjE3ODU2Nzg3NDB9.pqITzxMcBh95JxEtzjiSXWiwl_d1epYt60LDsrBWOMo`,
+          Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdHJpbmciLCJleHAiOjE3ODU2NzkwMDB9.ell0KScdTxzT79RtwuC5q_q-K9snCO7VO--W0fJnMoQ`,
         },
-      }
+      },
     );
 
     if (!response.ok) {
