@@ -15,7 +15,7 @@ export async function POST(request: Request, context: Context) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdHJpbmciLCJleHAiOjE3ODU2NzQ3NDF9.Du977kUOJgZNLxipdGFlGW8VgO__v1UzflLhUOrxvyg`,
+          Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdHJpbmciLCJleHAiOjE3ODU2Nzg3NDB9.pqITzxMcBh95JxEtzjiSXWiwl_d1epYt60LDsrBWOMo`,
         },
       }
     );
@@ -60,7 +60,7 @@ export async function GET(request: Request, context: Context) {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdHJpbmciLCJleHAiOjE3ODU2NzQ3NDF9.Du977kUOJgZNLxipdGFlGW8VgO__v1UzflLhUOrxvyg`,
+          Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdHJpbmciLCJleHAiOjE3ODU2Nzg3NDB9.pqITzxMcBh95JxEtzjiSXWiwl_d1epYt60LDsrBWOMo`,
         },
       }
     );
