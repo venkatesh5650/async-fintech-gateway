@@ -8,7 +8,7 @@ caching for polling workflows, zero-trust JWT authentication guards, and
 public CQRS read query routes.
 """
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Path
 import uuid
 import json
 import time
@@ -81,16 +81,16 @@ async def run_intelligence_worker(job_id: str, ticker: str):
         # Persist failure state to Redis for upstream client diagnostics
         await redis_client.set(job_id, json.dumps(error_payload), ex=3600)
 
-
-@router.post("/jobs/{ticker}", response_model=JobAcceptedResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post("/jobs/{ticker}")
 async def submit_analysis_job(
-    ticker: str, 
     background_tasks: BackgroundTasks,
+    # 1% UPGRADE: Strict Regex Boundary to prevent numeric/malformed ticker drains
+    ticker: str = Path(..., regex="^[a-zA-Z]{1,5}$", description="US Equity Ticker Symbol"), 
     _: None = Depends(limiter),
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Command Edge: Protected by rate-limiting and zero-trust JWT authentication.
+    Command Edge: Protected by rate-limiting, Regex boundary validation, and zero-trust JWT authentication.
     Generates a unique tracking capability token, pre-warms Redis state, and offloads 
     heavy agentic execution to background worker threads.
     """
@@ -102,6 +102,7 @@ async def submit_analysis_job(
     
     # Register asynchronous background worker task
     background_tasks.add_task(run_intelligence_worker, job_id, ticker)
+    
     return JobAcceptedResponse(job_id=job_id)
 
 
