@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 
 type Context = { params: Promise<{ ticker: string }> };
 
@@ -9,19 +10,28 @@ export async function POST(request: Request, context: Context) {
   const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("session_token")?.value;
+
+    if (!token) {
+      return NextResponse.json(
+        { error: "Unauthorized: Session missing or expired." },
+        { status: 401 }
+      );
+    }
+
     const response = await fetch(
       `${backendUrl}/v1/intelligence/jobs/${ticker}`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdHJpbmciLCJleHAiOjE3ODU3NTA3NjJ9.hXKowbydSgt7flmfnvMFVgXBxSMhtOjlUfW0XdPvFF4`,
+          Authorization: `Bearer ${token}`,
         },
       },
     );
 
     if (!response.ok) {
-      // Extract detailed validation errors from the backend response payload
       const errorData = await response.json().catch(() => ({}));
       let errorMessage = "Backend Gateway Error";
 
@@ -54,19 +64,28 @@ export async function GET(request: Request, context: Context) {
   const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("session_token")?.value;
+
+    if (!token) {
+      return NextResponse.json(
+        { error: "Unauthorized: Session missing or expired." },
+        { status: 401 }
+      );
+    }
+
     const response = await fetch(
       `${backendUrl}/v1/intelligence/jobs/${jobId}`,
       {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJzdHJpbmciLCJleHAiOjE3ODU3NTA3NjJ9.hXKowbydSgt7flmfnvMFVgXBxSMhtOjlUfW0XdPvFF4`,
+          Authorization: `Bearer ${token}`,
         },
       },
     );
 
     if (!response.ok) {
-      // Extract detailed validation errors from the backend response payload
       const errorData = await response.json().catch(() => ({}));
       let errorMessage = "Backend Gateway Error";
 
