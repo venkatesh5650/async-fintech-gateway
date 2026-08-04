@@ -18,7 +18,7 @@ export async function fetchIntelligence(ticker: string): Promise<IntelligenceRes
     };
 
     // 3. Execute request against the protected or backend route
-    const response = await fetch(`${API_BASE_URL}/v1/intelligence/jobs/${ticker}`, {
+    const response = await fetch(`${API_BASE_URL}/v1/intelligence/public/${ticker}`, {
       method: "GET", 
       headers,
       cache: "no-store", 
