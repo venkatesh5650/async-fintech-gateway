@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import IntelligenceCard from "@/components/IntelligenceCard";
+import LogoutButton from "@/components/LogoutButton";
 
 // Strict type contracts mapping to the backend payload
 interface JobState {
@@ -100,6 +101,7 @@ export default function DynamicDashboardPage() {
             <h2 className="text-white font-bold text-xl tracking-wide">
               Session Expired
             </h2>
+            <LogoutButton />
             <p className="text-gray-400 text-sm leading-relaxed">
               Your security clearance (JWT token) has expired. For zero-trust
               data protection, please re-authenticate your session.

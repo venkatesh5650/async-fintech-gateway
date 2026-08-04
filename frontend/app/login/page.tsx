@@ -11,10 +11,15 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    // 1. THE UX FIX: Stop the browser from hard-reloading the page on "Enter"
+    e.preventDefault();
+
+    // 2. Lock the button so the user can't spam "Enter"
+    setIsLoading(true);
+    setError("");
+
     try {
-      // 1. The Secure BFF Call
-      // Notice we do NOT call FastAPI (http://localhost:8000) directly.
-      // We call our internal Next.js proxy route to keep the handshake hidden.
+      // 3. The Secure BFF Call
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -26,10 +31,7 @@ export default function LoginPage() {
         throw new Error(data.error || "Authentication failed");
       }
 
-      // 2. The Unlocking Redirect
-      // The HTTP-Only cookie is now set in the browser's network layer.
-      // The middleware will read it and allow us to pass through the gate.
-      // Force a hard client-side navigation reload to clear memory and bypass router stalls
+      // 4. The Unlocking Redirect
       window.location.href = "/dashboard/AAPL";
     } catch (err: any) {
       setError(err.message);
@@ -51,6 +53,7 @@ export default function LoginPage() {
           </div>
         )}
 
+        {/* The <form> tag natively listens for the "Enter" key on any input inside it */}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-1">
