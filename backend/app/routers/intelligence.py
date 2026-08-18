@@ -15,11 +15,12 @@ import time
 import logging
 from app.database.schemas import JobAcceptedResponse, JobStatusResponse
 from app.core.security import get_current_user
-from app.core.firewall import RateLimiter
+from app.core.limiter import RateLimiter
 from langchain_core.messages import HumanMessage
 from app.graph.graph import app as intelligence_graph
 import redis.asyncio as redis
 import os
+import httpx
 
 # Configure API router with versioned routing prefix and documentation grouping tag
 router = APIRouter(prefix="/v1/intelligence", tags=["Intelligence Engine Index"])
@@ -48,7 +49,7 @@ async def run_intelligence_worker(job_id: str, ticker: str):
         # Invoke asynchronous multi-agent graph execution
         final_state = await intelligence_graph.ainvoke(initial_state)
         report = final_state.get("analysis_report", "ERROR: No report generated.")
-        
+       
         # Deterministic string-matching logic to parse alpha signals from agent text output
         report_upper = report.upper()
         if "SIGNAL: BUY" in report_upper: extracted_signal = "BUY"
@@ -71,6 +72,30 @@ async def run_intelligence_worker(job_id: str, ticker: str):
         # Cache completed state in Redis with a 3600-second expiration window
         await redis_client.set(job_id, json.dumps(payload), ex=3600)
         
+
+        # THE EVENT EMITTER: FIRING THE PAYLOAD TO n8n WORKFLOW 2
+      
+        webhook_url = "http://n8n:5678/webhook/finance-alert"
+        
+        webhook_data = {
+            "job_id": job_id,
+            "ticker": ticker.upper(),
+            "signal": extracted_signal,
+            "analysis": report,
+            "execution_time": round(execution_time, 2)
+        }
+        
+        # Using print() to guarantee it bypasses the logger and shows in terminal
+        print(f"🚀 [WEBHOOK] Attempting to fire payload for {ticker.upper()} to {webhook_url}")
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(webhook_url, json=webhook_data)
+                print(f"✅ [WEBHOOK SUCCESS] Fired to n8n for {ticker.upper()} | Status: {response.status_code}")
+        except Exception as webhook_err:
+            print(f"⚠️ [WEBHOOK FAILURE] Could not reach n8n for {ticker.upper()}: {str(webhook_err)}")
+      
+
     except Exception as e:
         logging.error(f"❌ [WORKER FAILURE] Job {job_id} crashed: {str(e)}")
         error_payload = {
@@ -81,11 +106,11 @@ async def run_intelligence_worker(job_id: str, ticker: str):
         # Persist failure state to Redis for upstream client diagnostics
         await redis_client.set(job_id, json.dumps(error_payload), ex=3600)
 
-@router.post("/jobs/{ticker}")
+@router.post("/jobs/{ticker}",status_code=status.HTTP_202_ACCEPTED)
 async def submit_analysis_job(
     background_tasks: BackgroundTasks,
-    # 1% UPGRADE: Strict Regex Boundary to prevent numeric/malformed ticker drains
-    ticker: str = Path(..., regex="^[a-zA-Z]{1,5}$", description="US Equity Ticker Symbol"), 
+    # Strict Pattern Boundary to prevent numeric/malformed ticker drains
+    ticker: str = Path(..., pattern="^[a-zA-Z]{1,5}$", description="US Equity Ticker Symbol"), 
     _: None = Depends(limiter),
     current_user: dict = Depends(get_current_user)
 ):
@@ -127,16 +152,16 @@ async def get_job_status(job_id: str):
     )
 
 
-@router.get("/public/{ticker}", status_code=status.HTTP_200_OK)
-async def get_public_intelligence(ticker: str):
-    """
-    CQRS Query Edge: Publicly accessible read route for the Next.js frontend dashboard.
-    Bypasses user authentication requirements to facilitate instant, zero-friction client previews.
-    """
-    upper_ticker = ticker.upper()
-    return {
-        "ticker": upper_ticker,
-        "signal": "BUY",
-        "reasoning": f"LangGraph multi-agent analysis successfully completed for {upper_ticker}. Strong momentum detected via asynchronous evaluation.",
-        "execution_time_ms": 138
-    }
+# @router.get("/public/{ticker}", status_code=status.HTTP_200_OK)
+# async def get_public_intelligence(ticker: str):
+#     """
+#     CQRS Query Edge: Publicly accessible read route for the Next.js frontend dashboard.
+#     Bypasses user authentication requirements to facilitate instant, zero-friction client previews.
+#     """
+#     upper_ticker = ticker.upper()
+#     return {
+#         "ticker": upper_ticker,
+#         "signal": "BUY",
+#         "reasoning": f"LangGraph multi-agent analysis successfully completed for {upper_ticker}. Strong momentum detected via asynchronous evaluation.",
+#         "execution_time_ms": 138
+#     }

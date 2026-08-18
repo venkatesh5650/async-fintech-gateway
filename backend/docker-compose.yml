@@ -51,9 +51,42 @@ services:
     networks:
       - fintech_network
 
+  # Load Testing Engine (Isolated)
+  locust:
+    image: locustio/locust
+    container_name: fintech_locust
+    ports:
+      - "8089:8089"
+    volumes:
+      - ./app/scripts:/mnt/locust
+    command: -f /mnt/locust/locustfile.py
+    depends_on:
+      - api
+    networks:
+      - fintech_network
+
+  # n8n Automation Engine (Orchestration Layer)
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: fintech_n8n
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678/
+      - DB_TYPE=sqlite
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - fintech_network
+
+# Persistent Storage
 # Persistent Storage
 volumes:
   postgres_data:
+  n8n_data:
 
 # Isolated Networking
 networks:

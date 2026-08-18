@@ -2,11 +2,16 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 import logging
+import time
 from contextlib import asynccontextmanager
 
 from app.database.database import engine, Base
-from app.core.firewall import RateLimiter
-from app.routers import auth, intelligence, market  # Imported all modular routers
+from app.core.limiter import RateLimiter
+from app.core.telemetry import StructuredLoggingMiddleware  # <-- Imported Enterprise Telemetry
+from app.routers import auth, intelligence, market  
+
+# Track container boot time for uptime metrics
+START_TIME = time.time()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -20,7 +25,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Fintech Intelligence Gateway", lifespan=lifespan)
 
-# Mounting Enterprise Microservice Routers
+# 1. Register Cloud-Native Structured Logging Middleware
+app.add_middleware(StructuredLoggingMiddleware)
+
+# 2. Mounting Enterprise Microservice Routers
 app.include_router(auth.router)
 app.include_router(intelligence.router)
 app.include_router(market.router)
@@ -48,6 +56,19 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         }
     )
 
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy", "firewall": "active", "scope": "fintech"}
+@app.get("/healthz", tags=["System Telemetry"])
+async def liveness_probe():
+    """
+    Cloud Load Balancer Liveness Probe.
+    Returns 200 OK if the ASGI event loop and runtime container are operational.
+    """
+    uptime_seconds = round(time.time() - START_TIME, 2)
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content={
+            "status": "healthy",
+            "uptime_seconds": uptime_seconds,
+            "firewall": "active",
+            "environment": "production"
+        }
+    )
