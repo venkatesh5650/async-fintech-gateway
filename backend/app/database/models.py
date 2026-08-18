@@ -4,13 +4,13 @@ from sqlalchemy import String, Boolean, DECIMAL, BigInteger, ForeignKey, DateTim
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
-# Import declarative base
 from app.database.database import Base
 
 class Ticker(Base):
     __tablename__ = "tickers"
+    
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    symbol: Mapped[str] = mapped_column(String(10), unique=True, nullable=False)
+    symbol: Mapped[str] = mapped_column(String(10), unique=True, index=True, nullable=False)
     company_name: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
@@ -27,10 +27,10 @@ class MarketPricing(Base):
     close_price: Mapped[Decimal] = mapped_column(DECIMAL(10, 4), nullable=False)  
     volume: Mapped[int] = mapped_column(BigInteger, nullable=False)
 
-    # Table constraints and indexes
     __table_args__ = (
         UniqueConstraint("ticker_id", "timestamp", name="uix_ticker_timestamp"),
-        Index("ix_market_pricing_timestamp", "timestamp"),
+        # Optimized composite index for high-throughput time-series equity range queries
+        Index("idx_ticker_timestamp_desc", "ticker_id", timestamp.desc()),
     )
 
 class User(Base):

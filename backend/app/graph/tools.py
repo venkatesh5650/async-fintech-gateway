@@ -2,7 +2,7 @@ import os
 import json
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 # Direct database session factory initialization
 from app.database.database import AsyncSessionLocal
@@ -23,7 +23,6 @@ async def get_historical_prices(ticker: str, days_back: int) -> str:
     """
     print(f"\n[TOOL EXECUTING] 🛠️ Agent querying PostgreSQL for {ticker} (Last {days_back} days)")
     
-    # Initialize async database session
     async with AsyncSessionLocal() as session:
         try:
             ticker_query = select(Ticker).where(Ticker.symbol == ticker.upper())
@@ -48,7 +47,6 @@ async def get_historical_prices(ticker: str, days_back: int) -> str:
             current_price = float(prices[0].close_price)
             avg_moving = sum(float(p.close_price) for p in prices) / len(prices)
             
-            # Serialize payload for LLM ingestion
             payload = {
                 "ticker": ticker.upper(),
                 "current_price": round(current_price, 2),
@@ -62,7 +60,7 @@ async def get_historical_prices(ticker: str, days_back: int) -> str:
             return f"DATABASE ERROR: {str(e)}"
 
 # ==========================================
-# Tool: Market Sentiment
+# Tool: Market Sentiment (RELATIONAL REFACTOR)
 # ==========================================
 class SentimentInput(BaseModel):
     ticker: str = Field(..., description="The stock ticker symbol.")
@@ -75,23 +73,29 @@ async def get_market_sentiment(ticker: str) -> str:
     """
     print(f"\n[TOOL EXECUTING] 🛠️ Agent querying LIVE PostgreSQL sentiment for {ticker}...")
     
-    # Initialize async database session
     async with AsyncSessionLocal() as session:
         try:
-            # Execute parameterized query
+            # 1. Resolve string symbol to relational Ticker ID first
+            ticker_query = select(Ticker).where(Ticker.symbol == ticker.upper())
+            result = await session.execute(ticker_query)
+            target_ticker = result.scalar_one_or_none()
+            
+            if not target_ticker:
+                return f"SYSTEM ALERT: Ticker {ticker} not found in registry."
+
+            # 2. Query market_sentiment using the verified foreign key ticker_id
             query = text(
-                "SELECT ticker, sentiment_score, institutional_confidence, warning "
-                "FROM market_sentiment WHERE ticker = :ticker"
+                "SELECT sentiment_score, institutional_confidence, warning "
+                "FROM market_sentiment WHERE ticker_id = :ticker_id"
             )
-            result = await session.execute(query, {"ticker": ticker.upper()})
-            row = result.fetchone()
+            sentiment_result = await session.execute(query, {"ticker_id": target_ticker.id})
+            row = sentiment_result.fetchone()
             
             if not row:
                 return f"SYSTEM ALERT: No sentiment data found in database for {ticker}."
                 
-            # Serialize database record into JSON payload
             payload = {
-                "ticker": row.ticker,
+                "ticker": ticker.upper(),
                 "sentiment_score": row.sentiment_score,
                 "institutional_confidence": row.institutional_confidence,
                 "warning": row.warning

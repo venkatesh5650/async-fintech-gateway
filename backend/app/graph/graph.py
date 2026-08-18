@@ -20,20 +20,18 @@ llm_with_tools = llm.bind_tools(tools)
 
 # Asynchronous intelligence node for non-blocking execution
 async def intelligence_node(state: AgentState):
-    print(f"\n[NODE: INTELLIGENCE] 🧠 Agent is reasoning on {state['ticker']}...")
+    # Ensure we strictly pull the dynamic ticker from the active state container
+    current_ticker = state.get("ticker", "AAPL").upper()
+    print(f"\n[NODE: INTELLIGENCE] 🧠 Agent is reasoning on target asset: {current_ticker}...")
     
-    # Inject system instructions into the execution context
-    system_prompt = SystemMessage(content=f"""You are an elite quantitative financial analyst evaluating {state['ticker']}. 
-    1. You MUST use your tools to fetch live market data from the PostgreSQL database.
+    system_prompt = SystemMessage(content=f"""You are an elite quantitative financial analyst evaluating {current_ticker}. 
+    1. You MUST use your tools to fetch live market data from the PostgreSQL database for {current_ticker}.
     2. PRIMARY STRATEGY: If current_price > fifty_day_sma, output "SIGNAL: BUY". Otherwise, output "SIGNAL: SELL".
     3. FALLBACK STRATEGY: If price data is missing, check sentiment. If BULLISH, output "SIGNAL: BUY". If BEARISH, output "SIGNAL: SELL".
     4. REJECTION PROTOCOL: If the data is missing entirely, or you cannot make a mathematical decision, output "SIGNAL: INVALID".
     5. STRICT FORMATTING: You MUST end your report with exactly "SIGNAL: BUY", "SIGNAL: SELL", "SIGNAL: HOLD", or "SIGNAL: INVALID". DO NOT output conversational filler.""")
     
-    # Prepend the system prompt to the message history
     messages_to_send = [system_prompt] + state.get("messages", [])
-    
-    # Execute asynchronous invocation
     response = await llm_with_tools.ainvoke(messages_to_send)
     return {"messages": [response]}
 
