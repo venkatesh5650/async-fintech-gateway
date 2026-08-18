@@ -56,6 +56,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         }
     )
 
+@app.get("/health", tags=["System Telemetry"])
 @app.get("/healthz", tags=["System Telemetry"])
 async def liveness_probe():
     """
