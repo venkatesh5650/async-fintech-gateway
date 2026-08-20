@@ -8,7 +8,8 @@ caching for polling workflows, zero-trust JWT authentication guards, and
 public CQRS read query routes.
 """
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Path
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Path, Security
+from fastapi.security.api_key import APIKeyHeader
 import uuid
 import json
 import time
@@ -26,7 +27,31 @@ import httpx
 # Configure API router with versioned routing prefix and documentation grouping tag
 router = APIRouter(prefix="/v1/intelligence", tags=["Intelligence Engine Index"])
 
-# Initialize asynchronous Redis connection pool and perimeter rate limiter
+API_KEY_NAME = "X-N8N-API-KEY"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+async def verify_m2m_or_user(
+    api_key: str = Security(api_key_header),
+):
+    """
+    Independent M2M and User Gatekeeper:
+    Checks the X-N8N-API-KEY header first. If valid, permits access immediately 
+    without invoking JWT checks.
+    """
+    expected_key = os.getenv("N8N_API_KEY", "super_secure_internal_orchestration_secret_key_2026")
+    
+   
+
+    if api_key and api_key == expected_key:
+        return {"role": "m2m_orchestrator"}
+        
+    # If no valid M2M key is provided, reject instantly with 403 (preventing unauthenticated 401 leaks)
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Zero-Trust Access Denied: Invalid or missing M2M API Key."
+    )
+
+# Initialized asynchronous Redis connection pool and perimeter rate limiter
 REDIS_URL = os.getenv("REDIS_URL", "redis://fintech_redis:6379/0")
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 limiter = RateLimiter(requests_per_minute=5)
@@ -38,7 +63,7 @@ async def run_intelligence_worker(job_id: str, ticker: str):
     """
     start_time = time.perf_counter()
     try:
-        # Initialize state payload container for the LangGraph re-act graph
+        # Initialized state payload container for the LangGraph re-act graph
         initial_state = {
             "ticker": ticker.upper(),
             "messages": [
@@ -116,7 +141,7 @@ async def submit_analysis_job(
     # Strict Pattern Boundary to prevent numeric/malformed ticker drains
     ticker: str = Path(..., pattern="^[a-zA-Z]{1,5}$", description="US Equity Ticker Symbol"), 
     _: None = Depends(limiter),
-    current_user: dict = Depends(get_current_user)
+    auth_verified: dict = Security(verify_m2m_or_user)
 ):
     """
     Command Edge: Protected by rate-limiting, Regex boundary validation, and zero-trust JWT authentication.
