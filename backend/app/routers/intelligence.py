@@ -18,6 +18,7 @@ from app.core.security import get_current_user
 from app.core.limiter import RateLimiter
 from langchain_core.messages import HumanMessage
 from app.graph.graph import app as intelligence_graph
+from app.core.emitter import broadcast_intelligence_result
 import redis.asyncio as redis
 import os
 import httpx
@@ -71,6 +72,9 @@ async def run_intelligence_worker(job_id: str, ticker: str):
         }
         # Cache completed state in Redis with a 3600-second expiration window
         await redis_client.set(job_id, json.dumps(payload), ex=3600)
+
+        
+        await broadcast_intelligence_result(payload)
         
 
         # THE EVENT EMITTER: FIRING THE PAYLOAD TO n8n WORKFLOW 2
