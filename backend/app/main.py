@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 
 from app.database.database import engine, Base
 from app.core.limiter import RateLimiter
-from app.core.telemetry import StructuredLoggingMiddleware  # <-- Imported Enterprise Telemetry
+from app.core.telemetry import StructuredLoggingMiddleware  
 from app.routers import auth, intelligence, market  
 
 # Track container boot time for uptime metrics
