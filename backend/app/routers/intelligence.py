@@ -8,7 +8,7 @@ caching for polling workflows, zero-trust JWT authentication guards, and
 public CQRS read query routes.
 """
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Path, Security
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Path, Security, Request
 from fastapi.security.api_key import APIKeyHeader
 import uuid
 import json
@@ -31,24 +31,31 @@ API_KEY_NAME = "X-N8N-API-KEY"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
 async def verify_m2m_or_user(
-    api_key: str = Security(api_key_header),
+    request: Request,
+    api_key: str = Security(api_key_header)
 ):
     """
-    Independent M2M and User Gatekeeper:
-    Checks the X-N8N-API-KEY header first. If valid, permits access immediately 
-    without invoking JWT checks.
+    Zero-Trust Dual Gatekeeper
     """
     expected_key = os.getenv("N8N_API_KEY", "super_secure_internal_orchestration_secret_key_2026")
     
-   
-
+    # 1. Machine-to-Machine Check (n8n)
     if api_key and api_key == expected_key:
         return {"role": "m2m_orchestrator"}
         
-    # If no valid M2M key is provided, reject instantly with 403 (preventing unauthenticated 401 leaks)
+    # 2. Human JWT Check (Next.js Dashboard)
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.split(" ")[1]
+        # By removing the try/except, if the token is expired, 
+        # get_current_user will natively raise a 401 Unauthorized!
+        user = await get_current_user(token) 
+        if user:
+            return user
+        
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
-        detail="Zero-Trust Access Denied: Invalid or missing M2M API Key."
+        detail="Zero-Trust Access Denied: Missing valid M2M API Key or User JWT."
     )
 
 # Initialized asynchronous Redis connection pool and perimeter rate limiter
