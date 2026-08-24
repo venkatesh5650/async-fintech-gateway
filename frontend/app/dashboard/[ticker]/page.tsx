@@ -1,42 +1,81 @@
-"use client"; // Required for client-side state management and polling intervals
+"use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import IntelligenceCard from "@/components/IntelligenceCard";
 import LogoutButton from "@/components/LogoutButton";
+import ActionTriggers from "@/components/ActionTriggers";
+import useWebSocket from "@/hooks/useWebSocket";
 
-// Strict type contracts mapping to the backend payload
 interface JobState {
   status: "processing" | "completed" | "failed";
   job_id: string;
-  result?: any; // Maps to IntelligenceResponse inside the component
+  result?: any;
 }
 
 export default function DynamicDashboardPage() {
   const params = useParams();
 
-  // Extract and normalize the ticker parameter from the URL route
   const rawTicker = params?.ticker;
   const ticker = typeof rawTicker === "string" ? rawTicker.toUpperCase() : null;
 
   const [jobState, setJobState] = useState<JobState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
+  const [cooldown, setCooldown] = useState<number>(0);
+  const [jobId, setJobId] = useState<string | undefined>(undefined);
 
+  // --------------------------------------------------
+  // COOLDOWN ENGINE
+  // --------------------------------------------------
   useEffect(() => {
-    // Ensure the ticker parameter is available before initiating API requests
+    if (cooldown <= 0) return;
+    const timer = setInterval(() => setCooldown((prev) => prev - 1), 1000);
+    return () => clearInterval(timer);
+  }, [cooldown]);
+
+  const handleManualDispatch = () => {
+    if (cooldown > 0) return;
+    setCooldown(60);
+    setRefreshTrigger((prev) => prev + 1);
+  };
+
+  // --------------------------------------------------
+  // STEP 2: WEBSOCKET EVENT STREAMING
+  // --------------------------------------------------
+  // This listener catches the pushed data from FastAPI instantly.
+  const handleWebSocketMessage = useCallback((data: any) => {
+    if (data && data.status) {
+      setJobState((prev) => ({
+        ...prev,
+        ...data,
+        job_id: prev?.job_id, // keep the original job_id
+      }));
+    }
+  }, []);
+
+  // The hook autonomously connects as soon as job_id is populated
+  const { isConnected, isExhausted } = useWebSocket({
+    jobId, // ← use the new stable state
+    onMessage: handleWebSocketMessage,
+  });
+
+  // --------------------------------------------------
+  // THE DISPATCH ENGINE (POLLING REMOVED)
+  // --------------------------------------------------
+  useEffect(() => {
     if (!ticker) return;
 
-    let pollingInterval: NodeJS.Timeout;
-
-    const dispatchAndPoll = async () => {
+    const dispatchJob = async () => {
       try {
-        // 1. Dispatch the background job via the Next.js proxy route
+        setError(null);
+
+        // Dispatch the background job to the AI Engine
         const dispatchRes = await fetch(`/api/jobs/${ticker}`, {
           method: "POST",
         });
 
         if (!dispatchRes.ok) {
-          // Handle unauthorized responses (e.g., expired JWT session)
           if (dispatchRes.status === 401) {
             throw new Error("SESSION_EXPIRED");
           }
@@ -49,48 +88,24 @@ export default function DynamicDashboardPage() {
         }
 
         const { job_id } = await dispatchRes.json();
+
+        // 1% MOVE: Set initial state, and let the WebSocket take over the rest.
+        setJobId(job_id);
         setJobState({ status: "processing", job_id });
-
-        // 2. Initialize polling to monitor job status
-        pollingInterval = setInterval(async () => {
-          const pollRes = await fetch(`/api/jobs/${job_id}`, {
-            method: "GET",
-          });
-
-          if (!pollRes.ok) {
-            if (pollRes.status === 401) {
-              setError("SESSION_EXPIRED");
-              clearInterval(pollingInterval);
-            }
-            return; // Silent fail on transient network blip, retry next tick
-          }
-
-          const currentJob = await pollRes.json();
-          setJobState(currentJob);
-
-          // 3. Terminate polling upon job completion or failure
-          if (
-            currentJob.status === "completed" ||
-            currentJob.status === "failed"
-          ) {
-            clearInterval(pollingInterval);
-          }
-        }, 2000); // Poll every 2 seconds
       } catch (err: any) {
         setError(err.message);
       }
     };
 
-    dispatchAndPoll();
+    dispatchJob();
 
-    // Cleanup polling interval on component unmount to prevent memory leaks
-    return () => clearInterval(pollingInterval);
-  }, [ticker]);
+    // Notice: NO MORE setInterval cleanup required for the API requests!
+  }, [ticker, refreshTrigger]);
 
-  // --- UI RENDERING STATES ---
-
+  // --------------------------------------------------
+  // ERROR STATES
+  // --------------------------------------------------
   if (error) {
-    // State A: User Session Expired (401 Unauthorized)
     if (error === "SESSION_EXPIRED") {
       return (
         <div className="p-10 flex flex-col items-center justify-center min-h-screen bg-black font-mono">
@@ -121,7 +136,6 @@ export default function DynamicDashboardPage() {
       );
     }
 
-    // State B: User Malformed Ticker Input (400 / 422 Validation Error)
     return (
       <div className="p-10 flex flex-col items-center justify-center min-h-screen bg-black font-mono">
         <div className="max-w-md w-full bg-gray-900 border border-red-500/30 rounded-xl p-8 shadow-2xl text-center space-y-4">
@@ -137,13 +151,6 @@ export default function DynamicDashboardPage() {
               {ticker || "provided"}
             </span>{" "}
             is invalid or malformed.
-            <br />
-            <br />
-            <span className="text-gray-300">Rule:</span> Tickers must consist of
-            strictly 1 to 5 alphabetic characters (e.g.,{" "}
-            <span className="text-green-400">AAPL</span>,{" "}
-            <span className="text-green-400">TSLA</span>,{" "}
-            <span className="text-green-400">NVDA</span>).
           </p>
           <div className="bg-black/50 p-3 rounded-lg border border-gray-800 text-xs text-gray-500 text-left overflow-x-auto">
             <span className="text-red-400 font-bold">Gateway Reason:</span>{" "}
@@ -162,10 +169,59 @@ export default function DynamicDashboardPage() {
     );
   }
 
-  // Skeleton loader state while job is processing
+  // --------------------------------------------------
+  // CIRCUIT BREAKER STATE
+  // --------------------------------------------------
+  if (isExhausted) {
+    return (
+      <div className="p-10 flex flex-col items-center justify-center min-h-screen bg-black font-mono">
+        <div className="max-w-md w-full bg-gray-900 border border-orange-500/30 rounded-xl p-8 shadow-2xl text-center space-y-4">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-orange-500/10 text-orange-500 mb-2 text-xl">
+            🔌
+          </div>
+          <h2 className="text-white font-bold text-xl tracking-wide">
+            Real-Time Feed Exhausted
+          </h2>
+          <p className="text-gray-400 text-sm leading-relaxed">
+            The secure TCP tunnel to the server was dropped, and maximum
+            reconnection attempts have been reached.
+          </p>
+          <div className="bg-black/50 p-3 rounded-lg border border-gray-800 text-xs text-gray-500 text-left">
+            <span className="text-orange-400 font-bold">System Action:</span>{" "}
+            Reconnection loop halted to protect browser memory. Please check
+            your network firewall or manually dispatch a new job.
+          </div>
+          <div className="pt-4">
+            {ticker && (
+              <ActionTriggers
+                ticker={ticker}
+                onDispatch={handleManualDispatch}
+                isProcessing={false}
+                cooldown={cooldown}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --------------------------------------------------
+  // PROCESSING / LOADING STATE
+  // --------------------------------------------------
   if (!ticker || !jobState || jobState.status === "processing") {
     return (
-      <div className="p-10 flex flex-col items-center justify-center space-y-6 min-h-screen bg-black">
+      <div className="p-10 flex flex-col items-center justify-center space-y-6 min-h-screen bg-black relative">
+        {/* TCP Connection Indicator */}
+        <div className="absolute top-8 right-8 flex items-center space-x-2 text-xs font-mono">
+          <span
+            className={`w-2 h-2 rounded-full ${isConnected ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]" : "bg-yellow-500 animate-pulse"}`}
+          ></span>
+          <span className={isConnected ? "text-green-500" : "text-yellow-500"}>
+            {isConnected ? "TCP Stream Active" : "Establishing Handshake..."}
+          </span>
+        </div>
+
         <div className="h-12 w-64 bg-gray-800 rounded-md animate-pulse"></div>
         <div className="text-gray-400 font-mono text-sm animate-pulse">
           LangGraph AI Engine is reasoning on {ticker || "ASSET"}...
@@ -174,24 +230,52 @@ export default function DynamicDashboardPage() {
     );
   }
 
-  // Render finalized job results
+  // --------------------------------------------------
+  // COMPLETED STATE
+  // --------------------------------------------------
   if (jobState.status === "completed") {
     return (
       <div className="p-10 min-h-screen bg-black">
-        <h1 className="text-3xl font-bold text-white mb-6 border-b border-gray-800 pb-2 font-mono">
-          {ticker} AI Analysis
+        <h1 className="text-3xl font-bold text-white mb-6 border-b border-gray-800 pb-2 font-mono flex items-center justify-between">
+          <span>{ticker} AI Analysis</span>
+          {/* Subtle live indicator for the polished UI */}
+          <span className="text-xs text-green-500 flex items-center border border-green-500/30 px-3 py-1 rounded bg-green-500/5">
+            <span className="w-1.5 h-1.5 bg-green-500 rounded-full mr-2 shadow-[0_0_5px_rgba(34,197,94,1)]"></span>
+            Live Data
+          </span>
         </h1>
+
         <div className="max-w-4xl mx-auto">
           <IntelligenceCard data={jobState.result} />
+          <ActionTriggers
+            ticker={ticker}
+            onDispatch={handleManualDispatch}
+            isProcessing={false}
+            cooldown={cooldown}
+          />
         </div>
       </div>
     );
   }
 
-  // Fallback Failure State
+  // --------------------------------------------------
+  // FAILURE STATE
+  // --------------------------------------------------
   return (
-    <div className="p-10 text-red-500 min-h-screen bg-black font-mono">
-      Job failed or timed out. Please try again.
+    <div className="p-10 min-h-screen bg-black font-mono">
+      <div className="text-red-500 mb-6 text-center text-xl">
+        Job failed or timed out. Please try again.
+      </div>
+      <div className="max-w-4xl mx-auto">
+        {ticker && (
+          <ActionTriggers
+            ticker={ticker}
+            onDispatch={handleManualDispatch}
+            isProcessing={false}
+            cooldown={cooldown}
+          />
+        )}
+      </div>
     </div>
   );
 }

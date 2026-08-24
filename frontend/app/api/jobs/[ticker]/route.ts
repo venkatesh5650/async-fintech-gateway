@@ -7,7 +7,7 @@ export async function POST(request: Request, context: Context) {
   const resolvedParams = await context.params;
   const ticker = resolvedParams.ticker;
 
-  const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
   try {
     const cookieStore = await cookies();
@@ -61,7 +61,7 @@ export async function GET(request: Request, context: Context) {
   const resolvedParams = await context.params;
   const jobId = resolvedParams.ticker;
 
-  const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
   try {
     const cookieStore = await cookies();
