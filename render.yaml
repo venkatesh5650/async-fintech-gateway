@@ -10,18 +10,18 @@ services:
     dockerfilePath: Dockerfile
     healthCheckPath: /health
     envVars:
-      # Automatically injects the internal DB URL from the database below
+      
       - key: DATABASE_URL
         fromDatabase:
           name: fintech-postgres
           property: connectionString
-      # Automatically injects the internal Redis URL from the cache below
+      
       - key: REDIS_URL
         fromService:
           type: redis
           name: fintech-redis
           property: connectionString
-      # Leaves the API key blank in code. You will paste this securely in the dashboard.
+   
       - key: GROQ_API_KEY
         sync: false 
 
@@ -29,7 +29,7 @@ services:
   - type: redis
     name: fintech-redis
     plan: free
-    ipAllowList: [] # Secures Redis so it can only be accessed internally by your API
+    ipAllowList: [] 
 
 databases:
   # 3. The PostgreSQL Time-Series Storage
