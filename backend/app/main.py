@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from app.database.database import engine, Base
 from app.core.limiter import RateLimiter
 from app.core.telemetry import StructuredLoggingMiddleware  
-from app.routers import auth, intelligence, market  
+from app.routers import auth, intelligence, market,websocket  
 
 # Track container boot time for uptime metrics
 START_TIME = time.time()
@@ -32,6 +32,7 @@ app.add_middleware(StructuredLoggingMiddleware)
 app.include_router(auth.router)
 app.include_router(intelligence.router)
 app.include_router(market.router)
+app.include_router(websocket.router)
 
 # Perimeter Defense: Rate Limiter Configuration
 limiter = RateLimiter(requests_per_minute=5)

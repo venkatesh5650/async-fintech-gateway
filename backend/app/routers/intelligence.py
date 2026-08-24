@@ -17,6 +17,7 @@ import logging
 from app.database.schemas import JobAcceptedResponse, JobStatusResponse
 from app.core.security import get_current_user
 from app.core.limiter import RateLimiter
+from app.routers.websocket import manager
 from langchain_core.messages import HumanMessage
 from app.graph.graph import app as intelligence_graph
 from app.core.emitter import broadcast_intelligence_result
@@ -95,6 +96,7 @@ async def run_intelligence_worker(job_id: str, ticker: str):
         # Construct standard execution result payload
         payload = {
             "status": "completed",
+            "server_timestamp": int(time.time() * 1000),
             "result": {
                 "ticker": ticker.upper(),
                 "signal": extracted_signal,
@@ -104,9 +106,11 @@ async def run_intelligence_worker(job_id: str, ticker: str):
         }
         # Cache completed state in Redis with a 3600-second expiration window
         await redis_client.set(job_id, json.dumps(payload), ex=3600)
-
         
+
+        await manager.send_personal_message(payload, job_id=job_id)
         await broadcast_intelligence_result(payload)
+      
         
 
         # THE EVENT EMITTER: FIRING THE PAYLOAD TO n8n WORKFLOW 2
@@ -141,6 +145,7 @@ async def run_intelligence_worker(job_id: str, ticker: str):
         }
         # Persist failure state to Redis for upstream client diagnostics
         await redis_client.set(job_id, json.dumps(error_payload), ex=3600)
+        await manager.send_personal_message(error_payload, job_id=job_id)
 
 @router.post("/jobs/{ticker}",status_code=status.HTTP_202_ACCEPTED)
 async def submit_analysis_job(
