@@ -9,17 +9,17 @@ export async function fetchIntelligence(
   ticker: string,
 ): Promise<IntelligenceResponse> {
   try {
-    // 1. The 1% Maneuver: Extract the secure HTTP-Only cookie server-side (Next.js 16 standard)
+    // Extract secure HTTP-only session token from cookie store server-side
     const cookieStore = await cookies();
     const token = cookieStore.get("session_token")?.value;
 
-    // 2. Build secure headers with dynamic Bearer token injection
+    // Attach Bearer token authorization header
     const headers: HeadersInit = {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
 
-    // 3. Execute request against the protected or backend route
+    // Forward request to backend intelligence service
     const response = await fetch(
       `${API_BASE_URL}/v1/intelligence/public/${ticker}`,
       {

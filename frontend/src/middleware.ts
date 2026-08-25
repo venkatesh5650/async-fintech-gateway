@@ -1,9 +1,7 @@
-// frontend/proxy.ts
-
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-export function proxy(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const isProtectedRoute = request.nextUrl.pathname.startsWith("/dashboard");
   const sessionToken = request.cookies.get("session_token")?.value;
 

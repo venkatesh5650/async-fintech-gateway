@@ -6,12 +6,12 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { email, password } = body;
 
-    // 1. The OAuth2 Translation Layer
+    // Format payload as form data for OAuth2 password grant
     const formData = new URLSearchParams();
     formData.append('username', email); 
     formData.append('password', password);
 
-    // 2. The Internal Network Fetch
+    // Forward credentials to backend auth service
     const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
     
     const backendRes = await fetch(`${backendUrl}/v1/auth/token`, { 
@@ -32,8 +32,8 @@ export async function POST(request: Request) {
     const data = await backendRes.json();
     const token = data.access_token;
 
-    // 3. The 1% Maneuver: Next.js 15 Async Cookie Serialization
-    const cookieStore = await cookies(); // <-- Next.js 15 requires awaiting this
+    // Persist JWT token in secure HTTP-only cookie
+    const cookieStore = await cookies();
     
     cookieStore.set({
       name: 'session_token',
