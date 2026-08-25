@@ -28,6 +28,22 @@ class ConnectionManager:
             websocket = self.active_connections[job_id]
             await websocket.send_text(json.dumps(message))
 
+    async def broadcast(self, message: dict):
+        """
+        Broadcasts a message payload to all actively connected WebSockets.
+        Gracefully catches disconnected sockets to prevent pipeline failures.
+        """
+        dead_connections = []
+        for job_id, websocket in list(self.active_connections.items()):
+            try:
+                await websocket.send_text(json.dumps(message))
+            except Exception as e:
+                logger.warning(f"[WS] Failed to broadcast frame to Job ID {job_id}: {str(e)}")
+                dead_connections.append(job_id)
+
+        for dead_id in dead_connections:
+            self.disconnect(dead_id)
+
 manager = ConnectionManager()
 
 @router.websocket("/jobs/{job_id}")

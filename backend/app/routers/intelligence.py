@@ -8,13 +8,20 @@ caching for polling workflows, zero-trust JWT authentication guards, and
 public CQRS read query routes.
 """
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Path, Security, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Path, Security, Request, Body
 from fastapi.security.api_key import APIKeyHeader
 import uuid
 import json
 import time
 import logging
-from app.database.schemas import JobAcceptedResponse, JobStatusResponse
+import asyncio
+from app.database.schemas import (
+    JobAcceptedResponse, 
+    JobStatusResponse,
+    BatchAnalysisRequest,
+    BatchJobAcceptedResponse,
+    BatchJobItem
+)
 from app.core.security import get_current_user
 from app.core.limiter import RateLimiter
 from app.routers.websocket import manager
@@ -24,6 +31,9 @@ from app.core.emitter import broadcast_intelligence_result
 import redis.asyncio as redis
 import os
 import httpx
+
+MAX_CONCURRENCY = int(os.getenv("BATCH_CONCURRENCY_LIMIT", "5"))
+
 
 # Configure API router with versioned routing prefix and documentation grouping tag
 router = APIRouter(prefix="/v1/intelligence", tags=["Intelligence Engine Index"])
@@ -36,20 +46,18 @@ async def verify_m2m_or_user(
     api_key: str = Security(api_key_header)
 ):
     """
-    Zero-Trust Dual Gatekeeper
+    Security gatekeeper validating incoming requests via M2M API key or User JWT.
     """
     expected_key = os.getenv("N8N_API_KEY", "super_secure_internal_orchestration_secret_key_2026")
     
-    # 1. Machine-to-Machine Check (n8n)
+    # Machine-to-Machine authentication check
     if api_key and api_key == expected_key:
         return {"role": "m2m_orchestrator"}
         
-    # 2. Human JWT Check (Next.js Dashboard)
+    # User JWT authentication check
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.split(" ")[1]
-        # By removing the try/except, if the token is expired, 
-        # get_current_user will natively raise a 401 Unauthorized!
         user = await get_current_user(token) 
         if user:
             return user
@@ -59,7 +67,7 @@ async def verify_m2m_or_user(
         detail="Zero-Trust Access Denied: Missing valid M2M API Key or User JWT."
     )
 
-# Initialized asynchronous Redis connection pool and perimeter rate limiter
+# Asynchronous Redis connection pool and perimeter rate limiter
 REDIS_URL = os.getenv("REDIS_URL", "redis://fintech_redis:6379/0")
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 limiter = RateLimiter(requests_per_minute=5)
@@ -71,7 +79,7 @@ async def run_intelligence_worker(job_id: str, ticker: str):
     """
     start_time = time.perf_counter()
     try:
-        # Initialized state payload container for the LangGraph re-act graph
+        # Initialize state payload container for the LangGraph state graph
         initial_state = {
             "ticker": ticker.upper(),
             "messages": [
@@ -84,7 +92,7 @@ async def run_intelligence_worker(job_id: str, ticker: str):
         final_state = await intelligence_graph.ainvoke(initial_state)
         report = final_state.get("analysis_report", "ERROR: No report generated.")
        
-        # Deterministic string-matching logic to parse alpha signals from agent text output
+        # Parse alpha signals deterministically from agent output
         report_upper = report.upper()
         if "SIGNAL: BUY" in report_upper: extracted_signal = "BUY"
         elif "SIGNAL: SELL" in report_upper: extracted_signal = "SELL"
@@ -93,7 +101,7 @@ async def run_intelligence_worker(job_id: str, ticker: str):
             
         execution_time = (time.perf_counter() - start_time) * 1000
         
-        # Construct standard execution result payload
+        # Construct standardized execution result payload
         payload = {
             "status": "completed",
             "server_timestamp": int(time.time() * 1000),
@@ -104,17 +112,15 @@ async def run_intelligence_worker(job_id: str, ticker: str):
                 "execution_time_ms": round(execution_time, 2)
             }
         }
-        # Cache completed state in Redis with a 3600-second expiration window
+        # Cache completed state in Redis with a 3600-second expiration TTL
         await redis_client.set(job_id, json.dumps(payload), ex=3600)
         
-
+        # Dispatch result to active WebSocket channels and event broadcaster
         await manager.send_personal_message(payload, job_id=job_id)
+        await manager.broadcast(payload)
         await broadcast_intelligence_result(payload)
       
-        
-
-        # THE EVENT EMITTER: FIRING THE PAYLOAD TO n8n WORKFLOW 2
-      
+        # Dispatch notification payload to external orchestration webhook
         webhook_url = "http://n8n:5678/webhook/finance-alert"
         
         webhook_data = {
@@ -125,15 +131,12 @@ async def run_intelligence_worker(job_id: str, ticker: str):
             "execution_time": round(execution_time, 2)
         }
         
-        # Using print() to guarantee it bypasses the logger and shows in terminal
-        print(f"🚀 [WEBHOOK] Attempting to fire payload for {ticker.upper()} to {webhook_url}")
-        
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(webhook_url, json=webhook_data)
-                print(f"✅ [WEBHOOK SUCCESS] Fired to n8n for {ticker.upper()} | Status: {response.status_code}")
+                logging.info(f"Webhook notification dispatched for {ticker.upper()} (Status: {response.status_code})")
         except Exception as webhook_err:
-            print(f"⚠️ [WEBHOOK FAILURE] Could not reach n8n for {ticker.upper()}: {str(webhook_err)}")
+            logging.warning(f"Webhook notification failed for {ticker.upper()}: {str(webhook_err)}")k_err)}")
       
 
     except Exception as e:
@@ -146,8 +149,35 @@ async def run_intelligence_worker(job_id: str, ticker: str):
         # Persist failure state to Redis for upstream client diagnostics
         await redis_client.set(job_id, json.dumps(error_payload), ex=3600)
         await manager.send_personal_message(error_payload, job_id=job_id)
+        await manager.broadcast(error_payload)
 
-@router.post("/jobs/{ticker}",status_code=status.HTTP_202_ACCEPTED)
+
+async def run_batch_intelligence_orchestrator(batch_id: str, jobs: list[tuple[str, str]]):
+    """
+    Concurrency Fan-Out Orchestrator.
+    Controls parallel execution of multi-asset intelligence workers using an asyncio.Semaphore
+    to prevent thread starvation and external API rate limit penalties.
+    """
+    semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
+
+    async def worker_with_semaphore(job_id: str, ticker: str):
+        async with semaphore:
+            await run_intelligence_worker(job_id, ticker)
+
+    # Launch controlled concurrent fan-out across worker threads
+    await asyncio.gather(*(worker_with_semaphore(job_id, ticker) for job_id, ticker in jobs))
+
+    # Mark parent batch status completed in Redis
+    completed_payload = {
+        "batch_id": batch_id,
+        "status": "completed",
+        "total_assets": len(jobs),
+        "server_timestamp": int(time.time() * 1000)
+    }
+    await redis_client.set(f"batch:{batch_id}", json.dumps(completed_payload), ex=3600)
+
+
+@router.post("/jobs/{ticker}", status_code=status.HTTP_202_ACCEPTED)
 async def submit_analysis_job(
     background_tasks: BackgroundTasks,
     # Strict Pattern Boundary to prevent numeric/malformed ticker drains
@@ -170,6 +200,60 @@ async def submit_analysis_job(
     background_tasks.add_task(run_intelligence_worker, job_id, ticker)
     
     return JobAcceptedResponse(job_id=job_id)
+
+
+@router.post("/batch", response_model=BatchJobAcceptedResponse, status_code=status.HTTP_202_ACCEPTED)
+async def submit_batch_analysis_jobs(
+    background_tasks: BackgroundTasks,
+    payload: BatchAnalysisRequest = Body(..., description="Batch payload containing 1-50 equity tickers"),
+    _: None = Depends(limiter),
+    auth_verified: dict = Security(verify_m2m_or_user)
+):
+    """
+    Batch Command Edge:
+    Zero-Trust Pydantic perimeter intercepts up to 50 target tickers in a single payload.
+    Maps unique tracking UUIDs in Redis and offloads execution to an asynchronous
+    controlled concurrency worker pool (asyncio.Semaphore).
+    """
+    batch_id = str(uuid.uuid4())
+    job_items: list[BatchJobItem] = []
+    worker_jobs: list[tuple[str, str]] = []
+
+    # Map individual UUIDs and pre-warm Redis states for instant WebSocket subscriptions
+    for ticker in payload.tickers:
+        job_id = str(uuid.uuid4())
+        job_items.append(BatchJobItem(ticker=ticker, job_id=job_id))
+        worker_jobs.append((job_id, ticker))
+
+        # Pre-warm individual job state
+        initial_job_payload = {
+            "status": "processing",
+            "batch_id": batch_id,
+            "ticker": ticker,
+            "result": None
+        }
+        await redis_client.set(job_id, json.dumps(initial_job_payload), ex=3600)
+
+    # Pre-warm batch status state in Redis
+    initial_batch_payload = {
+        "batch_id": batch_id,
+        "status": "processing",
+        "total_assets": len(payload.tickers),
+        "jobs": [item.model_dump() for item in job_items],
+        "server_timestamp": int(time.time() * 1000)
+    }
+    await redis_client.set(f"batch:{batch_id}", json.dumps(initial_batch_payload), ex=3600)
+
+    # Dispatch asynchronous concurrency fan-out
+    background_tasks.add_task(run_batch_intelligence_orchestrator, batch_id, worker_jobs)
+
+    return BatchJobAcceptedResponse(
+        batch_id=batch_id,
+        total_assets=len(job_items),
+        status="queued",
+        jobs=job_items,
+        message=f"Dispatched {len(job_items)} assets to controlled concurrency intelligence fan-out."
+    )
 
 
 @router.get("/jobs/{job_id}", response_model=JobStatusResponse, status_code=status.HTTP_200_OK)
