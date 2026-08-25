@@ -62,3 +62,57 @@ class JobStatusResponse(BaseModel):
     job_id: str
     status: str = Field(..., description="'processing', 'completed', or 'failed'")
     result: Optional[IntelligenceResponse] = Field(default=None, description="The final payload if completed")
+
+
+# ==================================================
+# MULTI-ASSET BATCH ORCHESTRATION SCHEMAS
+# ==================================================
+
+class BatchAnalysisRequest(BaseModel):
+    """
+    Zero-Trust Pydantic Perimeter for multi-asset batch dispatch.
+    Limits batch size to 50 tickers, sanitizes inputs, deduplicates symbols,
+    and filters out malformed items with high-availability resilience.
+    """
+    tickers: list[str] = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        description="List of 1-50 US equity ticker symbols to analyze simultaneously"
+    )
+
+    @field_validator("tickers")
+    @classmethod
+    def sanitize_and_filter_tickers(cls, values: list[str]) -> list[str]:
+        valid_tickers: list[str] = []
+        seen: set[str] = set()
+
+        for raw in values:
+            if not isinstance(raw, str):
+                continue
+            clean = raw.upper().strip()
+            # Enforce strict 1-5 alphabetic character boundary
+            if clean.isalpha() and (1 <= len(clean) <= 5):
+                if clean not in seen:
+                    seen.add(clean)
+                    valid_tickers.append(clean)
+
+        if not valid_tickers:
+            raise ValueError("Batch request must contain at least one valid 1-5 character alphabetic ticker.")
+
+        return valid_tickers
+
+
+class BatchJobItem(BaseModel):
+    """Individual asset tracking unit inside a distributed batch dispatch."""
+    ticker: str = Field(..., description="Target equity ticker symbol")
+    job_id: str = Field(..., description="Unique UUID for real-time WebSocket stream binding")
+
+
+class BatchJobAcceptedResponse(BaseModel):
+    """HTTP 202 Response schema returned immediately upon batch task acceptance."""
+    batch_id: str = Field(..., description="Parent batch identifier for multi-asset tracking")
+    total_assets: int = Field(..., description="Total sanitized assets queued for analysis")
+    status: str = Field(default="queued", description="Initial queue state")
+    jobs: list[BatchJobItem] = Field(..., description="Asset-to-Job mapping for real-time telemetry")
+    message: str = Field(default="Multi-asset batch accepted and dispatched to async worker fan-out.")
