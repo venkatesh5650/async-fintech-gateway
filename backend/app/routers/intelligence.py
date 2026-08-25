@@ -136,7 +136,7 @@ async def run_intelligence_worker(job_id: str, ticker: str):
                 response = await client.post(webhook_url, json=webhook_data)
                 logging.info(f"Webhook notification dispatched for {ticker.upper()} (Status: {response.status_code})")
         except Exception as webhook_err:
-            logging.warning(f"Webhook notification failed for {ticker.upper()}: {str(webhook_err)}")k_err)}")
+            logging.warning(f"Webhook notification failed for {ticker.upper()}: {str(webhook_err)}")
       
 
     except Exception as e:
