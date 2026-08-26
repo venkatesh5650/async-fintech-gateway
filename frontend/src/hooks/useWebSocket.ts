@@ -21,6 +21,10 @@ export default function useWebSocket({
 
   // Keep the latest onMessage without re-creating the connection
   useEffect(() => {
+    onMessageRef.current = onMessage;
+  }, [onMessage]);
+
+  useEffect(() => {
     if (!jobId) return;
 
     let cancelled = false;
