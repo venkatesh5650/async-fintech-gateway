@@ -48,7 +48,7 @@ Replaced short-polling intervals with a persistent WebSocket pipeline backed by 
 To scale beyond single-ticker ingestion, the pipeline supports institutional asset baskets:
 * **Zero-Trust Array Boundary:** FastAPI validates incoming payloads using a strict Pydantic BatchAnalysisRequest schema, capping single batch submissions at 50 tickers.
 * **Throttled Concurrency Fan-Out:** Background chunking workers orchestrate parallel LangGraph executions under an asyncio.Semaphore(5) boundary, maximizing processing throughput while avoiding external LLM rate-limit bans.
-* * **Distributed Queue Mapping:** Allocates independent UUID keys in Redis for each asset in the array, enabling concurrent telemetry streaming across the client UI.
+* **Distributed Queue Mapping:** Allocates independent UUID keys in Redis for each asset in the array, enabling concurrent telemetry streaming across the client UI.
 * **Client Cooldown State Machine:** Integrated the dispatch controls with a client-side 60-second cooldown timer to prevent redundant invocations and avoid hitting backend firewalls.
 
 ## 💻 Local Infrastructure Ignition
