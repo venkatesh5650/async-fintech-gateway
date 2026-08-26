@@ -41,6 +41,10 @@ export async function POST(request: Request, context: Context) {
           : errorData.detail;
       }
 
+      if (response.status === 401 || response.status === 403) {
+        cookieStore.delete("session_token");
+      }
+
       return NextResponse.json(
         { error: errorMessage },
         { status: response.status },
@@ -93,6 +97,10 @@ export async function GET(request: Request, context: Context) {
         errorMessage = Array.isArray(errorData.detail)
           ? errorData.detail[0].msg
           : errorData.detail;
+      }
+
+      if (response.status === 401 || response.status === 403) {
+        cookieStore.delete("session_token");
       }
 
       return NextResponse.json(
