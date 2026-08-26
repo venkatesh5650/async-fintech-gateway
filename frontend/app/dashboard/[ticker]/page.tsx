@@ -6,6 +6,7 @@ import IntelligenceCard from "@/components/IntelligenceCard";
 import LogoutButton from "@/components/LogoutButton";
 import ActionTriggers from "@/components/ActionTriggers";
 import BatchCommandCenter from "@/components/BatchCommandCenter";
+import MarketChart from "@/components/MarketChart";
 import useWebSocket from "@/hooks/useWebSocket";
 import { BatchAssetStatus, BatchJobAcceptedResponse } from "@/types/api";
 
@@ -31,6 +32,28 @@ export default function DynamicDashboardPage() {
   const [batchId, setBatchId] = useState<string | null>(null);
   const [batchAssets, setBatchAssets] = useState<BatchAssetStatus[]>([]);
   const [isBatchProcessing, setIsBatchProcessing] = useState(false);
+
+  // Chart pricing data state
+  const [chartData, setChartData] = useState<any[]>([]);
+
+  // Fetch historical price points
+  useEffect(() => {
+    if (!ticker) return;
+    const fetchHistory = async () => {
+      try {
+        const res = await fetch(`/api/market-data/${ticker}`);
+        if (res.ok) {
+          const history = await res.json();
+          setChartData(history);
+        } else {
+          console.error("Failed to fetch historical market data");
+        }
+      } catch (err) {
+        console.error("Error fetching historical market data:", err);
+      }
+    };
+    fetchHistory();
+  }, [ticker]);
 
   // --------------------------------------------------
   // COOLDOWN ENGINE
@@ -86,6 +109,28 @@ export default function DynamicDashboardPage() {
             })
           );
         }
+      }
+
+      // 3. Real-Time Telemetry Broadcast update for the chart
+      if (data && data.type === "market_data" && data.ticker === ticker) {
+        setChartData((prev) => {
+          const newPoint = {
+            time: Math.floor(new Date(data.timestamp).getTime() / 1000),
+            open: data.open,
+            high: data.high,
+            low: data.low,
+            close: data.close,
+            volume: data.volume,
+          };
+
+          const index = prev.findIndex((p) => p.time === newPoint.time);
+          if (index !== -1) {
+            const updated = [...prev];
+            updated[index] = newPoint;
+            return updated;
+          }
+          return [...prev, newPoint];
+        });
       }
     },
     [ticker, jobId]
@@ -333,7 +378,7 @@ export default function DynamicDashboardPage() {
   // --------------------------------------------------
   if (!ticker || !jobState || jobState.status === "processing") {
     return (
-      <div className="p-10 flex flex-col items-center justify-center space-y-6 min-h-screen bg-black relative">
+      <div className="p-10 min-h-screen bg-black relative flex flex-col items-center">
         {/* TCP Connection Indicator */}
         <div className="absolute top-8 right-8 flex items-center space-x-2 text-xs font-mono">
           <span
@@ -348,14 +393,26 @@ export default function DynamicDashboardPage() {
           </span>
         </div>
 
-        <div className="h-12 w-64 bg-gray-800 rounded-md animate-pulse" />
-        <div className="text-gray-400 font-mono text-sm animate-pulse">
-          LangGraph AI Engine is reasoning on {ticker || "ASSET"}...
-        </div>
+        <div className="w-full max-w-4xl space-y-6 mt-8">
+          <h1 className="text-3xl font-bold text-white mb-6 border-b border-gray-800 pb-2 font-mono flex items-center justify-between">
+            <span>{ticker || "Asset"} AI Analysis</span>
+            <LogoutButton />
+          </h1>
 
-        {/* Render Batch Matrix if batch is active during processing */}
-        {batchId && batchAssets.length > 0 && (
-          <div className="w-full max-w-4xl mt-8">
+          {/* Show chart immediately if we have data, even when AI is reasoning */}
+          {ticker && chartData.length > 0 && (
+            <MarketChart ticker={ticker} data={chartData} />
+          )}
+
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 flex flex-col items-center space-y-4 font-mono">
+            <div className="h-8 w-8 border-2 border-t-blue-500 border-gray-800 rounded-full animate-spin" />
+            <div className="text-gray-400 text-sm">
+              LangGraph AI Engine is reasoning on {ticker || "ASSET"}...
+            </div>
+          </div>
+
+          {/* Render Batch Matrix if batch is active during processing */}
+          {batchId && batchAssets.length > 0 && (
             <BatchCommandCenter
               batchId={batchId}
               assets={batchAssets}
@@ -364,8 +421,8 @@ export default function DynamicDashboardPage() {
                 setBatchAssets([]);
               }}
             />
-          </div>
-        )}
+          )}
+        </div>
       </div>
     );
   }
@@ -387,7 +444,10 @@ export default function DynamicDashboardPage() {
           </div>
         </h1>
 
-        <div className="max-w-4xl mx-auto">
+        <div className="max-w-4xl mx-auto space-y-6">
+          {/* Candlestick Chart Visualization */}
+          {ticker && <MarketChart ticker={ticker} data={chartData} />}
+
           <IntelligenceCard data={jobState.result} />
           
           <ActionTriggers
