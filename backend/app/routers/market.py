@@ -42,6 +42,7 @@ async def fetch_live_market_content(payload: MarketDataPayload):
             logging.error(f"❌ [EXTERNAL API ERROR] Failed to fetch market data after retries: {str(e)}")
             return
 
+    pricing_data = None
     try:
         async with AsyncSessionLocal() as session:
             async with session.begin():
@@ -68,12 +69,31 @@ async def fetch_live_market_content(payload: MarketDataPayload):
                     volume=payload.volume
                 )
                 session.add(pricing_record)
+                await session.flush()
+
+                # Safely copy values to a dictionary within the active transaction
+                pricing_data = {
+                    "type": "market_data",
+                    "ticker": payload.ticker.upper(),
+                    "timestamp": pricing_record.timestamp.isoformat(),
+                    "open": float(pricing_record.open_price),
+                    "high": float(pricing_record.high_price),
+                    "low": float(pricing_record.low_price),
+                    "close": float(pricing_record.close_price),
+                    "volume": int(pricing_record.volume)
+                }
             
             await session.commit()
             logging.warning(f"✅ [DATABASE SUCCESS] Saved {payload.ticker} price to database!")
             
+        # Broadcast the data frame to all active websocket clients
+        if pricing_data:
+            from app.routers.websocket import manager
+            await manager.broadcast(pricing_data)
+            logging.warning(f"📡 [WEBSOCKET BROADCAST] Emitted telemetry for {payload.ticker}: {pricing_data}")
+            
     except Exception as db_exc:
-        logging.error(f"❌ [DATABASE ERROR] Failed to save: {str(db_exc)}")
+        logging.error(f"❌ [DATABASE ERROR] Failed to save or broadcast: {str(db_exc)}")
 
 
 @router.post(
@@ -91,3 +111,43 @@ async def ingest_market_data(payload: MarketDataPayload, background_tasks: Backg
         "message": f"Asset metrics for {payload.ticker} queued for downstream analytics.",
         "tracking_id": "async_task_dispatched"
     }
+
+
+@router.get(
+    "/history/{ticker}", 
+    status_code=status.HTTP_200_OK
+)
+async def get_market_history(ticker: str):
+    """
+    CQRS Query Edge: Retrieve time-series historical pricing data for a ticker symbol.
+    """
+    async with AsyncSessionLocal() as session:
+        # 1. Resolve ticker symbol to id
+        ticker_stmt = select(Ticker).where(Ticker.symbol == ticker.upper())
+        ticker_result = await session.execute(ticker_stmt)
+        ticker_obj = ticker_result.scalars().first()
+        
+        if not ticker_obj:
+            return []
+            
+        # 2. Query market_pricing for that ticker, sorted chronologically (ascending)
+        pricing_stmt = (
+            select(MarketPricing)
+            .where(MarketPricing.ticker_id == ticker_obj.id)
+            .order_by(MarketPricing.timestamp.asc())
+        )
+        pricing_result = await session.execute(pricing_stmt)
+        pricing_list = pricing_result.scalars().all()
+        
+        # 3. Format response to match candlestick chart data points
+        return [
+            {
+                "time": int(item.timestamp.replace(tzinfo=timezone.utc).timestamp()),
+                "open": float(item.open_price),
+                "high": float(item.high_price),
+                "low": float(item.low_price),
+                "close": float(item.close_price),
+                "volume": int(item.volume)
+            }
+            for item in pricing_list
+        ]
