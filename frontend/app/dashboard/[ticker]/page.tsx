@@ -112,6 +112,7 @@ export default function DynamicDashboardPage() {
 
         if (!dispatchRes.ok) {
           if (dispatchRes.status === 401 || dispatchRes.status === 403) {
+            await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
             window.location.href = "/login";
             return;
           }
@@ -158,6 +159,7 @@ export default function DynamicDashboardPage() {
 
       if (!res.ok) {
         if (res.status === 401 || res.status === 403) {
+          await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
           window.location.href = "/login";
           return;
         }
@@ -189,18 +191,34 @@ export default function DynamicDashboardPage() {
   };
 
   // --------------------------------------------------
-  // ERROR STATES
+  // ERROR STATES & SESSION RESTORATION
   // --------------------------------------------------
+  useEffect(() => {
+    if (
+      error &&
+      (error === "SESSION_EXPIRED" ||
+        error.includes("Unauthorized") ||
+        error.includes("Zero-Trust Access Denied"))
+    ) {
+      fetch("/api/auth/logout", { method: "POST" })
+        .catch(() => {})
+        .finally(() => {
+          window.location.href = "/login";
+        });
+    }
+  }, [error]);
+
   if (error) {
     if (
       error === "SESSION_EXPIRED" ||
       error.includes("Unauthorized") ||
       error.includes("Zero-Trust Access Denied")
     ) {
-      if (typeof window !== "undefined") {
-        window.location.href = "/login";
-      }
-      return null;
+      return (
+        <div className="p-10 flex flex-col items-center justify-center min-h-screen bg-black font-mono">
+          <div className="text-gray-400">Redirecting to login...</div>
+        </div>
+      );
     }
 
     const isInvalidTicker = error.startsWith("INVALID_TICKER:");
