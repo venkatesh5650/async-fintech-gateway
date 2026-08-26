@@ -18,23 +18,38 @@ class TokenResponse(BaseModel):
     token_type: str
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
-async def register_user(user_data: UserCreate):
+async def register_user(
+    user_data: UserCreate,
+    db: AsyncSession = Depends(get_db)
+):
     """
     Registers a new user with secure bcrypt password hashing.
     """
+    # Check if user already exists
+    result = await db.execute(select(User).where(User.email == user_data.email))
+    existing_user = result.scalars().first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered."
+        )
+
     hashed_password = get_password_hash(user_data.password)
     
-    # TODO: Persist user credentials to the PostgreSQL asynchronous database session
+    new_user = User(email=user_data.email, hashed_password=hashed_password)
+    db.add(new_user)
+    await db.commit()
+    await db.refresh(new_user)
     
     return {
         "message": "User registered successfully.",
-        "email": user_data.email,
-        "password_hash": hashed_password[:15] + "..."  # Masked for preview safety
+        "email": new_user.email
     }
 
 @router.post("/token", response_model=TokenResponse)
 async def login_for_access_token(
-    form_data: OAuth2PasswordRequestForm = Depends()
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: AsyncSession = Depends(get_db)
 ):
     """
     Authenticates credentials via OAuth2 form-encoded payload 
@@ -44,16 +59,17 @@ async def login_for_access_token(
     email = form_data.username
     password = form_data.password
 
-    # TODO: Fetch user record from database by email
-    # db_user = await db.execute(select(User).where(User.email == email))
+    # Fetch user record from database by email
+    result = await db.execute(select(User).where(User.email == email))
+    db_user = result.scalars().first()
     
-    # TODO: Verify user credentials against database record
-    # if not db_user or not verify_password(password, db_user.hashed_password):
-    #     raise HTTPException(
-    #         status_code=status.HTTP_401_UNAUTHORIZED,
-    #         detail="Incorrect email or password",
-    #         headers={"WWW-Authenticate": "Bearer"},
-    #     )
+    # Verify user credentials against database record
+    if not db_user or not verify_password(password, db_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     # Generate the signed JWT access token using the email subject claim
     access_token = create_access_token(data={"sub": email})
@@ -61,4 +77,4 @@ async def login_for_access_token(
     return {
         "access_token": access_token,
         "token_type": "bearer"
-             }
+    }
