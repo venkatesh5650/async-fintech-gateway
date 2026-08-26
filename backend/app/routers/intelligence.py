@@ -103,6 +103,7 @@ async def run_intelligence_worker(job_id: str, ticker: str):
         
         # Construct standardized execution result payload
         payload = {
+            "job_id": job_id,
             "status": "completed",
             "server_timestamp": int(time.time() * 1000),
             "result": {
@@ -142,6 +143,7 @@ async def run_intelligence_worker(job_id: str, ticker: str):
     except Exception as e:
         logging.error(f"❌ [WORKER FAILURE] Job {job_id} crashed: {str(e)}")
         error_payload = {
+            "job_id": job_id,
             "status": "failed",
             "result": None,
             "error": str(e)
@@ -193,7 +195,7 @@ async def submit_analysis_job(
     job_id = str(uuid.uuid4())
     
     # Pre-warm Redis state to prevent polling race conditions before the worker boots
-    initial_payload = {"status": "processing", "result": None}
+    initial_payload = {"job_id": job_id, "status": "processing", "result": None}
     await redis_client.set(job_id, json.dumps(initial_payload), ex=3600)
     
     # Register asynchronous background worker task
@@ -227,6 +229,7 @@ async def submit_batch_analysis_jobs(
 
         # Pre-warm individual job state
         initial_job_payload = {
+            "job_id": job_id,
             "status": "processing",
             "batch_id": batch_id,
             "ticker": ticker,

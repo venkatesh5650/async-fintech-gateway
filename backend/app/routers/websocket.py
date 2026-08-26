@@ -1,10 +1,15 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import logging
 import json
+import redis.asyncio as redis
+import os
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 logger.propagate = True
+
+REDIS_URL = os.getenv("REDIS_URL", "redis://fintech_redis:6379/0")
+redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 
 router = APIRouter(prefix="/v1/ws", tags=["WebSockets"])
 
@@ -50,6 +55,18 @@ manager = ConnectionManager()
 async def websocket_job_endpoint(websocket: WebSocket, job_id: str):
     print(f">>> WS HANDLER ENTERED for {job_id}", flush=True)
     await manager.connect(job_id, websocket)
+
+    # Immediately attempt to push cached state to prevent delivery race conditions
+    try:
+        cached_data = await redis_client.get(job_id)
+        if cached_data:
+            payload = json.loads(cached_data)
+            await websocket.send_text(json.dumps(payload))
+            logger.info(f"[WS] Dispatched initial state from Redis cache for Job ID: {job_id}")
+    except Exception as redis_err:
+        # Fail-Open: log error but allow websocket transmission stream to remain active
+        logger.error(f"[WS] Fail-open on Redis status cache read error for Job ID {job_id}: {str(redis_err)}")
+
     try:
         while True:
             # Keep the socket open and listen for client pings
