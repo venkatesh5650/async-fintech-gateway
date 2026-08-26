@@ -31,21 +31,25 @@ Most financial AI applications crash in production because they lack stateful me
 ### 1. Multi-Cloud Edge Deployment 
 The platform is globally deployed. The Next.js frontend is hosted on Vercel's global CDN, routing traffic securely to a Dockerized FastAPI compute cluster hosted on a Render Virtual Private Cloud (VPC), utilizing a shared-network Valkey cache for zero-egress latency.
 
-### 2. Asynchronous CQRS Gateway 
-To prevent the React UI event loop from blocking during 5+ second LLM inferences, the system employs Command Query Responsibility Segregation (CQRS).
-* **The Command:** Clients `POST` a ticker. The proxy offloads the LangGraph execution to a background worker and instantly returns a `202 Accepted` with a UUID `job_id`.
-* **The Query:** The React client initiates a non-blocking `setInterval` hook, polling the `GET /job/{job_id}` endpoint to gracefully hydrate the UI upon AI completion.
+### 2. Zero-Trust Gateway & Token-Bucket Rate Limiting 
+The API gateway enforces a distributed Token-Bucket rate limiter (5 requests/min ceiling) in Redis to prevent API token draining and worker pool exhaustion. Request validation exceptions are captured by a centralized handler that returns standardized DataFirewallViolation responses without leaking internal stack traces.
 
-### 3. The Chaos Engineering Injection 
+### 3. Asynchronous CQRS & Gatekeeper Chaos Hardening
 The LangGraph state machine is strictly hardened against prompt injection attacks. 
-* **The Chaos Test:** Injecting a malicious user prompt ("Write a poem about Wall Street").
-* **The Response:** The decoupled Gatekeeper Node intercepted the schema violation, reprimanded the LLM in memory, forced a fallback strategy, and gracefully returned a machine-readable `SIGNAL: INVALID` to the UI in 1.49 seconds.
+* **Command/Query Decoupling:** Ingestion endpoints instantly acknowledge jobs (202 Accepted) and pre-warm Redis state keys to eliminate status-check race conditions").
+* **Chaos Hardening:** When subjected to adversarial prompt injection attacks, the decoupled Gatekeeper Node intercepts the payload, enforces the fallback schema, and issues a deterministic SIGNAL: INVALID in 1.49 seconds.
 
-### 4. The Real-Time Command Center & Dual-Auth Edge 
-The presentation layer is not a static webpage; it is a live FinTech terminal that enforces strict Command Query Responsibility Segregation (CQRS) at the UI level.
-* **Zero-Trust Dual Gatekeeper:** The FastAPI perimeter dynamically authenticates both autonomous Machine-to-Machine (M2M) orchestrators and human Next.js JWT sessions through a unified ASGI dependency.
-* **Reactive Telemetry UI:** A non-blocking `setInterval` React state machine polls the Redis background queue, gracefully hydrating the DOM with institutional-grade conditional styling and millisecond execution latency telemetry.
-* **Secure Client-Side Mutations:** A decoupled "Terminal Command Center" allows operators to manually bypass the cache and force heavy LangGraph re-evaluations without exposing API keys to the browser, triggering layout shifts, or forcing hard browser refreshes.
+### 4. Persistent Real-Time Telemetry (WebSockets)
+Replaced short-polling intervals with a persistent WebSocket pipeline backed by a custom ConnectionManager. The streaming interface includes:
+* **Heartbeat Monitoring:** Automated 30-second ping/pong cycles to drop dead TCP connections.
+* **Client Circuit Breakers:** Graceful reconnection and error-handling mechanisms that prevent UI lockups during network volatility.
+
+### 5. Multi-Asset Batch Orchestration & Concurrency Fan-Out
+To scale beyond single-ticker ingestion, the pipeline supports institutional asset baskets:
+* **Zero-Trust Array Boundary:** FastAPI validates incoming payloads using a strict Pydantic BatchAnalysisRequest schema, capping single batch submissions at 50 tickers.
+* **Throttled Concurrency Fan-Out:** Background chunking workers orchestrate parallel LangGraph executions under an asyncio.Semaphore(5) boundary, maximizing processing throughput while avoiding external LLM rate-limit bans.
+* * **Distributed Queue Mapping:** Allocates independent UUID keys in Redis for each asset in the array, enabling concurrent telemetry streaming across the client UI.
+* **Client Cooldown State Machine:** Integrated the dispatch controls with a client-side 60-second cooldown timer to prevent redundant invocations and avoid hitting backend firewalls.
 
 ## 💻 Local Infrastructure Ignition
 
