@@ -16,11 +16,13 @@ import time
 import logging
 import asyncio
 from app.database.schemas import (
-    JobAcceptedResponse, 
+    JobAcceptedResponse,
     JobStatusResponse,
     BatchAnalysisRequest,
     BatchJobAcceptedResponse,
-    BatchJobItem
+    BatchJobItem,
+    JobAuditEntry,
+    SystemAuditResponse,
 )
 from app.core.security import get_current_user
 from app.core.limiter import RateLimiter
@@ -293,3 +295,116 @@ async def get_job_status(job_id: str):
 #         "reasoning": f"LangGraph multi-agent analysis successfully completed for {upper_ticker}. Strong momentum detected via asynchronous evaluation.",
 #         "execution_time_ms": 138
 #     }
+
+
+# ==================================================
+# LIVE JOB AUDIT REGISTRY
+# ==================================================
+
+import re as _re
+
+# UUID v4 pattern used to match only genuine job keys in Redis,
+# filtering out batch:*, rate_limit:*, and other namespaced keys.
+_UUID_PATTERN = _re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    _re.IGNORECASE,
+)
+
+
+@router.get("/audit", response_model=SystemAuditResponse, status_code=status.HTTP_200_OK)
+async def get_live_job_audit():
+    """
+    Live Job Audit Registry.
+
+    Performs a non-blocking Redis SCAN across active job keys and
+    reconstructs runtime state in a single pipeline execution without querying PostgreSQL.
+    Public CQRS read endpoint for real-time dashboard telemetry.
+    """
+    audit_entries: list[JobAuditEntry] = []
+    processing_count = completed_count = failed_count = 0
+
+    # --- Redis SCAN: Non-blocking key discovery ---
+    # KEYS * is O(N) and blocks the Redis event loop — never use in production.
+    # SCAN iterates in small batches and is safe under concurrent load.
+    cursor = 0
+    job_keys: list[str] = []
+    while True:
+        cursor, keys = await redis_client.scan(cursor, match="*", count=200)
+        # Filter to UUID-shaped keys only — excludes batch:*, rate_limit:*, etc.
+        job_keys.extend(k for k in keys if _UUID_PATTERN.match(k))
+        if cursor == 0:
+            break
+
+    if not job_keys:
+        return SystemAuditResponse(
+            total_active_jobs=0,
+            processing=0,
+            completed=0,
+            failed=0,
+            jobs=[],
+            audit_timestamp_ms=int(time.time() * 1000),
+        )
+
+    # --- Single-trip Pipeline Fetch ---
+    # Fetch all job payloads and their TTLs in two pipelined commands.
+    # This is O(1) network round-trips regardless of job count.
+    pipeline = redis_client.pipeline()
+    for key in job_keys:
+        pipeline.get(key)
+    for key in job_keys:
+        pipeline.ttl(key)
+    results = await pipeline.execute()
+
+    # Results layout: first N are GET values, next N are TTL values
+    n = len(job_keys)
+    raw_values = results[:n]
+    ttl_values = results[n:]
+
+    for key, raw, ttl in zip(job_keys, raw_values, ttl_values):
+        if not raw:
+            continue
+        try:
+            data = json.loads(raw)
+            status_val = data.get("status", "unknown")
+            result = data.get("result") or {}
+
+            # Age estimate: jobs are stored with a 3600s TTL.
+            # age = 3600 - remaining_ttl gives seconds since dispatch.
+            # ttl == -1 means no expiry set (edge case), ttl == -2 means key vanished.
+            age_seconds = max(0, 3600 - ttl) if ttl > 0 else 0
+
+            entry = JobAuditEntry(
+                job_id=data.get("job_id", key),
+                ticker=data.get("ticker") or result.get("ticker", "UNKNOWN"),
+                status=status_val,
+                batch_id=data.get("batch_id"),
+                age_seconds=age_seconds,
+                signal=result.get("signal"),
+                execution_time_ms=result.get("execution_time_ms"),
+            )
+            audit_entries.append(entry)
+
+            if status_val == "processing":
+                processing_count += 1
+            elif status_val == "completed":
+                completed_count += 1
+            elif status_val == "failed":
+                failed_count += 1
+
+        except (json.JSONDecodeError, Exception):
+            # Malformed Redis entry — skip silently, do not crash the audit scan
+            logging.warning(f"[AUDIT] Skipped malformed Redis key: {key}")
+            continue
+
+    # Sort: processing jobs float to top (most urgent for an operator),
+    # then sort by age ascending within each status group.
+    audit_entries.sort(key=lambda e: (e.status != "processing", e.age_seconds))
+
+    return SystemAuditResponse(
+        total_active_jobs=len(audit_entries),
+        processing=processing_count,
+        completed=completed_count,
+        failed=failed_count,
+        jobs=audit_entries,
+        audit_timestamp_ms=int(time.time() * 1000),
+    )

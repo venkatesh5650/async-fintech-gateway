@@ -17,21 +17,39 @@ class ConnectionManager:
     def __init__(self):
         # Maps active TCP sockets directly to unique job_ids for O(1) routing
         self.active_connections: dict[str, WebSocket] = {}
+        # Track sequence numbers per active connection to allow clients to validate gaps
+        self.connection_sequences: dict[str, int] = {}
 
     async def connect(self, job_id: str, websocket: WebSocket):
         await websocket.accept()
         self.active_connections[job_id] = websocket
+        self.connection_sequences[job_id] = 0
         logger.info(f"[WS] Secure connection established for Job ID: {job_id}")
 
     def disconnect(self, job_id: str):
         if job_id in self.active_connections:
             del self.active_connections[job_id]
+        if job_id in self.connection_sequences:
+            del self.connection_sequences[job_id]
             logger.info(f"[WS] Connection pruned for Job ID: {job_id}")
+
+    async def _send_with_sequence(self, job_id: str, websocket: WebSocket, message: dict):
+        # Increment sequence number for this specific connection
+        seq = self.connection_sequences.get(job_id, 0) + 1
+        self.connection_sequences[job_id] = seq
+        
+        # Inject sequence number into payload
+        payload = {**message, "sequence_number": seq}
+        await websocket.send_text(json.dumps(payload))
 
     async def send_personal_message(self, message: dict, job_id: str):
         if job_id in self.active_connections:
             websocket = self.active_connections[job_id]
-            await websocket.send_text(json.dumps(message))
+            try:
+                await self._send_with_sequence(job_id, websocket, message)
+            except Exception as e:
+                logger.warning(f"[WS] Failed to send personal message to Job ID {job_id}: {str(e)}")
+                self.disconnect(job_id)
 
     async def broadcast(self, message: dict):
         """
@@ -41,7 +59,7 @@ class ConnectionManager:
         dead_connections = []
         for job_id, websocket in list(self.active_connections.items()):
             try:
-                await websocket.send_text(json.dumps(message))
+                await self._send_with_sequence(job_id, websocket, message)
             except Exception as e:
                 logger.warning(f"[WS] Failed to broadcast frame to Job ID {job_id}: {str(e)}")
                 dead_connections.append(job_id)
@@ -61,7 +79,7 @@ async def websocket_job_endpoint(websocket: WebSocket, job_id: str):
         cached_data = await redis_client.get(job_id)
         if cached_data:
             payload = json.loads(cached_data)
-            await websocket.send_text(json.dumps(payload))
+            await manager._send_with_sequence(job_id, websocket, payload)
             logger.info(f"[WS] Dispatched initial state from Redis cache for Job ID: {job_id}")
     except Exception as redis_err:
         # Fail-Open: log error but allow websocket transmission stream to remain active
