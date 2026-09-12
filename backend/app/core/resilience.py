@@ -6,8 +6,8 @@ logger = logging.getLogger("uvicorn.error")
 
 def async_retry(retries: int = 3, delay: float = 1.0, backoff: float = 2.0):
     """
-    1% Architect Pattern: Exponential Backoff Retry Decorator.
-    Protects equity data fetching loops from transient third-party API outages.
+    Exponential Backoff Retry Decorator.
+    Protects data fetching operations from transient third-party API outages.
     """
     def decorator(func):
         @wraps(func)
@@ -27,6 +27,8 @@ def async_retry(retries: int = 3, delay: float = 1.0, backoff: float = 2.0):
                     current_delay *= backoff
 
             logger.error(f"❌ [CRITICAL] Market data fetcher '{func.__name__}' failed permanently after {retries} retries.")
-            raise last_exception
+            if last_exception is not None:
+                raise last_exception
+            raise RuntimeError(f"Operation '{func.__name__}' failed permanently after {retries} retries.")
         return wrapper
     return decorator

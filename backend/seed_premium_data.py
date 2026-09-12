@@ -8,8 +8,14 @@ from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from app.database.models import Ticker, MarketPricing
 
-# Override connection string locally to target mapped port on localhost
-DATABASE_URL = "postgresql+asyncpg://admin:admin_5650@localhost:5432/market_data"
+# 1. Access database URL securely from environment, fall back to localhost
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://admin:admin_5650@localhost:5432/market_data")
+
+# 2. Normalize standard postgres schemes to use the asyncpg dialect
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
+elif DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+asyncpg://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
 engine = create_async_engine(DATABASE_URL, echo=False)
 AsyncSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
