@@ -35,3 +35,27 @@ export interface BatchAssetStatus {
   error?: string;
   server_timestamp?: number;
 }
+
+// ==================================================
+// LIVE JOB AUDIT REGISTRY TYPE CONTRACTS
+// ==================================================
+
+export interface JobAuditEntry {
+  job_id: string;
+  ticker: string;
+  status: "processing" | "completed" | "failed" | string;
+  batch_id?: string;
+  age_seconds: number;
+  signal?: "BUY" | "SELL" | "HOLD" | "INVALID";
+  execution_time_ms?: number;
+}
+
+export interface SystemAuditResponse {
+  total_active_jobs: number;
+  processing: number;
+  completed: number;
+  failed: number;
+  jobs: JobAuditEntry[];
+  audit_timestamp_ms: number;
+}
+

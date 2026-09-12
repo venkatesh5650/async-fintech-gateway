@@ -115,4 +115,38 @@ class BatchJobAcceptedResponse(BaseModel):
     total_assets: int = Field(..., description="Total sanitized assets queued for analysis")
     status: str = Field(default="queued", description="Initial queue state")
     jobs: list[BatchJobItem] = Field(..., description="Asset-to-Job mapping for real-time telemetry")
-    message: str = Field(default="Multi-asset batch accepted and dispatched to async worker fan-out.")
+    message: str = Field(default="Multi-asset batch accepted and dispatched to async worker fan-out.")
+
+
+# ==================================================
+# LIVE JOB AUDIT REGISTRY CONTRACTS
+# ==================================================
+
+class JobAuditEntry(BaseModel):
+    """
+    Snapshot of a single active or recently completed intelligence job.
+    Reconstructed from a Redis SCAN — requires zero PostgreSQL queries.
+    Age is estimated from the job's remaining TTL against the fixed 3600s expiry.
+    """
+    job_id: str = Field(..., description="UUID tracking token for this job")
+    ticker: str = Field(..., description="Target equity ticker symbol")
+    status: str = Field(..., description="'processing' | 'completed' | 'failed'")
+    batch_id: Optional[str] = Field(default=None, description="Parent batch ID if dispatched via batch endpoint")
+    age_seconds: int = Field(..., description="Estimated seconds since job was dispatched (3600 - TTL)")
+    signal: Optional[str] = Field(default=None, description="BUY/SELL/HOLD/INVALID — populated on completion only")
+    execution_time_ms: Optional[float] = Field(default=None, description="Agent execution latency — populated on completion only")
+
+
+class SystemAuditResponse(BaseModel):
+    """
+    Aggregated live job registry payload returned by GET /v1/intelligence/audit.
+    Provides an instant operational snapshot of all active Redis job states
+    with summary counters for dashboard consumption.
+    """
+    total_active_jobs: int = Field(..., description="Total jobs present in Redis at time of scan")
+    processing: int = Field(..., description="Jobs currently executing in background workers")
+    completed: int = Field(..., description="Jobs that have finished and cached their result")
+    failed: int = Field(..., description="Jobs that crashed with an exception")
+    jobs: list[JobAuditEntry] = Field(..., description="Individual job snapshots, sorted processing-first")
+    audit_timestamp_ms: int = Field(..., description="Unix epoch milliseconds when the scan was performed")
+
