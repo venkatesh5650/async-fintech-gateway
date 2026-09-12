@@ -1,34 +1,50 @@
 "use client";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 
 interface UseWebSocketOptions {
   jobId?: string;
   onMessage: (data: any) => void;
+  onSequenceGap?: () => void;
 }
 
 export default function useWebSocket({
   jobId,
   onMessage,
+  onSequenceGap,
 }: UseWebSocketOptions) {
   const [isConnected, setIsConnected] = useState(false);
   const [isExhausted, setIsExhausted] = useState(false);
 
   const socketRef = useRef<WebSocket | null>(null);
   const onMessageRef = useRef(onMessage);
+  const onSequenceGapRef = useRef(onSequenceGap);
   const retryCount = useRef(0);
   const MAX_RETRIES = 3;
-  const intentionalClose = useRef(false);
 
-  // Keep the latest onMessage without re-creating the connection
+  const lastSequenceNumber = useRef<number>(0);
+  const [reconnectTrigger, setReconnectTrigger] = useState(0);
+
+  // Keep the latest callbacks without re-creating the connection
   useEffect(() => {
     onMessageRef.current = onMessage;
   }, [onMessage]);
+
+  useEffect(() => {
+    onSequenceGapRef.current = onSequenceGap;
+  }, [onSequenceGap]);
+
+  // Reset circuit breaker when jobId changes
+  useEffect(() => {
+    setIsExhausted(false);
+    retryCount.current = 0;
+  }, [jobId]);
 
   useEffect(() => {
     if (!jobId) return;
 
     let cancelled = false;
     let pingInterval: ReturnType<typeof setInterval> | null = null;
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 
     const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsHost = process.env.NEXT_PUBLIC_WS_HOST || "127.0.0.1:8000";
@@ -41,6 +57,7 @@ export default function useWebSocket({
       if (cancelled) return;
       setIsConnected(true);
       retryCount.current = 0;
+      lastSequenceNumber.current = 0; // Reset sequence tracking for fresh session
       console.log(`[WS] Secure handshake established for Job ID: ${jobId}`);
 
       pingInterval = setInterval(() => {
@@ -55,6 +72,26 @@ export default function useWebSocket({
       try {
         const parsedData = JSON.parse(event.data);
         if (parsedData.type === "pong") return;
+
+        // Sequence Number Validation
+        const seq = parsedData.sequence_number;
+        if (typeof seq === "number") {
+          const expectedSeq = lastSequenceNumber.current + 1;
+          if (seq < expectedSeq) {
+            console.warn(
+              `[WS] Stale/out-of-order packet discarded. Expected >= ${expectedSeq}, got ${seq}.`
+            );
+            return;
+          } else if (seq > expectedSeq) {
+            console.error(
+              `[WS] Sequence gap detected! Expected ${expectedSeq}, got ${seq}. Triggering recovery.`
+            );
+            if (onSequenceGapRef.current) {
+              onSequenceGapRef.current();
+            }
+          }
+          lastSequenceNumber.current = seq;
+        }
 
         if (parsedData.server_timestamp) {
           const networkLatency = Date.now() - parsedData.server_timestamp;
@@ -94,23 +131,23 @@ export default function useWebSocket({
 
       retryCount.current += 1;
       console.warn(
-        `[WS] Connection dropped. Attempt ${retryCount.current}/${MAX_RETRIES} in 3s...`,
+        `[WS] Connection dropped. Attempt ${retryCount.current}/${MAX_RETRIES} in 3s...`
       );
-      setTimeout(() => {
-        // only reconnect if this effect is still alive
+      
+      reconnectTimeout = setTimeout(() => {
         if (!cancelled) {
-          // force a clean reconnect by changing a dummy dependency or just call connect logic again
-          // simplest: rely on the fact that jobId is still the same
+          setReconnectTrigger((prev) => prev + 1);
         }
       }, 3000);
     };
 
-    // Cleanup only runs on real unmount or jobId change
+    // Cleanup only runs on real unmount, jobId change, or reconnectTrigger
     return () => {
       cancelled = true;
-      console.log("[WS] CLEANUP (real) – closing socket for", jobId);
+      console.log("[WS] CLEANUP – closing socket for", jobId);
 
       if (pingInterval) clearInterval(pingInterval);
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
 
       ws.onclose = null; // prevent the onclose handler from running
       if (
@@ -121,7 +158,7 @@ export default function useWebSocket({
       }
       socketRef.current = null;
     };
-  }, [jobId]); // ← ONLY depend on jobId; // only re-run when jobId really changes
+  }, [jobId, reconnectTrigger]); // Re-run effect to reconnect when trigger increments
 
   return { isConnected, isExhausted };
 }

@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 
 export async function POST(request: Request) {
   try {
@@ -32,20 +31,20 @@ export async function POST(request: Request) {
     const data = await backendRes.json();
     const token = data.access_token;
 
-    // Persist JWT token in secure HTTP-only cookie
-    const cookieStore = await cookies();
-    
-    cookieStore.set({
+    // In Next.js 15 Route Handlers, cookies() is read-only.
+    // Cookie mutation must happen on the NextResponse object directly.
+    const response = NextResponse.json({ success: true });
+    response.cookies.set({
       name: 'session_token',
       value: token,
-      httpOnly: true, 
-      secure: process.env.NODE_ENV === 'production', 
-      sameSite: 'lax', 
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
       path: '/',
-      maxAge: 60 * 60 * 24 * 7, 
+      maxAge: 60 * 60 * 24 * 7,
     });
 
-    return NextResponse.json({ success: true });
+    return response;
 
   } catch (error) {
     console.error("BFF Authentication Error:", error);

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
 import IntelligenceCard from "@/components/IntelligenceCard";
 import LogoutButton from "@/components/LogoutButton";
 import ActionTriggers from "@/components/ActionTriggers";
 import BatchCommandCenter from "@/components/BatchCommandCenter";
+import JobAuditPanel from "@/components/JobAuditPanel";
 import MarketChart from "@/components/MarketChart";
 import useWebSocket from "@/hooks/useWebSocket";
 import { BatchAssetStatus, BatchJobAcceptedResponse } from "@/types/api";
@@ -36,24 +37,143 @@ export default function DynamicDashboardPage() {
   // Chart pricing data state
   const [chartData, setChartData] = useState<any[]>([]);
 
+  // Refs for tracking latest state (prevent stale closures in async handlers)
+  const jobStateRef = useRef<JobState | null>(null);
+  const jobIdRef = useRef<string | undefined>(undefined);
+  const batchIdRef = useRef<string | null>(null);
+  const batchAssetsRef = useRef<BatchAssetStatus[]>([]);
+  const syncChannelRef = useRef<BroadcastChannel | null>(null);
+
+  useEffect(() => { jobStateRef.current = jobState; }, [jobState]);
+  useEffect(() => { jobIdRef.current = jobId; }, [jobId]);
+  useEffect(() => { batchIdRef.current = batchId; }, [batchId]);
+  useEffect(() => { batchAssetsRef.current = batchAssets; }, [batchAssets]);
+
   // Fetch historical price points
-  useEffect(() => {
+  const fetchHistory = useCallback(async () => {
     if (!ticker) return;
-    const fetchHistory = async () => {
-      try {
-        const res = await fetch(`/api/market-data/${ticker}`);
-        if (res.ok) {
-          const history = await res.json();
-          setChartData(history);
-        } else {
-          console.error("Failed to fetch historical market data");
-        }
-      } catch (err) {
-        console.error("Error fetching historical market data:", err);
+    try {
+      const res = await fetch(`/api/market-data/${ticker}`);
+      if (res.ok) {
+        const history = await res.json();
+        setChartData(history);
+      } else {
+        console.error("Failed to fetch historical market data");
       }
-    };
-    fetchHistory();
+    } catch (err) {
+      console.error("Error fetching historical market data:", err);
+    }
   }, [ticker]);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
+
+  // REST API status checker for job recovery
+  const fetchJobStatus = useCallback(async (targetJobId: string) => {
+    try {
+      const res = await fetch(`/api/jobs/${targetJobId}`);
+      if (res.ok) {
+        const data = await res.json();
+        
+        if (jobIdRef.current === targetJobId) {
+          setJobState((prev) => {
+            if (!prev) return prev;
+            return { ...prev, ...data };
+          });
+        }
+
+        setBatchAssets((prevAssets) =>
+          prevAssets.map((asset) => {
+            if (asset.job_id === targetJobId) {
+              return {
+                ...asset,
+                status: data.status,
+                result: data.result,
+                error: data.error,
+                server_timestamp: data.server_timestamp,
+              };
+            }
+            return asset;
+          })
+        );
+      }
+    } catch (err) {
+      console.error("[Recovery] Failed to fetch job status:", err);
+    }
+  }, []);
+
+  // Sequence Gap Recovery logic
+  const handleSequenceGap = useCallback(() => {
+    console.warn(`[WS] Gap detected for active ticker ${ticker}. Triggering state recovery.`);
+    fetchHistory();
+    if (jobIdRef.current) {
+      fetchJobStatus(jobIdRef.current);
+    }
+  }, [ticker, fetchHistory, fetchJobStatus]);
+
+  // --------------------------------------------------
+  // SESSION STATE PRESERVATION & RESTORATION (LOCAL STORAGE)
+  // --------------------------------------------------
+  useEffect(() => {
+    if (typeof window === "undefined" || !ticker) return;
+
+    // Restore Cooldown
+    const cooldownUntil = localStorage.getItem("cooldown_until");
+    if (cooldownUntil) {
+      const remaining = Math.ceil((parseInt(cooldownUntil, 10) - Date.now()) / 1000);
+      if (remaining > 0) {
+        setCooldown(remaining);
+      }
+    }
+
+    // Restore Ticker Job
+    const cachedJobId = localStorage.getItem(`job_id_${ticker}`);
+    const cachedJobState = localStorage.getItem(`job_state_${ticker}`);
+    if (cachedJobId && cachedJobState) {
+      setJobId(cachedJobId);
+      setJobState(JSON.parse(cachedJobState));
+    }
+
+    // Restore Batch
+    const cachedBatchId = localStorage.getItem("batch_id");
+    const cachedBatchAssets = localStorage.getItem("batch_assets");
+    if (cachedBatchId && cachedBatchAssets) {
+      setBatchId(cachedBatchId);
+      setBatchAssets(JSON.parse(cachedBatchAssets));
+    }
+  }, [ticker]);
+
+  // Persist Cooldown to localStorage
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (cooldown > 0) {
+      localStorage.setItem("cooldown_until", (Date.now() + cooldown * 1000).toString());
+    } else {
+      localStorage.removeItem("cooldown_until");
+    }
+  }, [cooldown]);
+
+  // Persist Ticker Job to localStorage
+  useEffect(() => {
+    if (typeof window === "undefined" || !ticker || !jobId) return;
+    localStorage.setItem(`job_id_${ticker}`, jobId);
+    if (jobState) {
+      localStorage.setItem(`job_state_${ticker}`, JSON.stringify(jobState));
+    }
+  }, [ticker, jobId, jobState]);
+
+  // Persist Batch to localStorage
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (batchId) {
+      localStorage.setItem("batch_id", batchId);
+      localStorage.setItem("batch_assets", JSON.stringify(batchAssets));
+    } else {
+      localStorage.removeItem("batch_id");
+      localStorage.removeItem("batch_assets");
+    }
+  }, [batchId, batchAssets]);
 
   // --------------------------------------------------
   // COOLDOWN ENGINE
@@ -68,16 +188,20 @@ export default function DynamicDashboardPage() {
     if (cooldown > 0) return;
     setCooldown(60);
     setRefreshTrigger((prev) => prev + 1);
+
+    if (syncChannelRef.current) {
+      syncChannelRef.current.postMessage({ type: "COOLDOWN_UPDATE", payload: 60 });
+    }
   };
 
   // --------------------------------------------------
-  // WEBSOCKET EVENT STREAMING
+  // WEBSOCKET EVENT STREAMING & TAB SYNCHRONIZATION
   // --------------------------------------------------
   const handleWebSocketMessage = useCallback(
-    (data: any) => {
+    (data: any, bypassSync = false) => {
       if (data && data.status) {
-        // 1. Single Asset Job update (matches the current active ticker)
-        if (data.result?.ticker === ticker || data.job_id === jobId) {
+        // 1. Single Asset Job update
+        if (data.result?.ticker === ticker || data.job_id === jobIdRef.current) {
           setJobState((prev) => {
             if (!prev) return prev;
             return {
@@ -88,7 +212,7 @@ export default function DynamicDashboardPage() {
           });
         }
 
-        // 2. Multi-Asset Batch Matrix update (matches any asset in the active batch)
+        // 2. Multi-Asset Batch Matrix update
         if (data.result?.ticker || data.job_id) {
           const incomingTicker = data.result?.ticker?.toUpperCase();
           setBatchAssets((prevAssets) =>
@@ -132,13 +256,70 @@ export default function DynamicDashboardPage() {
           return [...prev, newPoint];
         });
       }
+
+      // Sync WebSocket payload to other browser tabs
+      if (!bypassSync && syncChannelRef.current) {
+        syncChannelRef.current.postMessage({ type: "WS_PACKET", payload: data });
+      }
     },
-    [ticker, jobId]
+    [ticker]
   );
+
+  // Set up BroadcastChannel listener for Cross-Tab Sync
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const channel = new BroadcastChannel("fintech_gateway_sync");
+    syncChannelRef.current = channel;
+
+    const handleSyncMessage = (event: MessageEvent) => {
+      const { type, payload } = event.data;
+      console.log(`[Sync] Cross-tab event received: ${type}`);
+
+      switch (type) {
+        case "COOLDOWN_UPDATE":
+          if (typeof payload === "number") {
+            setCooldown(payload);
+          }
+          break;
+        case "BATCH_UPDATE":
+          if (payload) {
+            setBatchId(payload.batchId);
+            setBatchAssets(payload.batchAssets);
+          } else {
+            setBatchId(null);
+            setBatchAssets([]);
+          }
+          break;
+        case "JOB_UPDATE":
+          if (payload && payload.ticker === ticker) {
+            setJobId(payload.jobId);
+            setJobState(payload.jobState);
+          }
+          break;
+        case "WS_PACKET":
+          if (payload) {
+            handleWebSocketMessage(payload, true);
+          }
+          break;
+        default:
+          break;
+      }
+    };
+
+    channel.addEventListener("message", handleSyncMessage);
+
+    return () => {
+      channel.removeEventListener("message", handleSyncMessage);
+      channel.close();
+      syncChannelRef.current = null;
+    };
+  }, [ticker, handleWebSocketMessage]);
 
   const { isConnected, isExhausted } = useWebSocket({
     jobId,
     onMessage: handleWebSocketMessage,
+    onSequenceGap: handleSequenceGap,
   });
 
   // --------------------------------------------------
@@ -177,7 +358,16 @@ export default function DynamicDashboardPage() {
 
         const { job_id } = await dispatchRes.json();
         setJobId(job_id);
-        setJobState({ status: "processing", job_id });
+        const nextState: JobState = { status: "processing", job_id };
+        setJobState(nextState);
+
+        // Sync dispatch to other tabs
+        if (syncChannelRef.current) {
+          syncChannelRef.current.postMessage({
+            type: "JOB_UPDATE",
+            payload: { ticker, jobId: job_id, jobState: nextState }
+          });
+        }
       } catch (err: any) {
         setError(`SYSTEM_ERROR:${err.message}`);
       }
@@ -192,6 +382,9 @@ export default function DynamicDashboardPage() {
   const handleBatchDispatch = async (tickers: string[]) => {
     if (cooldown > 0 || isBatchProcessing) return;
     setCooldown(60);
+    if (syncChannelRef.current) {
+      syncChannelRef.current.postMessage({ type: "COOLDOWN_UPDATE", payload: 60 });
+    }
     setIsBatchProcessing(true);
     setError(null);
 
@@ -222,11 +415,27 @@ export default function DynamicDashboardPage() {
       }));
       setBatchAssets(initialAssets);
 
+      // Sync batch state to other tabs
+      if (syncChannelRef.current) {
+        syncChannelRef.current.postMessage({
+          type: "BATCH_UPDATE",
+          payload: { batchId: data.batch_id, batchAssets: initialAssets }
+        });
+      }
+
       // Connect WebSocket if current dashboard asset is in the batch
       const currentAssetJob = data.jobs.find((j) => j.ticker === ticker);
       if (currentAssetJob) {
         setJobId(currentAssetJob.job_id);
-        setJobState({ status: "processing", job_id: currentAssetJob.job_id });
+        const nextState: JobState = { status: "processing", job_id: currentAssetJob.job_id };
+        setJobState(nextState);
+
+        if (syncChannelRef.current) {
+          syncChannelRef.current.postMessage({
+            type: "JOB_UPDATE",
+            payload: { ticker, jobId: currentAssetJob.job_id, jobState: nextState }
+          });
+        }
       }
     } catch (err: any) {
       setError(`SYSTEM_ERROR:${err.message}`);
@@ -419,9 +628,18 @@ export default function DynamicDashboardPage() {
               onClearBatch={() => {
                 setBatchId(null);
                 setBatchAssets([]);
+                if (syncChannelRef.current) {
+                  syncChannelRef.current.postMessage({
+                    type: "BATCH_UPDATE",
+                    payload: null
+                  });
+                }
               }}
             />
           )}
+
+          {/* Live Redis Job Registry Audit Console */}
+          <JobAuditPanel />
         </div>
       </div>
     );
@@ -465,8 +683,17 @@ export default function DynamicDashboardPage() {
             onClearBatch={() => {
               setBatchId(null);
               setBatchAssets([]);
+              if (syncChannelRef.current) {
+                syncChannelRef.current.postMessage({
+                  type: "BATCH_UPDATE",
+                  payload: null
+                });
+              }
             }}
           />
+
+          {/* Live Redis Job Registry Audit Console */}
+          <JobAuditPanel />
         </div>
       </div>
     );
@@ -496,6 +723,12 @@ export default function DynamicDashboardPage() {
           onClearBatch={() => {
             setBatchId(null);
             setBatchAssets([]);
+            if (syncChannelRef.current) {
+              syncChannelRef.current.postMessage({
+                type: "BATCH_UPDATE",
+                payload: null
+              });
+            }
           }}
         />
       </div>
