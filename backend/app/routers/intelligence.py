@@ -40,6 +40,7 @@ from app.core.broker import (
     enqueue_intelligence_job,
     enqueue_batch_intelligence_jobs,
     get_dlq_entries,
+    get_stream_health_snapshot,
     STREAM_INTEL_JOBS,
     STREAM_INTEL_DLQ,
 )
@@ -474,3 +475,31 @@ async def get_dead_letter_registry(
         entries=entries,
         audit_timestamp_ms=int(time.time() * 1000),
     )
+
+
+# ==================================================
+# DAY 63: STREAM LAG & CONCURRENCY OBSERVABILITY
+# ==================================================
+
+@router.get("/stream-health", status_code=status.HTTP_200_OK)
+async def get_stream_health():
+    """
+    CQRS Observability: Live stream lag and worker health telemetry.
+
+    Exposes real-time Redis Stream metrics used by the DynamicConcurrencyController
+    to auto-tune worker concurrency. Public read route — non-sensitive operational data.
+
+    Response fields:
+      stream_name     — Redis Stream key name
+      consumer_group  — Consumer group name
+      stream_len      — Total entries currently in the stream (XLEN)
+      lag             — Messages NOT YET delivered to any consumer (unread backlog)
+      pel_count       — Messages delivered but NOT yet ACKed (in-flight processing)
+      consumer_count  — Number of registered consumers in the group
+      last_delivered_id — Stream ID of the last message dispatched to the group
+      health_status   — HEALTHY | ACTIVE | DEGRADED | CRITICAL
+      audit_timestamp_ms — Server wall-clock timestamp of this snapshot
+    """
+    snapshot = await get_stream_health_snapshot(client=redis_client)
+    snapshot["audit_timestamp_ms"] = int(time.time() * 1000)
+    return snapshot

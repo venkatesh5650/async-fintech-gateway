@@ -1,7 +1,7 @@
 # ROADMAP STATE - 120-Day Automated Equity Research Engine
 
 ## 1. Project Context & Current Position
-* **Current Day:** Day 62 (Phase 2 - Day 62 Locked)
+* **Current Day:** Day 63 (Phase 2 - Day 63 Locked)
 * **Target Role:** FinTech AI Automation Engineer / Systems Architect[cite: 14]
 * **Core Philosophy:** We strictly follow the principles outlined in "The 1% Advantage: Engineering a Durable FinTech Career". 
 * **AI Agent Directive:** Do not write black-box code or rewrite existing architecture. You are operating as a 1% Systems Architect. Read the completed days to understand the existing context, then execute the Phase 2 objectives.
@@ -53,12 +53,17 @@ We have successfully engineered a zero-trust, cloud-native FinTech microservice 
   * Integrated external Dead-Letter alerting with Discord/n8n DLQ webhook notifications.
   * Built public CQRS observability endpoint `GET /v1/intelligence/dlq` exposing diagnostic root-cause metadata and delivery attempt counts.
   * Executed automated 4-point audit suite (`audit_recovery.py`) and verified 100% test pass rate (4/4 assertions passed) with zero main stream PEL residual leaks.
+* **Day 63:** Stream Lag Monitor & Dynamic Concurrency Tuning:
+  * Engineered `get_stream_lag()` and `get_stream_health_snapshot()` primitives in `app/core/broker.py` using native Redis 7 `XINFO GROUPS` lag reporting and concurrent `asyncio.gather` reads.
+  * Integrated `DynamicConcurrencyController` into `StreamConsumerWorker` (`app/workers/consumer.py`) as a sibling background task that auto-tunes `asyncio.Semaphore` between `MIN=3` and `MAX=10` every 10 seconds based on real stream lag readings, with LLM rate-limit safety hardcoded at `MAX=10`.
+  * Added public CQRS observability route `GET /v1/intelligence/stream-health` exposing `stream_len`, `lag`, `pel_count`, `consumer_count`, and `health_status` (HEALTHY / ACTIVE / DEGRADED / CRITICAL).
+  * Executed automated 4-point audit suite (`audit_lag_monitor.py`) and verified 100% test pass rate (4/4 assertions: lag primitive structure, synthetic load detection, scaling logic isolation, CQRS endpoint schema).
 
-## 3. Current Position: Day 62 Complete & Locked (Ready for Day 63)
-Phase 2 fault tolerance is certified. The system autonomously recovers from worker container crashes, isolates poison pill data, and prevents infinite retry loops.
+## 3. Current Position: Day 63 Complete & Locked (Ready for Day 64)
+Phase 2 adaptive performance is certified. The system autonomously monitors its own stream backlog and scales worker concurrency between 3–10 in real time, with full CQRS observability exposed via the stream-health endpoint.
 
 ## 4. Phase 2 Directives (Days 61–90)
 * **Current Milestone (Days 61–65):** Advanced Message Brokers & Resilient Stream Processing.
-* **Day 63 Target:** Stream Lag Monitoring & Worker Autoscaling / Dynamic Concurrency Tuning.
+* **Day 64 Target:** Backpressure & Rate-Limit Aware Retry Scheduling (exponential backoff on 429s from Groq with circuit breaker integration into the consumer worker).
 * **Do not regress:** Preserve zero-trust Pydantic perimeter, WebSocket sequence validation, and telemetry tracing.
 * **Protect the Event Loop:** Retain strict async I/O boundaries and non-blocking caching.

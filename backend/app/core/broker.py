@@ -10,6 +10,7 @@ Decouples HTTP request ingestion from heavy LangGraph compute tasks,
 ensuring at-least-once delivery guarantees and zero ASGI thread starvation.
 """
 
+import asyncio
 import os
 import time
 import logging
@@ -154,6 +155,100 @@ async def get_pending_summary(
     """
     rc = client or get_redis_client()
     return await rc.xpending(stream, group)
+
+
+async def get_stream_lag(
+    stream: str = STREAM_INTEL_JOBS,
+    group: str = GROUP_INTEL_WORKERS,
+    client: Optional[redis.Redis] = None,
+) -> dict:
+    """
+    Day 63: Stream Lag Diagnostic Primitive.
+
+    Queries XINFO GROUPS for the native Redis 7+ 'lag' field, which reports the
+    number of messages in the stream that have NOT yet been delivered to this
+    consumer group. This is the authoritative measure of stream backlog.
+
+    Returns a dict with:
+      - lag         (int): Messages in stream not yet delivered to any consumer in group.
+      - pel_count   (int): Messages delivered but not yet ACKed (in-flight).
+      - consumer_count (int): Number of registered consumers in the group.
+      - last_delivered_id (str): The stream ID of the last message delivered by this group.
+    """
+    rc = client or get_redis_client()
+    result = {
+        "lag": 0,
+        "pel_count": 0,
+        "consumer_count": 0,
+        "last_delivered_id": "0-0",
+    }
+    try:
+        groups_info = await rc.xinfo_groups(stream)
+        for group_info in groups_info:
+            if group_info.get("name") == group:
+                # 'lag' is natively reported by Redis 7.0+; older versions return None
+                raw_lag = group_info.get("lag")
+                result["lag"] = int(raw_lag) if raw_lag is not None else 0
+                result["pel_count"] = int(group_info.get("pending", 0))
+                result["consumer_count"] = int(group_info.get("consumers", 0))
+                result["last_delivered_id"] = group_info.get("last-delivered-id", "0-0")
+                break
+    except Exception as exc:
+        logger.warning(f"[LAG MONITOR] Failed to read XINFO GROUPS for '{stream}': {exc}")
+    return result
+
+
+async def get_stream_health_snapshot(
+    stream: str = STREAM_INTEL_JOBS,
+    group: str = GROUP_INTEL_WORKERS,
+    client: Optional[redis.Redis] = None,
+) -> dict:
+    """
+    Day 63: Full Stream Health Snapshot.
+
+    Aggregates XLEN (total stream entries) with XINFO GROUPS lag metrics into a
+    single non-blocking read for CQRS observability and the concurrency controller.
+
+    health_status logic:
+      HEALTHY   — lag == 0 and pel_count == 0
+      ACTIVE    — 0 < lag <= 20  (normal processing backlog)
+      DEGRADED  — 20 < lag <= 100 (backlog building up)
+      CRITICAL  — lag > 100 (severe backlog, immediate attention needed)
+    """
+    rc = client or get_redis_client()
+
+    # Run both commands concurrently using asyncio.gather
+    stream_len_result, lag_result = await asyncio.gather(
+        rc.xlen(stream),
+        get_stream_lag(stream=stream, group=group, client=rc),
+        return_exceptions=True,
+    )
+
+    stream_len = int(stream_len_result) if isinstance(stream_len_result, int) else 0
+    lag_data = lag_result if isinstance(lag_result, dict) else {
+        "lag": 0, "pel_count": 0, "consumer_count": 0, "last_delivered_id": "0-0"
+    }
+
+    total_lag = lag_data["lag"] + lag_data["pel_count"]
+    if total_lag == 0:
+        health_status = "HEALTHY"
+    elif total_lag <= 20:
+        health_status = "ACTIVE"
+    elif total_lag <= 100:
+        health_status = "DEGRADED"
+    else:
+        health_status = "CRITICAL"
+
+    return {
+        "stream_name": stream,
+        "consumer_group": group,
+        "stream_len": stream_len,
+        "lag": lag_data["lag"],
+        "pel_count": lag_data["pel_count"],
+        "consumer_count": lag_data["consumer_count"],
+        "last_delivered_id": lag_data["last_delivered_id"],
+        "health_status": health_status,
+    }
 
 
 async def reclaim_abandoned_jobs(

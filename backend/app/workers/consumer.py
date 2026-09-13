@@ -33,6 +33,7 @@ from app.core.broker import (
     reclaim_abandoned_jobs,
     route_to_dlq,
     get_message_delivery_count,
+    get_stream_lag,
 )
 from app.core.emitter import send_to_discord_dlq
 from app.routers.intelligence import run_intelligence_worker
@@ -45,6 +46,12 @@ logger = logging.getLogger(__name__)
 
 MAX_CONCURRENT_JOBS = int(os.getenv("BATCH_CONCURRENCY_LIMIT", "5"))
 BLOCK_TIMEOUT_MS = int(os.getenv("CONSUMER_BLOCK_MS", "2000"))
+
+# Day 63: Dynamic Concurrency Tuning Configuration
+MIN_CONCURRENCY = int(os.getenv("MIN_CONCURRENCY", "3"))    # Never drop below (idle baseline)
+MAX_CONCURRENCY = int(os.getenv("MAX_CONCURRENCY", "10"))   # Hard cap (Groq free tier safe)
+SCALE_UP_THRESHOLD = int(os.getenv("SCALE_UP_THRESHOLD", "5"))  # Lag count that triggers +1 step
+LAG_CHECK_INTERVAL_SEC = float(os.getenv("LAG_CHECK_INTERVAL_SEC", "10.0"))  # How often to re-evaluate
 
 
 class StreamConsumerWorker:
@@ -170,6 +177,79 @@ class StreamConsumerWorker:
                 logger.error(f"❌ [WORKER ERROR] Job {job_id} failed: {exc}", exc_info=True)
                 # Note: Un-ACKed message intentionally remains in PEL for crash-recovery/retry inspection
 
+    async def _run_concurrency_controller(self) -> None:
+        """
+        Day 63: Dynamic Concurrency Controller.
+
+        Background coroutine that runs alongside the main polling loop.
+        Every LAG_CHECK_INTERVAL_SEC it reads the real stream lag from Redis
+        and adjusts self.semaphore to the optimal concurrency level.
+
+        Scaling algorithm:
+          - lag == 0              → scale down to MIN_CONCURRENCY (idle)
+          - lag <= THRESHOLD      → hold current level (steady state)
+          - lag <= THRESHOLD * 3  → step up by +1 (moderate backlog)
+          - lag >  THRESHOLD * 3  → jump to MAX_CONCURRENCY (surge)
+
+        The semaphore is replaced atomically: tasks that already hold an
+        acquisition on the OLD semaphore complete normally; new tasks pick
+        up from the NEW semaphore on their next async with call.
+        """
+        logger.info(
+            f"📊 [CONCURRENCY CTRL] Controller active — "
+            f"MIN={MIN_CONCURRENCY}, MAX={MAX_CONCURRENCY}, "
+            f"THRESHOLD={SCALE_UP_THRESHOLD}, INTERVAL={LAG_CHECK_INTERVAL_SEC}s"
+        )
+        while self.running:
+            try:
+                await asyncio.sleep(LAG_CHECK_INTERVAL_SEC)
+                if not self.running:
+                    break
+
+                lag_data = await get_stream_lag(
+                    stream=STREAM_INTEL_JOBS,
+                    group=GROUP_INTEL_WORKERS,
+                    client=self.redis_client,
+                )
+                total_lag = lag_data["lag"] + lag_data["pel_count"]
+                current = self.max_concurrency
+
+                # Determine target based on lag level
+                if total_lag == 0:
+                    target = MIN_CONCURRENCY
+                elif total_lag <= SCALE_UP_THRESHOLD:
+                    target = current  # steady — hold
+                elif total_lag <= SCALE_UP_THRESHOLD * 3:
+                    target = min(current + 1, MAX_CONCURRENCY)  # step up
+                else:
+                    target = MAX_CONCURRENCY  # surge — max out
+
+                # Clamp within safe bounds
+                target = max(MIN_CONCURRENCY, min(target, MAX_CONCURRENCY))
+
+                if target != current:
+                    direction = "⬆️  SCALE UP" if target > current else "⬇️  SCALE DOWN"
+                    logger.warning(
+                        f"{direction} [{current} → {target}] "
+                        f"lag={lag_data['lag']} pel={lag_data['pel_count']} "
+                        f"total_lag={total_lag} consumers={lag_data['consumer_count']}"
+                    )
+                    # Atomic semaphore swap
+                    self.semaphore = asyncio.Semaphore(target)
+                    self.max_concurrency = target
+                else:
+                    logger.debug(
+                        f"📊 [CONCURRENCY CTRL] Holding at {current} "
+                        f"(lag={lag_data['lag']} pel={lag_data['pel_count']})"
+                    )
+
+            except asyncio.CancelledError:
+                logger.info("📊 [CONCURRENCY CTRL] Controller received cancellation.")
+                break
+            except Exception as exc:
+                logger.error(f"📊 [CONCURRENCY CTRL] Controller error: {exc}")
+                await asyncio.sleep(5.0)  # Back off on error, don't tight-loop
+
     async def _reclaim_abandoned_jobs_cycle(self) -> None:
         """
         Scans the PEL for messages idle for >= CLAIM_MIN_IDLE_MS and reclaims them.
@@ -235,9 +315,19 @@ class StreamConsumerWorker:
     async def run(self) -> None:
         """
         Primary continuous message consumption loop with periodic crash recovery.
+        Launches the DynamicConcurrencyController as a concurrent background task
+        so lag monitoring and message processing run independently.
         """
         self.running = True
         logger.info(f"🔄 [LOOP START] Worker '{self.consumer_id}' actively polling Redis Streams...")
+
+        # Day 63: Launch dynamic concurrency controller as a sibling background task
+        controller_task = asyncio.create_task(
+            self._run_concurrency_controller(),
+            name=f"concurrency-ctrl-{self.consumer_id}",
+        )
+        self._active_tasks.add(controller_task)
+        controller_task.add_done_callback(self._active_tasks.discard)
 
         last_claim_time = 0.0
         AUTOCLAIM_INTERVAL_SEC = 10.0
