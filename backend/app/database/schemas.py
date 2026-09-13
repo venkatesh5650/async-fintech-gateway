@@ -149,4 +149,32 @@ class SystemAuditResponse(BaseModel):
     failed: int = Field(..., description="Jobs that crashed with an exception")
     jobs: list[JobAuditEntry] = Field(..., description="Individual job snapshots, sorted processing-first")
     audit_timestamp_ms: int = Field(..., description="Unix epoch milliseconds when the scan was performed")
+
+
+# ==================================================
+# DEAD-LETTER QUEUE (DLQ) AUDIT CONTRACTS
+# ==================================================
+
+class DeadLetterJobEntry(BaseModel):
+    """
+    Diagnostic schema for a quarantined Dead-Letter Queue (DLQ) entry.
+    """
+    dlq_id: str = Field(..., description="Monotonic stream entry ID in the DLQ")
+    original_message_id: str = Field(..., description="Original stream ID before quarantine")
+    job_id: str = Field(..., description="UUID tracking token")
+    ticker: str = Field(..., description="Target equity symbol")
+    batch_id: Optional[str] = Field(default=None, description="Parent batch ID if applicable")
+    trace_id: Optional[str] = Field(default=None, description="Telemetry trace correlation ID")
+    delivery_count: int = Field(..., description="Total failed delivery attempts before quarantine")
+    error_reason: str = Field(..., description="Root cause diagnostics")
+    quarantined_at: float = Field(..., description="Unix timestamp when message was quarantined")
+
+
+class DeadLetterRegistryResponse(BaseModel):
+    """
+    Aggregated response payload for GET /v1/intelligence/dlq.
+    """
+    total_quarantined: int = Field(..., description="Total messages currently in the DLQ")
+    entries: list[DeadLetterJobEntry] = Field(..., description="List of quarantined jobs")
+    audit_timestamp_ms: int = Field(..., description="Timestamp of the query")
 

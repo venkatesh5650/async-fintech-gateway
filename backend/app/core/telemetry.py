@@ -33,6 +33,7 @@ class StructuredLoggingMiddleware(BaseHTTPMiddleware):
         # X-Request-ID response header, enabling end-to-end trace correlation
         # across FastAPI → Next.js BFF → browser DevTools.
         request_id = str(uuid.uuid4())
+        request.state.request_id = request_id
 
         # perf_counter gives sub-millisecond precision; time.time() only gives ~ms
         start = time.perf_counter()

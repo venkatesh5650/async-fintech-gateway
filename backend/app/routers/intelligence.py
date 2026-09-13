@@ -23,6 +23,8 @@ from app.database.schemas import (
     BatchJobItem,
     JobAuditEntry,
     SystemAuditResponse,
+    DeadLetterJobEntry,
+    DeadLetterRegistryResponse,
 )
 from app.core.security import get_current_user
 from app.core.limiter import RateLimiter
@@ -33,6 +35,14 @@ from app.core.emitter import broadcast_intelligence_result
 import redis.asyncio as redis
 import os
 import httpx
+from typing import Optional, Any
+from app.core.broker import (
+    enqueue_intelligence_job,
+    enqueue_batch_intelligence_jobs,
+    get_dlq_entries,
+    STREAM_INTEL_JOBS,
+    STREAM_INTEL_DLQ,
+)
 
 MAX_CONCURRENCY = int(os.getenv("BATCH_CONCURRENCY_LIMIT", "5"))
 
@@ -183,7 +193,7 @@ async def run_batch_intelligence_orchestrator(batch_id: str, jobs: list[tuple[st
 
 @router.post("/jobs/{ticker}", status_code=status.HTTP_202_ACCEPTED)
 async def submit_analysis_job(
-    background_tasks: BackgroundTasks,
+    request: Request,
     # Strict Pattern Boundary to prevent numeric/malformed ticker drains
     ticker: str = Path(..., pattern="^[a-zA-Z]{1,5}$", description="US Equity Ticker Symbol"), 
     _: None = Depends(limiter),
@@ -191,24 +201,37 @@ async def submit_analysis_job(
 ):
     """
     Command Edge: Protected by rate-limiting, Regex boundary validation, and zero-trust JWT authentication.
-    Generates a unique tracking capability token, pre-warms Redis state, and offloads 
-    heavy agentic execution to background worker threads.
+    Generates a unique tracking capability token, pre-warms Redis state with 'queued',
+    and publishes the task event to Redis Streams (stream:intel_jobs) for decoupled worker execution.
     """
     job_id = str(uuid.uuid4())
+    trace_id = getattr(request.state, "request_id", None) or request.headers.get("X-Request-ID", str(uuid.uuid4()))
     
-    # Pre-warm Redis state to prevent polling race conditions before the worker boots
-    initial_payload = {"job_id": job_id, "status": "processing", "result": None}
+    # Pre-warm Redis state to prevent polling race conditions before consumer pickup
+    initial_payload = {
+        "job_id": job_id,
+        "status": "queued",
+        "ticker": ticker.upper(),
+        "trace_id": trace_id,
+        "result": None,
+        "server_timestamp": int(time.time() * 1000)
+    }
     await redis_client.set(job_id, json.dumps(initial_payload), ex=3600)
     
-    # Register asynchronous background worker task
-    background_tasks.add_task(run_intelligence_worker, job_id, ticker)
+    # Publish event to durable Redis Stream
+    await enqueue_intelligence_job(
+        job_id=job_id,
+        ticker=ticker,
+        trace_id=trace_id,
+        client=redis_client
+    )
     
     return JobAcceptedResponse(job_id=job_id)
 
 
 @router.post("/batch", response_model=BatchJobAcceptedResponse, status_code=status.HTTP_202_ACCEPTED)
 async def submit_batch_analysis_jobs(
-    background_tasks: BackgroundTasks,
+    request: Request,
     payload: BatchAnalysisRequest = Body(..., description="Batch payload containing 1-50 equity tickers"),
     _: None = Depends(limiter),
     auth_verified: dict = Security(verify_m2m_or_user)
@@ -216,48 +239,56 @@ async def submit_batch_analysis_jobs(
     """
     Batch Command Edge:
     Zero-Trust Pydantic perimeter intercepts up to 50 target tickers in a single payload.
-    Maps unique tracking UUIDs in Redis and offloads execution to an asynchronous
-    controlled concurrency worker pool (asyncio.Semaphore).
+    Maps unique tracking UUIDs, pre-warms state in Redis, and enqueues high-throughput
+    pipelined stream events to Redis Streams (stream:intel_jobs).
     """
     batch_id = str(uuid.uuid4())
+    trace_id = getattr(request.state, "request_id", None) or request.headers.get("X-Request-ID", str(uuid.uuid4()))
     job_items: list[BatchJobItem] = []
-    worker_jobs: list[tuple[str, str]] = []
+    stream_jobs: list[dict[str, Any]] = []
 
     # Map individual UUIDs and pre-warm Redis states for instant WebSocket subscriptions
     for ticker in payload.tickers:
         job_id = str(uuid.uuid4())
         job_items.append(BatchJobItem(ticker=ticker, job_id=job_id))
-        worker_jobs.append((job_id, ticker))
+        stream_jobs.append({"job_id": job_id, "ticker": ticker})
 
-        # Pre-warm individual job state
+        # Pre-warm individual job state with 'queued'
         initial_job_payload = {
             "job_id": job_id,
-            "status": "processing",
+            "status": "queued",
             "batch_id": batch_id,
-            "ticker": ticker,
-            "result": None
+            "ticker": ticker.upper(),
+            "trace_id": trace_id,
+            "result": None,
+            "server_timestamp": int(time.time() * 1000)
         }
         await redis_client.set(job_id, json.dumps(initial_job_payload), ex=3600)
 
     # Pre-warm batch status state in Redis
     initial_batch_payload = {
         "batch_id": batch_id,
-        "status": "processing",
+        "status": "queued",
         "total_assets": len(payload.tickers),
         "jobs": [item.model_dump() for item in job_items],
         "server_timestamp": int(time.time() * 1000)
     }
     await redis_client.set(f"batch:{batch_id}", json.dumps(initial_batch_payload), ex=3600)
 
-    # Dispatch asynchronous concurrency fan-out
-    background_tasks.add_task(run_batch_intelligence_orchestrator, batch_id, worker_jobs)
+    # Pipelined high-throughput publish to Redis Streams
+    await enqueue_batch_intelligence_jobs(
+        jobs=stream_jobs,
+        batch_id=batch_id,
+        trace_id=trace_id,
+        client=redis_client
+    )
 
     return BatchJobAcceptedResponse(
         batch_id=batch_id,
         total_assets=len(job_items),
         status="queued",
         jobs=job_items,
-        message=f"Dispatched {len(job_items)} assets to controlled concurrency intelligence fan-out."
+        message=f"Dispatched {len(job_items)} assets to Redis Streams ('{STREAM_INTEL_JOBS}') for consumer execution."
     )
 
 
@@ -406,5 +437,40 @@ async def get_live_job_audit():
         completed=completed_count,
         failed=failed_count,
         jobs=audit_entries,
+        audit_timestamp_ms=int(time.time() * 1000),
+    )
+
+
+@router.get("/dlq", response_model=DeadLetterRegistryResponse, status_code=status.HTTP_200_OK)
+async def get_dead_letter_registry(
+    count: int = 50,
+    auth_verified: dict = Security(verify_m2m_or_user),
+):
+    """
+    CQRS Observability Route for Dead-Letter Queue (DLQ).
+    Returns quarantined jobs that exceeded maximum retry thresholds,
+    complete with root-cause diagnostic information and attempt counts.
+    """
+    raw_entries = await get_dlq_entries(count=count, client=redis_client)
+    entries = []
+    for item in raw_entries:
+        try:
+            entries.append(DeadLetterJobEntry(
+                dlq_id=item["dlq_id"],
+                original_message_id=item.get("original_message_id", ""),
+                job_id=item.get("job_id", ""),
+                ticker=item.get("ticker", "UNKNOWN"),
+                batch_id=item.get("batch_id") or None,
+                trace_id=item.get("trace_id") or None,
+                delivery_count=int(item.get("delivery_count", 1)),
+                error_reason=item.get("error_reason", "Unknown failure"),
+                quarantined_at=float(item.get("quarantined_at", time.time())),
+            ))
+        except Exception as e:
+            logging.warning(f"[DLQ AUDIT] Failed to parse DLQ item {item}: {e}")
+
+    return DeadLetterRegistryResponse(
+        total_quarantined=len(entries),
+        entries=entries,
         audit_timestamp_ms=int(time.time() * 1000),
     )

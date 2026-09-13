@@ -10,18 +10,49 @@ from app.core.limiter import RateLimiter
 from app.core.telemetry import StructuredLoggingMiddleware  
 from app.routers import auth, intelligence, market,websocket  
 
+import os
+import asyncio
+from app.core.broker import ensure_consumer_group, close_redis_client
+from app.workers.consumer import StreamConsumerWorker
+
 # Track container boot time for uptime metrics
 START_TIME = time.time()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Forces the cloud database to create tables if they do not exist at boot.
+    Bootstraps persistent storage engines and Redis Streams consumer groups at boot.
     """
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logging.warning("✅ [DATABASE INIT] Verified/Created all PostgreSQL tables in the cloud.")
-    yield 
+
+    # Day 61: Bootstrap Redis Stream & Consumer Group
+    try:
+        await ensure_consumer_group()
+    except Exception as e:
+        logging.warning(f"⚠️ [BROKER INIT WARNING] Redis Streams group initialization deferred: {e}")
+
+    # Embedded Stream Consumer: ensures jobs are processed seamlessly in single-process mode
+    consumer_task = None
+    worker = None
+    if os.getenv("ENABLE_EMBEDDED_CONSUMER", "true").lower() == "true":
+        worker = StreamConsumerWorker(consumer_id="embedded-asgi-worker")
+        try:
+            await worker.initialize()
+            consumer_task = asyncio.create_task(worker.run())
+            logging.info("🚀 [EMBEDDED WORKER] Started embedded Redis Stream consumer task.")
+        except Exception as e:
+            logging.warning(f"⚠️ Could not start embedded stream consumer: {e}")
+
+    yield
+
+    # Graceful shutdown hooks
+    if worker:
+        await worker.shutdown()
+    if consumer_task:
+        consumer_task.cancel()
+    await close_redis_client() 
 
 app = FastAPI(title="Fintech Intelligence Gateway", lifespan=lifespan)
 
