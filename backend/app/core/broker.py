@@ -17,6 +17,7 @@ import logging
 from typing import Optional, Any
 import redis.asyncio as redis
 from redis.exceptions import ResponseError
+from app.core.telemetry import generate_trace_id, generate_span_id
 
 logger = logging.getLogger(__name__)
 
@@ -81,25 +82,32 @@ async def enqueue_intelligence_job(
     ticker: str,
     batch_id: Optional[str] = None,
     trace_id: Optional[str] = None,
+    parent_span_id: Optional[str] = None,
     client: Optional[redis.Redis] = None
 ) -> str:
     """
     Event Publisher (Edge Ingestion).
-    Appends a new intelligence analysis event payload to the Redis Stream.
+    Appends a new intelligence analysis event payload to the Redis Stream with full
+    distributed trace context (trace_id, parent_span_id, and enqueue_span_id).
     Returns the auto-generated monotonic stream entry ID (e.g., '1710000000000-0').
     """
     rc = client or get_redis_client()
+    enqueue_span = generate_span_id()
+    effective_trace = trace_id or generate_trace_id()
+
     payload = {
         "job_id": job_id,
         "ticker": ticker.upper(),
         "batch_id": batch_id or "",
-        "trace_id": trace_id or "",
-        "enqueued_at": str(time.time())
+        "trace_id": effective_trace,
+        "parent_span_id": parent_span_id or "",
+        "enqueue_span_id": enqueue_span,
+        "enqueued_at": str(time.time()),
     }
 
     message_id = await rc.xadd(STREAM_INTEL_JOBS, payload)
     logger.info(
-        f"[STREAM PUBLISH] Enqueued Job {job_id} ({ticker.upper()}) to '{STREAM_INTEL_JOBS}' -> Msg ID: {message_id}"
+        f"[STREAM PUBLISH] Enqueued Job {job_id} ({ticker.upper()}) to '{STREAM_INTEL_JOBS}' -> Msg ID: {message_id} | Trace: {effective_trace[:8]}.. | Span: {enqueue_span}"
     )
     return message_id
 
@@ -108,30 +116,36 @@ async def enqueue_batch_intelligence_jobs(
     jobs: list[dict[str, Any]],
     batch_id: str,
     trace_id: Optional[str] = None,
+    parent_span_id: Optional[str] = None,
     client: Optional[redis.Redis] = None
 ) -> list[str]:
     """
     High-Throughput Pipelined Batch Publisher.
-    Enqueues multiple intelligence tasks using a single network round-trip.
+    Enqueues multiple intelligence tasks using a single network round-trip with
+    distributed trace context attached to every child job payload.
     """
     rc = client or get_redis_client()
     now_str = str(time.time())
+    effective_trace = trace_id or generate_trace_id()
 
     async with rc.pipeline(transaction=False) as pipe:
         for job in jobs:
+            enqueue_span = generate_span_id()
             payload = {
                 "job_id": job["job_id"],
                 "ticker": job["ticker"].upper(),
                 "batch_id": batch_id,
-                "trace_id": trace_id or "",
-                "enqueued_at": now_str
+                "trace_id": effective_trace,
+                "parent_span_id": parent_span_id or "",
+                "enqueue_span_id": enqueue_span,
+                "enqueued_at": now_str,
             }
             pipe.xadd(STREAM_INTEL_JOBS, payload)
         
         message_ids = await pipe.execute()
 
     logger.info(
-        f"[STREAM BATCH PUBLISH] Enqueued {len(jobs)} jobs for Batch {batch_id} to '{STREAM_INTEL_JOBS}'"
+        f"[STREAM BATCH PUBLISH] Enqueued {len(jobs)} jobs for Batch {batch_id} to '{STREAM_INTEL_JOBS}' | Trace: {effective_trace[:8]}.."
     )
     return message_ids
 
@@ -292,6 +306,7 @@ async def route_to_dlq(
     payload: dict[str, Any],
     error_reason: str,
     delivery_count: int,
+    parent_span_id: Optional[str] = None,
     source_stream: str = STREAM_INTEL_JOBS,
     group: str = GROUP_INTEL_WORKERS,
     dlq_stream: str = STREAM_INTEL_DLQ,
@@ -300,16 +315,21 @@ async def route_to_dlq(
     """
     Dead-Letter Queue Dispatcher (Quarantine).
     Permanently isolates poison pill messages that exceeded MAX_DELIVERY_ATTEMPTS.
-    Appends enriched diagnostic metadata to DLQ and removes the poisoned message
-    from the primary stream via XACK.
+    Appends enriched diagnostic metadata and preserves distributed trace lineage
+    to the DLQ, and removes the poisoned message from the primary stream via XACK.
     """
     rc = client or get_redis_client()
+    dlq_span = generate_span_id()
+    effective_trace = payload.get("trace_id") or generate_trace_id()
+
     dlq_payload = {
         "original_message_id": message_id,
         "job_id": payload.get("job_id", ""),
         "ticker": payload.get("ticker", ""),
         "batch_id": payload.get("batch_id", ""),
-        "trace_id": payload.get("trace_id", ""),
+        "trace_id": effective_trace,
+        "parent_span_id": parent_span_id or payload.get("enqueue_span_id", ""),
+        "dlq_span_id": dlq_span,
         "delivery_count": str(delivery_count),
         "error_reason": error_reason,
         "quarantined_at": str(time.time()),
@@ -322,7 +342,7 @@ async def route_to_dlq(
     await rc.xack(source_stream, group, message_id)
 
     logger.critical(
-        f"☠️ [DLQ ROUTED] Quarantined poison message {message_id} (Job: {payload.get('job_id')}, Ticker: {payload.get('ticker')}) -> DLQ Msg ID: {dlq_msg_id} | Attempts: {delivery_count} | Reason: {error_reason}"
+        f"☠️ [DLQ ROUTED] Quarantined poison message {message_id} (Job: {payload.get('job_id')}, Ticker: {payload.get('ticker')}) -> DLQ Msg ID: {dlq_msg_id} | Trace: {effective_trace[:8]}.. | Span: {dlq_span} | Attempts: {delivery_count} | Reason: {error_reason}"
     )
     return dlq_msg_id
 
