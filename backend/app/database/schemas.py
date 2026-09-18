@@ -52,6 +52,7 @@ class JobAcceptedResponse(BaseModel):
     job_id: str = Field(..., description="Unique UUID for tracking the background task")
     status: str = Field(default="processing", description="Current state of the engine")
     message: str = Field(default="Task offloaded to background worker.")
+    trace_id: Optional[str] = Field(default=None, description="Distributed W3C trace identifier")
 
 
 # Response schema for polling the status of asynchronous jobs
@@ -62,6 +63,7 @@ class JobStatusResponse(BaseModel):
     job_id: str
     status: str = Field(..., description="'processing', 'completed', or 'failed'")
     result: Optional[IntelligenceResponse] = Field(default=None, description="The final payload if completed")
+    trace_id: Optional[str] = Field(default=None, description="Distributed W3C trace identifier")
 
 
 # ==================================================
@@ -116,6 +118,7 @@ class BatchJobAcceptedResponse(BaseModel):
     status: str = Field(default="queued", description="Initial queue state")
     jobs: list[BatchJobItem] = Field(..., description="Asset-to-Job mapping for real-time telemetry")
     message: str = Field(default="Multi-asset batch accepted and dispatched to async worker fan-out.")
+    trace_id: Optional[str] = Field(default=None, description="Distributed W3C trace identifier")
 
 
 # ==================================================
@@ -177,4 +180,29 @@ class DeadLetterRegistryResponse(BaseModel):
     total_quarantined: int = Field(..., description="Total messages currently in the DLQ")
     entries: list[DeadLetterJobEntry] = Field(..., description="List of quarantined jobs")
     audit_timestamp_ms: int = Field(..., description="Timestamp of the query")
+
+
+# ==================================================
+# DISTRIBUTED TRACE OBSERVABILITY CONTRACTS
+# ==================================================
+
+class TraceSpanEntry(BaseModel):
+    """Represents an individual stage span within the distributed processing waterfall."""
+    stage: str = Field(..., description="Lifecycle stage: INGEST_AND_STREAM_ENQUEUE | STREAM_QUEUE_WAIT | WORKER_MULTI_AGENT_EXECUTION | BROADCAST_AND_PERSIST")
+    span_id: Optional[str] = Field(default=None, description="Span identifier")
+    duration_ms: Optional[float] = Field(default=None, description="Stage latency in milliseconds")
+    status: str = Field(default="COMPLETED", description="Stage execution status: COMPLETED | FAILED | QUARANTINED")
+
+
+class TraceWaterfallResponse(BaseModel):
+    """
+    End-to-end distributed trace waterfall for a single transaction lifecycle.
+    """
+    trace_id: str = Field(..., description="W3C 32-character hexadecimal trace identifier")
+    job_id: str = Field(..., description="Associated job tracking UUID")
+    ticker: str = Field(..., description="Target equity ticker symbol")
+    status: str = Field(..., description="Final job status: completed | failed | dead_lettered")
+    total_journey_ms: float = Field(..., description="End-to-end journey latency from edge ingest to client delivery")
+    spans: list[TraceSpanEntry] = Field(..., description="Ordered list of execution spans across microservice boundaries")
+    server_timestamp_ms: int = Field(..., description="Server wall-clock timestamp of the trace query")
 
