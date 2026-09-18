@@ -65,11 +65,19 @@ We have successfully engineered a zero-trust, cloud-native FinTech microservice 
   * Added public CQRS telemetry route `GET /v1/intelligence/circuit-breaker` and embedded circuit telemetry into `GET /v1/intelligence/stream-health`.
   * Executed automated 4-point audit suite (`audit_retry_scheduler.py`) with 100% pass rate (4/4 assertions: error classification/jitter bounds, state transitions, concurrency dampening, CQRS schema) and 0 regressions on Day 63 audit.
 
-## 3. Current Position: Day 64 Complete & Locked (Ready for Day 65)
-Phase 2 resilient stream processing is certified. The system autonomously detects downstream LLM rate limits, pauses ingestion, clamps worker concurrency, and safely recovers via canary trials.
+* **Day 65:** Distributed Stream Tracing & Correlation ID Context Propagation (Phase 2 Milestone 1 Capstone):
+  * Engineered W3C TraceContext compliant telemetry primitives in `app/core/telemetry.py` (`generate_trace_id`, `generate_span_id`, `format_traceparent`, `parse_traceparent`) and upgraded `StructuredLoggingMiddleware` with distributed context extraction/injection (`traceparent`, `X-Trace-ID`, `X-Request-ID`).
+  * Enriched Redis Streams message schema in `app/core/broker.py` with causal span lineage (`trace_id`, `parent_span_id`, `enqueue_span_id`) across single and batch job ingestion, preserving full trace context into the Dead-Letter Queue (`stream:intel_jobs:dlq`).
+  * Upgraded `StreamConsumerWorker` (`app/workers/consumer.py`) to extract trace context upon dequeue, generate worker execution spans, calculate sub-millisecond `queue_wait_ms`, and pass end-to-end trace lineage into worker execution.
+  * Augmented job completion payloads, WebSocket broadcast events, and fast $O(1)$ index key `trace:{trace_id}` with comprehensive telemetry metadata (`trace_id`, `span_id`, `parent_span_id`, `queue_wait_ms`).
+  * Added public CQRS query endpoint `GET /v1/intelligence/trace/{trace_id}` providing deep observability into the complete lifecycle waterfall from HTTP ingest to Redis stream queueing, worker execution, and WebSocket dispatch.
+  * Executed automated 5-point audit suite (`audit_distributed_tracing.py`) with 100% pass rate (5/5 assertions: W3C primitives, ingest-to-stream context propagation, worker dequeue queue wait, WebSocket/cache lineage, CQRS trace waterfall endpoint) and verified zero regressions across Day 63 and Day 64 test suites.
+
+## 3. Current Position: Day 65 Complete & Locked (Phase 2 Milestone 1 Capstone Complete)
+Phase 2 Milestone 1 (Advanced Message Brokers & Resilient Stream Processing, Days 61–65) is certified and sealed. The architecture features full horizontal decoupling, autonomous poison-pill quarantine, adaptive backpressure, circuit-breaking resilience, and distributed end-to-end W3C trace propagation.
 
 ## 4. Phase 2 Directives (Days 61–90)
-* **Current Milestone (Days 61–65):** Advanced Message Brokers & Resilient Stream Processing.
-* **Day 65 Target:** Distributed Stream Tracing & Correlation ID Context Propagation (End-to-end W3C/OpenTelemetry-style trace propagation across FastAPI ASGI -> Redis Streams -> Consumer Worker -> WebSocket Emitter -> DLQ).
-* **Do not regress:** Preserve zero-trust Pydantic perimeter, WebSocket sequence validation, and telemetry tracing.
+* **Milestone 1 (Days 61–65) [LOCKED]:** Advanced Message Brokers & Resilient Stream Processing.
+* **Milestone 2 (Days 66–75) Target:** Distributed Caching, Cache-Aside Read Optimization & Real-Time Sync Edge.
+* **Do not regress:** Preserve zero-trust Pydantic perimeter, WebSocket sequence validation, adaptive concurrency control, and distributed telemetry tracing.
 * **Protect the Event Loop:** Retain strict async I/O boundaries and non-blocking caching.
