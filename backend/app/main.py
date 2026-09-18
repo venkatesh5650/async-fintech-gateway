@@ -27,7 +27,7 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
     logging.warning("✅ [DATABASE INIT] Verified/Created all PostgreSQL tables in the cloud.")
 
-    # Day 61: Bootstrap Redis Stream & Consumer Group
+    # Infrastructure Bootstrap: Redis Streams & Consumer Groups
     try:
         await ensure_consumer_group()
     except Exception as e:

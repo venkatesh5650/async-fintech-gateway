@@ -4,7 +4,7 @@
 Redis Streams Enterprise Message Broker Module
 -----------------------------------------------
 Provides cloud-native message queuing abstractions using Redis Streams 
-and Consumer Groups (Day 61: Phase 2 Core Engine).
+and Consumer Groups.
 
 Decouples HTTP request ingestion from heavy LangGraph compute tasks,
 ensuring at-least-once delivery guarantees and zero ASGI thread starvation.
@@ -163,7 +163,7 @@ async def get_stream_lag(
     client: Optional[redis.Redis] = None,
 ) -> dict:
     """
-    Day 63: Stream Lag Diagnostic Primitive.
+    Stream Lag Diagnostic Primitive.
 
     Queries XINFO GROUPS for the native Redis 7+ 'lag' field, which reports the
     number of messages in the stream that have NOT yet been delivered to this
@@ -204,7 +204,7 @@ async def get_stream_health_snapshot(
     client: Optional[redis.Redis] = None,
 ) -> dict:
     """
-    Day 63: Full Stream Health Snapshot.
+    Full Stream Health Snapshot.
 
     Aggregates XLEN (total stream entries) with XINFO GROUPS lag metrics into a
     single non-blocking read for CQRS observability and the concurrency controller.

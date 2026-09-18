@@ -1,7 +1,7 @@
 # ROADMAP STATE - 120-Day Automated Equity Research Engine
 
 ## 1. Project Context & Current Position
-* **Current Day:** Day 63 (Phase 2 - Day 63 Locked)
+* **Current Day:** Day 64 (Phase 2 - Day 64 Locked)
 * **Target Role:** FinTech AI Automation Engineer / Systems Architect[cite: 14]
 * **Core Philosophy:** We strictly follow the principles outlined in "The 1% Advantage: Engineering a Durable FinTech Career". 
 * **AI Agent Directive:** Do not write black-box code or rewrite existing architecture. You are operating as a 1% Systems Architect. Read the completed days to understand the existing context, then execute the Phase 2 objectives.
@@ -58,12 +58,18 @@ We have successfully engineered a zero-trust, cloud-native FinTech microservice 
   * Integrated `DynamicConcurrencyController` into `StreamConsumerWorker` (`app/workers/consumer.py`) as a sibling background task that auto-tunes `asyncio.Semaphore` between `MIN=3` and `MAX=10` every 10 seconds based on real stream lag readings, with LLM rate-limit safety hardcoded at `MAX=10`.
   * Added public CQRS observability route `GET /v1/intelligence/stream-health` exposing `stream_len`, `lag`, `pel_count`, `consumer_count`, and `health_status` (HEALTHY / ACTIVE / DEGRADED / CRITICAL).
   * Executed automated 4-point audit suite (`audit_lag_monitor.py`) and verified 100% test pass rate (4/4 assertions: lag primitive structure, synthetic load detection, scaling logic isolation, CQRS endpoint schema).
+* **Day 64:** Backpressure & Rate-Limit Aware Retry Scheduling:
+  * Engineered `GroqLLMCircuitBreaker`, `CircuitState` (CLOSED, OPEN, HALF_OPEN), `is_rate_limit_error`, and AWS full-jitter exponential backoff in `app/core/resilience.py`.
+  * Integrated circuit breaker into `StreamConsumerWorker` (`app/workers/consumer.py`): stream ingestion polling paused when circuit is OPEN, per-job rate-limit retry loop with jittered backoff, and immediate concurrency backpressure clamping down to `MIN_CONCURRENCY=3` upon 429 detection.
+  * Concurrency controller strictly pins target to `MIN_CONCURRENCY` while downstream LLM circuit is tripped.
+  * Added public CQRS telemetry route `GET /v1/intelligence/circuit-breaker` and embedded circuit telemetry into `GET /v1/intelligence/stream-health`.
+  * Executed automated 4-point audit suite (`audit_retry_scheduler.py`) with 100% pass rate (4/4 assertions: error classification/jitter bounds, state transitions, concurrency dampening, CQRS schema) and 0 regressions on Day 63 audit.
 
-## 3. Current Position: Day 63 Complete & Locked (Ready for Day 64)
-Phase 2 adaptive performance is certified. The system autonomously monitors its own stream backlog and scales worker concurrency between 3–10 in real time, with full CQRS observability exposed via the stream-health endpoint.
+## 3. Current Position: Day 64 Complete & Locked (Ready for Day 65)
+Phase 2 resilient stream processing is certified. The system autonomously detects downstream LLM rate limits, pauses ingestion, clamps worker concurrency, and safely recovers via canary trials.
 
 ## 4. Phase 2 Directives (Days 61–90)
 * **Current Milestone (Days 61–65):** Advanced Message Brokers & Resilient Stream Processing.
-* **Day 64 Target:** Backpressure & Rate-Limit Aware Retry Scheduling (exponential backoff on 429s from Groq with circuit breaker integration into the consumer worker).
+* **Day 65 Target:** Distributed Stream Tracing & Correlation ID Context Propagation (End-to-end W3C/OpenTelemetry-style trace propagation across FastAPI ASGI -> Redis Streams -> Consumer Worker -> WebSocket Emitter -> DLQ).
 * **Do not regress:** Preserve zero-trust Pydantic perimeter, WebSocket sequence validation, and telemetry tracing.
 * **Protect the Event Loop:** Retain strict async I/O boundaries and non-blocking caching.
