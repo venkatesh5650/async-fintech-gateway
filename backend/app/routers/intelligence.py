@@ -44,6 +44,7 @@ from app.core.broker import (
     STREAM_INTEL_JOBS,
     STREAM_INTEL_DLQ,
 )
+from app.core.resilience import groq_circuit_breaker
 
 MAX_CONCURRENCY = int(os.getenv("BATCH_CONCURRENCY_LIMIT", "5"))
 
@@ -478,7 +479,7 @@ async def get_dead_letter_registry(
 
 
 # ==================================================
-# DAY 63: STREAM LAG & CONCURRENCY OBSERVABILITY
+# CQRS TELEMETRY: STREAM LAG & CONCURRENCY OBSERVABILITY
 # ==================================================
 
 @router.get("/stream-health", status_code=status.HTTP_200_OK)
@@ -501,5 +502,28 @@ async def get_stream_health():
       audit_timestamp_ms — Server wall-clock timestamp of this snapshot
     """
     snapshot = await get_stream_health_snapshot(client=redis_client)
+    snapshot["circuit_breaker"] = groq_circuit_breaker.get_state_snapshot()
     snapshot["audit_timestamp_ms"] = int(time.time() * 1000)
     return snapshot
+
+
+# ==================================================
+# CQRS TELEMETRY: DOWNSTREAM LLM CIRCUIT BREAKER
+# ==================================================
+
+@router.get("/circuit-breaker", status_code=status.HTTP_200_OK)
+async def get_circuit_breaker_telemetry():
+    """
+    CQRS Observability: Real-time LLM Circuit Breaker & Rate-Limit Telemetry.
+
+    Exposes the internal state of GroqLLMCircuitBreaker:
+      circuit_state           — CLOSED | OPEN | HALF_OPEN
+      consecutive_rate_limits — Current streak of HTTP 429 errors
+      failure_threshold       — Consecutive 429s required to trip breaker
+      total_trips             — Cumulative times the circuit has tripped
+      cooldown_period_sec     — Total cooldown window duration
+      cooldown_remaining_sec  — Seconds until canary test allowed
+      last_failure_reason     — Root-cause error message
+      server_timestamp_ms     — Server wall-clock timestamp
+    """
+    return groq_circuit_breaker.get_state_snapshot()
