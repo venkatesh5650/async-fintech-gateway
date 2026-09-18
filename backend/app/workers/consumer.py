@@ -43,6 +43,7 @@ from app.core.resilience import (
     calculate_backoff_with_jitter,
 )
 from app.routers.intelligence import run_intelligence_worker
+from app.core.telemetry import generate_span_id
 
 logging.basicConfig(
     level=logging.INFO,
@@ -105,6 +106,8 @@ class StreamConsumerWorker:
         ticker = data.get("ticker")
         batch_id = data.get("batch_id")
         trace_id = data.get("trace_id", "")
+        parent_span = data.get("enqueue_span_id") or data.get("parent_span_id", "")
+        worker_span = generate_span_id()
         enqueued_at = float(data.get("enqueued_at", time.time()))
 
         if not job_id or not ticker:
@@ -115,7 +118,7 @@ class StreamConsumerWorker:
 
         queue_wait_ms = round((time.time() - enqueued_at) * 1000, 2)
         logger.info(
-            f"⚡ [PULL] Processing {ticker.upper()} (Job: {job_id[:8]}.. | Msg ID: {message_id} | Queue Wait: {queue_wait_ms}ms | Trace: {trace_id[:8]})"
+            f"⚡ [PULL] Processing {ticker.upper()} (Job: {job_id[:8]}.. | Msg ID: {message_id} | Queue Wait: {queue_wait_ms}ms | Trace: {trace_id[:8]}.. | Span: {worker_span})"
         )
 
         async with self.semaphore:
@@ -146,6 +149,7 @@ class StreamConsumerWorker:
                     payload=data,
                     error_reason=f"Exceeded max delivery attempts ({delivery_count}/{MAX_DELIVERY_ATTEMPTS})",
                     delivery_count=delivery_count,
+                    parent_span_id=parent_span,
                     client=self.redis_client
                 )
 
@@ -181,8 +185,15 @@ class StreamConsumerWorker:
                         )
                         await asyncio.sleep(cooldown_wait)
 
-                    # Execute heavy LangGraph multi-agent analysis
-                    await run_intelligence_worker(job_id, ticker)
+                    # Execute heavy LangGraph multi-agent analysis with distributed trace context
+                    await run_intelligence_worker(
+                        job_id=job_id,
+                        ticker=ticker,
+                        trace_id=trace_id,
+                        span_id=worker_span,
+                        parent_span_id=parent_span,
+                        queue_wait_ms=queue_wait_ms,
+                    )
                     groq_circuit_breaker.record_success()
                     executed_successfully = True
                     break
