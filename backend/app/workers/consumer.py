@@ -36,6 +36,12 @@ from app.core.broker import (
     get_stream_lag,
 )
 from app.core.emitter import send_to_discord_dlq
+from app.core.resilience import (
+    CircuitState,
+    groq_circuit_breaker,
+    is_rate_limit_error,
+    calculate_backoff_with_jitter,
+)
 from app.routers.intelligence import run_intelligence_worker
 
 logging.basicConfig(
@@ -47,11 +53,14 @@ logger = logging.getLogger(__name__)
 MAX_CONCURRENT_JOBS = int(os.getenv("BATCH_CONCURRENCY_LIMIT", "5"))
 BLOCK_TIMEOUT_MS = int(os.getenv("CONSUMER_BLOCK_MS", "2000"))
 
-# Day 63: Dynamic Concurrency Tuning Configuration
+# Dynamic Concurrency Tuning Configuration (Backpressure Control)
 MIN_CONCURRENCY = int(os.getenv("MIN_CONCURRENCY", "3"))    # Never drop below (idle baseline)
 MAX_CONCURRENCY = int(os.getenv("MAX_CONCURRENCY", "10"))   # Hard cap (Groq free tier safe)
 SCALE_UP_THRESHOLD = int(os.getenv("SCALE_UP_THRESHOLD", "5"))  # Lag count that triggers +1 step
 LAG_CHECK_INTERVAL_SEC = float(os.getenv("LAG_CHECK_INTERVAL_SEC", "10.0"))  # How often to re-evaluate
+
+# Downstream Rate-Limit & Resilience Configuration
+MAX_RATE_LIMIT_RETRIES = int(os.getenv("MAX_RATE_LIMIT_RETRIES", "3"))
 
 
 class StreamConsumerWorker:
@@ -159,10 +168,61 @@ class StreamConsumerWorker:
                 except Exception:
                     pass
 
-            try:
-                # Execute heavy LangGraph multi-agent analysis
-                await run_intelligence_worker(job_id, ticker)
+            # Fault-Tolerant Execution: Circuit Breaker & Jittered Exponential Backoff
+            executed_successfully = False
+            for attempt in range(1, MAX_RATE_LIMIT_RETRIES + 1):
+                try:
+                    # Check if circuit breaker allows execution
+                    if not groq_circuit_breaker.can_execute():
+                        cooldown_wait = max(1.0, min(groq_circuit_breaker.get_cooldown_remaining(), 5.0))
+                        logger.warning(
+                            f"🛑 [CIRCUIT OPEN] Groq LLM circuit breaker is {groq_circuit_breaker.state.value}. "
+                            f"Waiting {cooldown_wait}s before execution trial {attempt}/{MAX_RATE_LIMIT_RETRIES}..."
+                        )
+                        await asyncio.sleep(cooldown_wait)
 
+                    # Execute heavy LangGraph multi-agent analysis
+                    await run_intelligence_worker(job_id, ticker)
+                    groq_circuit_breaker.record_success()
+                    executed_successfully = True
+                    break
+
+                except Exception as exc:
+                    if is_rate_limit_error(exc):
+                        groq_circuit_breaker.record_failure(exc, is_rate_limit=True)
+
+                        # Immediate Backpressure: Clamp concurrency to MIN_CONCURRENCY
+                        if self.max_concurrency > MIN_CONCURRENCY:
+                            logger.warning(
+                                f"⚠️ [BACKPRESSURE] Rate-limit (429) detected on {ticker.upper()}! "
+                                f"Clamping concurrency [{self.max_concurrency} → {MIN_CONCURRENCY}] to protect Groq quota."
+                            )
+                            self.semaphore = asyncio.Semaphore(MIN_CONCURRENCY)
+                            self.max_concurrency = MIN_CONCURRENCY
+
+                        if attempt < MAX_RATE_LIMIT_RETRIES:
+                            backoff_delay = calculate_backoff_with_jitter(
+                                attempt=attempt,
+                                base_delay=2.0,
+                                max_delay=15.0,
+                                jitter=True,
+                            )
+                            logger.warning(
+                                f"⏳ [RATE-LIMIT RETRY {attempt}/{MAX_RATE_LIMIT_RETRIES}] {ticker.upper()} throttled (429). "
+                                f"Backing off with jitter for {backoff_delay}s..."
+                            )
+                            await asyncio.sleep(backoff_delay)
+                        else:
+                            logger.error(
+                                f"❌ [RATE-LIMIT EXHAUSTED] Job {job_id} ({ticker.upper()}) exhausted {MAX_RATE_LIMIT_RETRIES} retries on 429."
+                            )
+                    else:
+                        # Non-rate-limit error (e.g. fatal data issue or parsing bug)
+                        groq_circuit_breaker.record_failure(exc, is_rate_limit=False)
+                        logger.error(f"❌ [WORKER ERROR] Job {job_id} failed: {exc}", exc_info=True)
+                        break
+
+            if executed_successfully:
                 # Explicit message acknowledgment
                 await self.redis_client.xack(STREAM_INTEL_JOBS, GROUP_INTEL_WORKERS, message_id)
                 logger.info(
@@ -173,13 +233,9 @@ class StreamConsumerWorker:
                 if batch_id:
                     await self._update_batch_progress(batch_id)
 
-            except Exception as exc:
-                logger.error(f"❌ [WORKER ERROR] Job {job_id} failed: {exc}", exc_info=True)
-                # Note: Un-ACKed message intentionally remains in PEL for crash-recovery/retry inspection
-
     async def _run_concurrency_controller(self) -> None:
         """
-        Day 63: Dynamic Concurrency Controller.
+        Autonomous Dynamic Concurrency Controller.
 
         Background coroutine that runs alongside the main polling loop.
         Every LAG_CHECK_INTERVAL_SEC it reads the real stream lag from Redis
@@ -214,8 +270,11 @@ class StreamConsumerWorker:
                 total_lag = lag_data["lag"] + lag_data["pel_count"]
                 current = self.max_concurrency
 
-                # Determine target based on lag level
-                if total_lag == 0:
+                # Determine target based on lag level and circuit breaker status
+                if groq_circuit_breaker.state == CircuitState.OPEN:
+                    # Do not scale up while downstream LLM is tripped
+                    target = MIN_CONCURRENCY
+                elif total_lag == 0:
                     target = MIN_CONCURRENCY
                 elif total_lag <= SCALE_UP_THRESHOLD:
                     target = current  # steady — hold
@@ -321,7 +380,7 @@ class StreamConsumerWorker:
         self.running = True
         logger.info(f"🔄 [LOOP START] Worker '{self.consumer_id}' actively polling Redis Streams...")
 
-        # Day 63: Launch dynamic concurrency controller as a sibling background task
+        # Launch autonomous concurrency controller as a concurrent background task
         controller_task = asyncio.create_task(
             self._run_concurrency_controller(),
             name=f"concurrency-ctrl-{self.consumer_id}",
@@ -339,6 +398,16 @@ class StreamConsumerWorker:
                 if now - last_claim_time >= AUTOCLAIM_INTERVAL_SEC:
                     last_claim_time = now
                     await self._reclaim_abandoned_jobs_cycle()
+
+                # Gatekeeper: Pause stream ingestion when downstream LLM circuit breaker is tripped
+                if not groq_circuit_breaker.can_execute():
+                    cooldown_wait = max(1.0, min(groq_circuit_breaker.get_cooldown_remaining(), 5.0))
+                    logger.warning(
+                        f"⏸️ [POLL PAUSED] Groq LLM circuit breaker is {groq_circuit_breaker.state.value}. "
+                        f"Pausing stream ingestion for {cooldown_wait}s to allow quota recovery..."
+                    )
+                    await asyncio.sleep(cooldown_wait)
+                    continue
 
                 # Read new unread messages destined for this consumer group
                 # '>' indicates messages never delivered to any other consumer
