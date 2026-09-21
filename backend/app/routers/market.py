@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, status, Depends
+from fastapi import APIRouter, BackgroundTasks, status, Depends, Security
 import asyncio
 import logging
 import yfinance as yf
@@ -9,6 +9,7 @@ from app.database.models import Ticker, MarketPricing
 from app.database.schemas import MarketDataPayload
 from app.core.resilience import async_retry
 from app.core.limiter import RateLimiter
+from app.routers.intelligence import verify_m2m_or_user
 
 router = APIRouter(prefix="/v1/market-data", tags=["Market Ingestion"])
 
@@ -156,7 +157,10 @@ async def ingest_market_data(payload: MarketDataPayload, background_tasks: Backg
     "/history/{ticker}",
     status_code=status.HTTP_200_OK
 )
-async def get_market_history(ticker: str):
+async def get_market_history(
+    ticker: str,
+    auth_verified: dict = Security(verify_m2m_or_user),
+):
     """
     CQRS Query Edge: Retrieve time-series historical pricing data for a ticker symbol.
     """
