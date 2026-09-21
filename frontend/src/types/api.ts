@@ -6,6 +6,14 @@ export interface IntelligenceResponse {
   execution_time_ms: number;
 }
 
+// Immediate response returned when a single job is accepted (HTTP 202)
+export interface JobAcceptedResponse {
+  job_id: string;
+  trace_id?: string;
+  status: string;
+  message: string;
+}
+
 // ==================================================
 // MULTI-ASSET BATCH ORCHESTRATION CONTRACTS
 // ==================================================
@@ -25,6 +33,7 @@ export interface BatchJobAcceptedResponse {
   status: "queued" | "processing" | "completed" | "failed";
   jobs: BatchJobItem[];
   message: string;
+  trace_id?: string;
 }
 
 export interface BatchAssetStatus {
@@ -48,6 +57,7 @@ export interface JobAuditEntry {
   age_seconds: number;
   signal?: "BUY" | "SELL" | "HOLD" | "INVALID";
   execution_time_ms?: number;
+  trace_id?: string;
 }
 
 export interface SystemAuditResponse {
@@ -56,6 +66,86 @@ export interface SystemAuditResponse {
   completed: number;
   failed: number;
   jobs: JobAuditEntry[];
+  audit_timestamp_ms: number;
+}
+
+// ==================================================
+// DEAD-LETTER QUEUE (DLQ) TYPE CONTRACTS
+// ==================================================
+
+export interface DeadLetterJobEntry {
+  dlq_id: string;
+  original_message_id: string;
+  job_id: string;
+  ticker: string;
+  batch_id?: string | null;
+  trace_id?: string | null;
+  delivery_count: number;
+  error_reason: string;
+  quarantined_at: number;
+}
+
+export interface DeadLetterRegistryResponse {
+  total_quarantined: number;
+  entries: DeadLetterJobEntry[];
+  audit_timestamp_ms: number;
+}
+
+// ==================================================
+// DISTRIBUTED TRACE WATERFALL CONTRACTS
+// ==================================================
+
+export interface TraceSpanEntry {
+  stage:
+    | "INGEST_AND_STREAM_ENQUEUE"
+    | "STREAM_QUEUE_WAIT"
+    | "WORKER_MULTI_AGENT_EXECUTION"
+    | "BROADCAST_AND_PERSIST"
+    | string;
+  span_id?: string | null;
+  duration_ms?: number | null;
+  status: "COMPLETED" | "FAILED" | "QUARANTINED" | string;
+}
+
+export interface TraceWaterfallResponse {
+  trace_id: string;
+  job_id: string;
+  ticker: string;
+  status: string;
+  total_journey_ms: number;
+  spans: TraceSpanEntry[];
+  server_timestamp_ms: number;
+}
+
+// ==================================================
+// STREAM HEALTH & DYNAMIC CONCURRENCY CONTRACTS
+// ==================================================
+
+export type StreamHealthStatus = "HEALTHY" | "ACTIVE" | "DEGRADED" | "CRITICAL";
+
+export type CircuitBreakerState = "CLOSED" | "OPEN" | "HALF_OPEN";
+
+export interface CircuitBreakerTelemetrySnapshot {
+  circuit_state: CircuitBreakerState;
+  consecutive_rate_limits: number;
+  failure_threshold: number;
+  total_trips: number;
+  cooldown_period_sec: number;
+  cooldown_remaining_sec: number;
+  last_failure_reason?: string | null;
+  server_timestamp_ms: number;
+}
+
+export interface StreamHealthResponse {
+  stream_name: string;
+  consumer_group: string;
+  stream_len: number;
+  lag: number;
+  pel_count: number;
+  consumer_count: number;
+  last_delivered_id: string;
+  health_status: StreamHealthStatus;
+  circuit_breaker?: CircuitBreakerTelemetrySnapshot;
   audit_timestamp_ms: number;
 }
 

@@ -7,6 +7,11 @@ import LogoutButton from "@/components/LogoutButton";
 import ActionTriggers from "@/components/ActionTriggers";
 import BatchCommandCenter from "@/components/BatchCommandCenter";
 import JobAuditPanel from "@/components/JobAuditPanel";
+import DLQInspectorPanel from "@/components/DLQInspectorPanel";
+import StreamHealthMonitor from "@/components/StreamHealthMonitor";
+import CircuitBreakerPanel from "@/components/CircuitBreakerPanel";
+import DistributedTraceExplorer from "@/components/DistributedTraceExplorer";
+import TraceWaterfallModal from "@/components/TraceWaterfallModal";
 import MarketChart from "@/components/MarketChart";
 import useWebSocket from "@/hooks/useWebSocket";
 import { BatchAssetStatus, BatchJobAcceptedResponse } from "@/types/api";
@@ -28,6 +33,13 @@ export default function DynamicDashboardPage() {
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
   const [cooldown, setCooldown] = useState<number>(0);
   const [jobId, setJobId] = useState<string | undefined>(undefined);
+  const [traceId, setTraceId] = useState<string | undefined>(undefined);
+  const [activeOpsTab, setActiveOpsTab] = useState<"registry" | "dlq" | "health" | "circuit" | "trace">("registry");
+  const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
+
+  const handleCloseTraceModal = useCallback(() => {
+    setSelectedTraceId(null);
+  }, []);
 
   // Batch Orchestration State
   const [batchId, setBatchId] = useState<string | null>(null);
@@ -58,7 +70,11 @@ export default function DynamicDashboardPage() {
         const history = await res.json();
         setChartData(history);
       } else {
-        console.error("Failed to fetch historical market data");
+        const errPayload = await res.json().catch(() => ({}));
+        console.error("Failed to fetch historical market data:", res.status, errPayload);
+        if (res.status === 401 || res.status === 403) {
+          setError("SESSION_EXPIRED");
+        }
       }
     } catch (err) {
       console.error("Error fetching historical market data:", err);
@@ -69,22 +85,32 @@ export default function DynamicDashboardPage() {
     fetchHistory();
   }, [fetchHistory]);
 
-  // REST API status checker for job recovery
+  // REST API status checker for job recovery and batch reconciliation
   const fetchJobStatus = useCallback(async (targetJobId: string) => {
     try {
       const res = await fetch(`/api/jobs/${targetJobId}`);
       if (res.ok) {
         const data = await res.json();
-        
+
         if (jobIdRef.current === targetJobId) {
           setJobState((prev) => {
-            if (!prev) return prev;
-            return { ...prev, ...data };
+            if (prev && prev.status === data.status && prev.result === data.result) {
+              return prev;
+            }
+            const current = prev || { status: data.status, job_id: targetJobId };
+            return { ...current, ...data };
           });
+          if (data.trace_id) {
+            setTraceId(data.trace_id);
+          }
         }
 
-        setBatchAssets((prevAssets) =>
-          prevAssets.map((asset) => {
+        setBatchAssets((prevAssets) => {
+          const target = prevAssets.find((a) => a.job_id === targetJobId);
+          if (!target || (target.status === data.status && target.result === data.result)) {
+            return prevAssets;
+          }
+          const updated = prevAssets.map((asset) => {
             if (asset.job_id === targetJobId) {
               return {
                 ...asset,
@@ -95,8 +121,33 @@ export default function DynamicDashboardPage() {
               };
             }
             return asset;
-          })
-        );
+          });
+
+          if (syncChannelRef.current && batchIdRef.current) {
+            syncChannelRef.current.postMessage({
+              type: "BATCH_UPDATE",
+              payload: { batchId: batchIdRef.current, batchAssets: updated },
+            });
+          }
+
+          return updated;
+        });
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        if (res.status === 500 && errData.error) {
+          if (jobIdRef.current === targetJobId) {
+            setJobState((prev) =>
+              prev ? { ...prev, status: "failed", error: errData.error } : null
+            );
+          }
+          setBatchAssets((prevAssets) =>
+            prevAssets.map((asset) =>
+              asset.job_id === targetJobId
+                ? { ...asset, status: "failed", error: errData.error }
+                : asset
+            )
+          );
+        }
       }
     } catch (err) {
       console.error("[Recovery] Failed to fetch job status:", err);
@@ -111,6 +162,44 @@ export default function DynamicDashboardPage() {
       fetchJobStatus(jobIdRef.current);
     }
   }, [ticker, fetchHistory, fetchJobStatus]);
+
+  // Active job status reconciliation & fallback polling
+  useEffect(() => {
+    const hasPendingBatch = batchAssets.some(
+      (a) => a.status === "processing" || a.status === "queued"
+    );
+    const hasPendingSingle = jobState?.status === "processing";
+
+    if (!hasPendingBatch && !hasPendingSingle) return;
+
+    // Immediate check on trigger
+    if (hasPendingSingle && jobIdRef.current) {
+      fetchJobStatus(jobIdRef.current);
+    }
+    if (hasPendingBatch) {
+      batchAssetsRef.current
+        .filter((a) => a.status === "processing" || a.status === "queued")
+        .forEach((a) => {
+          fetchJobStatus(a.job_id);
+        });
+    }
+
+    const interval = setInterval(() => {
+      if (jobStateRef.current?.status === "processing" && jobIdRef.current) {
+        fetchJobStatus(jobIdRef.current);
+      }
+      const pending = batchAssetsRef.current.filter(
+        (a) => a.status === "processing" || a.status === "queued"
+      );
+      if (pending.length > 0) {
+        pending.forEach((a) => {
+          fetchJobStatus(a.job_id);
+        });
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [jobState?.status, batchAssets, fetchJobStatus]);
 
   // --------------------------------------------------
   // SESSION STATE PRESERVATION & RESTORATION (LOCAL STORAGE)
@@ -356,8 +445,9 @@ export default function DynamicDashboardPage() {
           return;
         }
 
-        const { job_id } = await dispatchRes.json();
+        const { job_id, trace_id } = await dispatchRes.json();
         setJobId(job_id);
+        setTraceId(trace_id || undefined);
         const nextState: JobState = { status: "processing", job_id };
         setJobState(nextState);
 
@@ -407,6 +497,7 @@ export default function DynamicDashboardPage() {
 
       const data: BatchJobAcceptedResponse = await res.json();
       setBatchId(data.batch_id);
+      setTraceId(data.trace_id || undefined);
 
       const initialAssets: BatchAssetStatus[] = data.jobs.map((j) => ({
         ticker: j.ticker,
@@ -618,6 +709,19 @@ export default function DynamicDashboardPage() {
             <div className="text-gray-400 text-sm">
               LangGraph AI Engine is reasoning on {ticker || "ASSET"}...
             </div>
+            {traceId && (
+              <button
+                onClick={() => setSelectedTraceId(traceId)}
+                className="flex items-center gap-2 mt-1 hover:opacity-80 transition-opacity"
+                title="View distributed trace waterfall"
+              >
+                <span className="text-[10px] text-gray-600 uppercase tracking-widest">Trace</span>
+                <span className="text-[11px] text-blue-400 font-mono bg-blue-500/10 border border-blue-500/30 px-2 py-0.5 rounded flex items-center gap-1">
+                  <span>⤢</span>
+                  <span>{traceId.slice(0, 12)}…</span>
+                </span>
+              </button>
+            )}
           </div>
 
           {/* Render Batch Matrix if batch is active during processing */}
@@ -625,6 +729,9 @@ export default function DynamicDashboardPage() {
             <BatchCommandCenter
               batchId={batchId}
               assets={batchAssets}
+              onSelectAsset={(selectedTicker) => {
+                window.location.href = `/dashboard/${selectedTicker}`;
+              }}
               onClearBatch={() => {
                 setBatchId(null);
                 setBatchAssets([]);
@@ -638,8 +745,80 @@ export default function DynamicDashboardPage() {
             />
           )}
 
-          {/* Live Redis Job Registry Audit Console */}
-          <JobAuditPanel />
+          {/* Operational Observability Console */}
+          <div className="mt-8">
+            <div className="flex items-center space-x-2 border-b border-gray-800 pb-3 mb-4 font-mono text-xs">
+              <button
+                onClick={() => setActiveOpsTab("registry")}
+                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold ${
+                  activeOpsTab === "registry"
+                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
+                    : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                Live Job Registry
+              </button>
+              <button
+                onClick={() => setActiveOpsTab("dlq")}
+                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
+                  activeOpsTab === "dlq"
+                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
+                    : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                <span>DLQ Inspector</span>
+              </button>
+              <button
+                onClick={() => setActiveOpsTab("health")}
+                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
+                  activeOpsTab === "health"
+                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
+                    : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                <span>Stream Health</span>
+              </button>
+              <button
+                onClick={() => setActiveOpsTab("circuit")}
+                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
+                  activeOpsTab === "circuit"
+                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
+                    : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                <span>Circuit Breaker</span>
+              </button>
+              <button
+                onClick={() => setActiveOpsTab("trace")}
+                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
+                  activeOpsTab === "trace"
+                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
+                    : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                <span>Distributed Trace</span>
+              </button>
+            </div>
+
+            {activeOpsTab === "registry" ? (
+              <JobAuditPanel onSelectTrace={(tId) => setSelectedTraceId(tId)} />
+            ) : activeOpsTab === "dlq" ? (
+              <DLQInspectorPanel onSelectTrace={(tId) => setSelectedTraceId(tId)} />
+            ) : activeOpsTab === "health" ? (
+              <StreamHealthMonitor />
+            ) : activeOpsTab === "circuit" ? (
+              <CircuitBreakerPanel />
+            ) : (
+              <DistributedTraceExplorer
+                initialTraceId={traceId || undefined}
+              />
+            )}
+          </div>
+
+          <TraceWaterfallModal
+            traceId={selectedTraceId}
+            onClose={handleCloseTraceModal}
+          />
         </div>
       </div>
     );
@@ -667,6 +846,21 @@ export default function DynamicDashboardPage() {
           {ticker && <MarketChart ticker={ticker} data={chartData} />}
 
           <IntelligenceCard data={jobState.result} />
+
+          {/* Distributed trace context */}
+          {traceId && (
+            <button
+              onClick={() => setSelectedTraceId(traceId)}
+              className="flex items-center gap-2 bg-[#0a0a0a] border border-gray-800 hover:border-gray-700 rounded-lg px-4 py-2 transition-colors"
+              title="View distributed trace waterfall"
+            >
+              <span className="text-[10px] text-gray-600 uppercase tracking-widest">Trace ID</span>
+              <span className="text-xs text-blue-400 font-mono flex items-center gap-1">
+                <span>⤢</span>
+                <span>{traceId.slice(0, 16)}…</span>
+              </span>
+            </button>
+          )}
           
           <ActionTriggers
             ticker={ticker}
@@ -680,6 +874,9 @@ export default function DynamicDashboardPage() {
           <BatchCommandCenter
             batchId={batchId}
             assets={batchAssets}
+            onSelectAsset={(selectedTicker) => {
+              window.location.href = `/dashboard/${selectedTicker}`;
+            }}
             onClearBatch={() => {
               setBatchId(null);
               setBatchAssets([]);
@@ -692,8 +889,80 @@ export default function DynamicDashboardPage() {
             }}
           />
 
-          {/* Live Redis Job Registry Audit Console */}
-          <JobAuditPanel />
+          {/* Operational Observability Console */}
+          <div className="mt-8">
+            <div className="flex items-center space-x-2 border-b border-gray-800 pb-3 mb-4 font-mono text-xs">
+              <button
+                onClick={() => setActiveOpsTab("registry")}
+                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold ${
+                  activeOpsTab === "registry"
+                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
+                    : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                Live Job Registry
+              </button>
+              <button
+                onClick={() => setActiveOpsTab("dlq")}
+                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
+                  activeOpsTab === "dlq"
+                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
+                    : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                <span>DLQ Inspector</span>
+              </button>
+              <button
+                onClick={() => setActiveOpsTab("health")}
+                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
+                  activeOpsTab === "health"
+                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
+                    : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                <span>Stream Health</span>
+              </button>
+              <button
+                onClick={() => setActiveOpsTab("circuit")}
+                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
+                  activeOpsTab === "circuit"
+                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
+                    : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                <span>Circuit Breaker</span>
+              </button>
+              <button
+                onClick={() => setActiveOpsTab("trace")}
+                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
+                  activeOpsTab === "trace"
+                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
+                    : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                <span>Distributed Trace</span>
+              </button>
+            </div>
+
+            {activeOpsTab === "registry" ? (
+              <JobAuditPanel onSelectTrace={(tId) => setSelectedTraceId(tId)} />
+            ) : activeOpsTab === "dlq" ? (
+              <DLQInspectorPanel onSelectTrace={(tId) => setSelectedTraceId(tId)} />
+            ) : activeOpsTab === "health" ? (
+              <StreamHealthMonitor />
+            ) : activeOpsTab === "circuit" ? (
+              <CircuitBreakerPanel />
+            ) : (
+              <DistributedTraceExplorer
+                initialTraceId={traceId || undefined}
+              />
+            )}
+          </div>
+
+          <TraceWaterfallModal
+            traceId={selectedTraceId}
+            onClose={handleCloseTraceModal}
+          />
         </div>
       </div>
     );
@@ -720,6 +989,9 @@ export default function DynamicDashboardPage() {
         <BatchCommandCenter
           batchId={batchId}
           assets={batchAssets}
+          onSelectAsset={(selectedTicker) => {
+            window.location.href = `/dashboard/${selectedTicker}`;
+          }}
           onClearBatch={() => {
             setBatchId(null);
             setBatchAssets([]);
@@ -730,6 +1002,81 @@ export default function DynamicDashboardPage() {
               });
             }
           }}
+        />
+
+        {/* Operational Observability Console */}
+        <div className="mt-8">
+          <div className="flex items-center space-x-2 border-b border-gray-800 pb-3 mb-4 font-mono text-xs">
+            <button
+              onClick={() => setActiveOpsTab("registry")}
+              className={`px-3 py-1.5 rounded-lg transition-colors font-semibold ${
+                activeOpsTab === "registry"
+                  ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
+                  : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              Live Job Registry
+            </button>
+            <button
+              onClick={() => setActiveOpsTab("dlq")}
+              className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
+                activeOpsTab === "dlq"
+                  ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
+                  : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              <span>DLQ Inspector</span>
+            </button>
+            <button
+              onClick={() => setActiveOpsTab("health")}
+              className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
+                activeOpsTab === "health"
+                  ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
+                  : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              <span>Stream Health</span>
+            </button>
+            <button
+              onClick={() => setActiveOpsTab("circuit")}
+              className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
+                activeOpsTab === "circuit"
+                  ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
+                  : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              <span>Circuit Breaker</span>
+            </button>
+            <button
+              onClick={() => setActiveOpsTab("trace")}
+              className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
+                activeOpsTab === "trace"
+                  ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
+                  : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              <span>Distributed Trace</span>
+            </button>
+          </div>
+
+          {activeOpsTab === "registry" ? (
+            <JobAuditPanel onSelectTrace={(tId) => setSelectedTraceId(tId)} />
+          ) : activeOpsTab === "dlq" ? (
+            <DLQInspectorPanel onSelectTrace={(tId) => setSelectedTraceId(tId)} />
+          ) : activeOpsTab === "health" ? (
+            <StreamHealthMonitor />
+          ) : activeOpsTab === "circuit" ? (
+            <CircuitBreakerPanel />
+          ) : (
+            <DistributedTraceExplorer
+              initialTraceId={traceId || undefined}
+            />
+          )}
+        </div>
+
+        <TraceWaterfallModal
+          traceId={selectedTraceId}
+          onClose={handleCloseTraceModal}
         />
       </div>
     </div>
