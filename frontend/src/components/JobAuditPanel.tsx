@@ -97,9 +97,11 @@ function SummaryCounter({
   );
 }
 
-// ── Main Component ────────────────────────────────────────────────────────────
+interface JobAuditPanelProps {
+  onSelectTrace?: (traceId: string) => void;
+}
 
-export default function JobAuditPanel() {
+export default function JobAuditPanel({ onSelectTrace }: JobAuditPanelProps = {}) {
   const [auditData, setAuditData] = useState<SystemAuditResponse>(EMPTY_STATE);
   const [isLoading, setIsLoading] = useState(true);
   const [isError, setIsError] = useState(false);
@@ -233,6 +235,7 @@ export default function JobAuditPanel() {
                 <th className="text-left pb-2 pr-3 font-normal">Ticker</th>
                 <th className="text-left pb-2 pr-3 font-normal">Status</th>
                 <th className="text-left pb-2 pr-3 font-normal">Signal</th>
+                <th className="text-left pb-2 pr-3 font-normal">Trace</th>
                 <th className="text-right pb-2 pr-3 font-normal">
                   Latency
                 </th>
@@ -265,6 +268,28 @@ export default function JobAuditPanel() {
                   {/* Signal */}
                   <td className="py-2 pr-3">
                     <SignalBadge signal={job.signal} />
+                  </td>
+
+                  {/* Distributed trace correlation */}
+                  <td className="py-2 pr-3">
+                    {job.trace_id ? (
+                      <button
+                        className="text-[10px] font-mono text-blue-400/80 hover:text-blue-300 hover:underline transition-colors flex items-center gap-1"
+                        title="View distributed trace waterfall"
+                        onClick={() => {
+                          if (onSelectTrace && job.trace_id) {
+                            onSelectTrace(job.trace_id);
+                          } else if (job.trace_id) {
+                            navigator.clipboard.writeText(job.trace_id);
+                          }
+                        }}
+                      >
+                        <span>⤢</span>
+                        <span>{job.trace_id.slice(0, 8)}…</span>
+                      </button>
+                    ) : (
+                      <span className="text-gray-700 text-xs">—</span>
+                    )}
                   </td>
 
                   {/* Execution latency */}
