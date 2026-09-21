@@ -42,7 +42,7 @@ async def audit_redis():
     """Test 2: Redis In-Memory Keyspace & Latency"""
     client = redis.from_url(REDIS_URL, decode_responses=True)
     start = time.perf_counter()
-    test_key = "audit:test:day60"
+    test_key = "audit:test:redis_connectivity"
     await client.set(test_key, "healthy", ex=10)
     val = await client.get(test_key)
     await client.delete(test_key)

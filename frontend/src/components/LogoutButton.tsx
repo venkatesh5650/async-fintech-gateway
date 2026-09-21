@@ -3,10 +3,10 @@
 export default function LogoutButton() {
   const handleLogout = async () => {
     try {
-      // 1. Hit our new kill switch API
+      // Invalidate session cookie server-side via authentication gateway
       await fetch('/api/auth/logout', { method: 'POST' });
       
-      // 2. Hard redirect back to the login perimeter
+      // Redirect client to login perimeter
       window.location.href = '/login';
     } catch (error) {
       console.error("Failed to execute logout", error);

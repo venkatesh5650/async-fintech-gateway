@@ -38,7 +38,7 @@ API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 
 
 # ─────────────────────────────────────────────────
-# 1. Rate-Limit Classifier & Full-Jitter Math Bounds
+# Rate-Limit Classifier & Full-Jitter Math Bounds
 # ─────────────────────────────────────────────────
 async def test_rate_limit_classifier_and_jitter() -> float:
     t0 = time.perf_counter()
@@ -88,7 +88,7 @@ async def test_rate_limit_classifier_and_jitter() -> float:
 
 
 # ─────────────────────────────────────────────────
-# 2. Circuit Breaker State Transitions
+# Circuit Breaker State Transitions
 # ─────────────────────────────────────────────────
 async def test_circuit_breaker_state_machine() -> float:
     t0 = time.perf_counter()
@@ -145,7 +145,7 @@ async def test_circuit_breaker_state_machine() -> float:
 
 
 # ─────────────────────────────────────────────────
-# 3. Worker Concurrency Dampening on Rate-Limit
+# Worker Concurrency Dampening on Rate-Limit
 # ─────────────────────────────────────────────────
 async def test_worker_concurrency_dampening() -> float:
     t0 = time.perf_counter()
@@ -194,7 +194,7 @@ async def test_worker_concurrency_dampening() -> float:
 
 
 # ─────────────────────────────────────────────────
-# 4. Live CQRS Telemetry Endpoint Verification
+# Live CQRS Telemetry Endpoint Verification
 # ─────────────────────────────────────────────────
 async def test_cqrs_telemetry_endpoints() -> float:
     t0 = time.perf_counter()

@@ -15,13 +15,14 @@ services:
       - GROQ_API_KEY=${GROQ_API_KEY}
       - REDIS_URL=redis://redis:6379/0
       - N8N_API_KEY=${N8N_API_KEY}
+      - SECRET_KEY=${SECRET_KEY}
     volumes:
       - ./:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-exclude '.venv/*'
     networks:
       - fintech_network
 
-  # Dedicated Redis Streams Consumer Worker (Day 61)
+  # Dedicated Redis Streams Consumer Worker
   worker:
     build: .
     container_name: fintech_stream_worker
@@ -35,6 +36,7 @@ services:
       - GROQ_API_KEY=${GROQ_API_KEY}
       - REDIS_URL=redis://redis:6379/0
       - N8N_API_KEY=${N8N_API_KEY}
+      - SECRET_KEY=${SECRET_KEY}
     volumes:
       - ./:/app
     command: python -m app.workers.consumer

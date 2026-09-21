@@ -29,7 +29,7 @@ export default function MarketChart({ ticker, data }: MarketChartProps) {
   // Default to Area Line chart since ingest contains tick-by-tick single prices (flat candles)
   const [chartType, setChartType] = useState<"area" | "candlestick">("area");
 
-  // 1. Initialize Chart Canvas & Volume Histogram (Always present)
+  // Initialize chart canvas and volume histogram overlay
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -108,7 +108,7 @@ export default function MarketChart({ ticker, data }: MarketChartProps) {
     };
   }, []);
 
-  // 2. Synchronize Data and Series Type
+  // Synchronize pricing dataset and active series representation
   useEffect(() => {
     if (!chartRef.current || !volumeSeriesRef.current || !data) return;
 
@@ -125,7 +125,7 @@ export default function MarketChart({ ticker, data }: MarketChartProps) {
       }
     }
 
-    // A. Remove previous series to prevent double overlay
+    // Clear previous series instances before mounting new series
     if (candlestickSeriesRef.current) {
       chartRef.current.removeSeries(candlestickSeriesRef.current);
       candlestickSeriesRef.current = null;
@@ -135,7 +135,7 @@ export default function MarketChart({ ticker, data }: MarketChartProps) {
       areaSeriesRef.current = null;
     }
 
-    // B. Build the active series type and assign data
+    // Construct series representation and apply styled themes
     if (chartType === "candlestick") {
       const candlestickSeries = chartRef.current.addSeries(CandlestickSeries, {
         upColor: "#22c55e", // Tailwind green-500
@@ -171,7 +171,7 @@ export default function MarketChart({ ticker, data }: MarketChartProps) {
       areaSeriesRef.current = areaSeries;
     }
 
-    // C. Set volume histogram data
+    // Apply volume histogram timeseries data
     volumeSeriesRef.current.setData(uniqueData.map(p => ({
       time: p.time as Time,
       value: p.volume || 0,

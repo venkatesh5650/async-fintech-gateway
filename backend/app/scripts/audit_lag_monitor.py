@@ -108,7 +108,7 @@ async def test_2_lag_detection_under_load(rc: redis.Redis) -> str:
     await rc.xgroup_create(test_stream, test_group, id="0", mkstream=True)
 
     try:
-        # Phase A: Enqueue 5 jobs WITHOUT consuming them
+        # Synthetic Load Stage: Enqueue 5 jobs without active consumption
         msg_ids = []
         for i in range(JOBS_TO_ENQUEUE):
             mid = await rc.xadd(test_stream, {
@@ -125,7 +125,7 @@ async def test_2_lag_detection_under_load(rc: redis.Redis) -> str:
                 f"Expected lag >= {JOBS_TO_ENQUEUE} before consume, got lag={lag_before['lag']}"
             )
 
-        # Phase B: Consume ALL messages (pull into PEL) then ACK them
+        # Ingestion Stage: Consume all pending messages into PEL and acknowledge
         read_res = await rc.xreadgroup(
             groupname=test_group,
             consumername=consumer_name,
