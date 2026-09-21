@@ -138,6 +138,7 @@ class JobAuditEntry(BaseModel):
     age_seconds: int = Field(..., description="Estimated seconds since job was dispatched (3600 - TTL)")
     signal: Optional[str] = Field(default=None, description="BUY/SELL/HOLD/INVALID — populated on completion only")
     execution_time_ms: Optional[float] = Field(default=None, description="Agent execution latency — populated on completion only")
+    trace_id: Optional[str] = Field(default=None, description="Distributed W3C trace identifier for correlation")
 
 
 class SystemAuditResponse(BaseModel):

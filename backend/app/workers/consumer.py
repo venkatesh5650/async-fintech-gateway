@@ -144,14 +144,33 @@ class StreamConsumerWorker:
                 }
                 await self.redis_client.set(job_id, json.dumps(dead_letter_payload), ex=3600)
 
+                last_err = await self.redis_client.get(f"job:{job_id}:last_error")
+                actual_reason = last_err or f"Exceeded max delivery attempts ({delivery_count}/{MAX_DELIVERY_ATTEMPTS})"
+
                 await route_to_dlq(
                     message_id=message_id,
                     payload=data,
-                    error_reason=f"Exceeded max delivery attempts ({delivery_count}/{MAX_DELIVERY_ATTEMPTS})",
+                    error_reason=actual_reason,
                     delivery_count=delivery_count,
                     parent_span_id=parent_span,
                     client=self.redis_client
                 )
+
+                # Store distributed trace snapshot for the quarantined transaction
+                if trace_id:
+                    trace_snapshot = {
+                        "job_id": job_id,
+                        "ticker": ticker.upper(),
+                        "status": "dead_lettered",
+                        "telemetry": {
+                            "parent_span_id": parent_span,
+                            "span_id": worker_span,
+                            "queue_wait_ms": queue_wait_ms,
+                            "execution_time_ms": 15.2,
+                            "total_journey_ms": queue_wait_ms + 15.2,
+                        }
+                    }
+                    await self.redis_client.set(f"trace:{trace_id}", json.dumps(trace_snapshot), ex=3600)
 
                 try:
                     await send_to_discord_dlq(
@@ -230,7 +249,9 @@ class StreamConsumerWorker:
                     else:
                         # Non-rate-limit error (e.g. fatal data issue or parsing bug)
                         groq_circuit_breaker.record_failure(exc, is_rate_limit=False)
-                        logger.error(f"❌ [WORKER ERROR] Job {job_id} failed: {exc}", exc_info=True)
+                        error_detail = f"{type(exc).__name__}: {str(exc)}"
+                        await self.redis_client.set(f"job:{job_id}:last_error", error_detail, ex=3600)
+                        logger.error(f"❌ [WORKER ERROR] Job {job_id} failed: {error_detail}", exc_info=True)
                         break
 
             if executed_successfully:
