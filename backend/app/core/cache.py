@@ -93,9 +93,17 @@ class CacheAsideManager:
                     payload["span_id"] = span_id
                     payload["mutex_contention"] = False
                     payload["lock_wait_ms"] = 0.0
-                    if trace_id:
+                    if not payload.get("trace_id") and trace_id:
                         payload["trace_id"] = trace_id
 
+                    await self._index_trace_snapshot(
+                        client=client,
+                        ticker=upper_ticker,
+                        trace_id=payload.get("trace_id") or trace_id or "",
+                        span_id=payload.get("span_id") or span_id,
+                        exec_ms=elapsed_ms,
+                        wait_ms=0.0,
+                    )
                     return payload
                 except Exception as parse_err:
                     logger.warning(f"Failed to parse cached payload for {upper_ticker}: {parse_err}")
@@ -121,6 +129,14 @@ class CacheAsideManager:
                 db_payload["trace_id"] = trace_id
 
             await self.set_cached_result(upper_ticker, db_payload, ttl=DEFAULT_CACHE_TTL_SEC)
+            await self._index_trace_snapshot(
+                client=client,
+                ticker=upper_ticker,
+                trace_id=db_payload.get("trace_id") or trace_id or "",
+                span_id=span_id,
+                exec_ms=db_latency_ms,
+                wait_ms=0.0,
+            )
             return db_payload
 
         # Attempt atomic mutex acquisition (SET NX EX)
@@ -143,6 +159,14 @@ class CacheAsideManager:
                     db_payload["trace_id"] = trace_id
 
                 await self.set_cached_result(upper_ticker, db_payload, ttl=DEFAULT_CACHE_TTL_SEC)
+                await self._index_trace_snapshot(
+                    client=client,
+                    ticker=upper_ticker,
+                    trace_id=db_payload.get("trace_id") or trace_id or "",
+                    span_id=span_id,
+                    exec_ms=db_latency_ms,
+                    wait_ms=0.0,
+                )
                 return db_payload
             finally:
                 try:
@@ -173,9 +197,17 @@ class CacheAsideManager:
                         payload["span_id"] = span_id
                         payload["mutex_contention"] = True
                         payload["lock_wait_ms"] = wait_ms
-                        if trace_id:
+                        if not payload.get("trace_id") and trace_id:
                             payload["trace_id"] = trace_id
 
+                        await self._index_trace_snapshot(
+                            client=client,
+                            ticker=upper_ticker,
+                            trace_id=payload.get("trace_id") or trace_id or "",
+                            span_id=payload.get("span_id") or span_id,
+                            exec_ms=float(payload.get("data_source_latency_ms", 1.0)),
+                            wait_ms=wait_ms,
+                        )
                         return payload
                     except Exception:
                         pass
@@ -223,6 +255,51 @@ class CacheAsideManager:
         elif "source" not in payload_to_store:
             payload_to_store["source"] = "WRITE_THROUGH"
         await client.set(cache_key, json.dumps(payload_to_store), ex=ttl)
+
+        if payload_to_store.get("trace_id"):
+            await self._index_trace_snapshot(
+                client=client,
+                ticker=ticker,
+                trace_id=payload_to_store["trace_id"],
+                span_id=payload_to_store.get("span_id", "write-through-priming"),
+                exec_ms=float(payload_to_store.get("execution_time_ms", 5.0)),
+                wait_ms=0.0,
+            )
+
+    async def _index_trace_snapshot(
+        self,
+        client,
+        ticker: str,
+        trace_id: str,
+        span_id: str,
+        exec_ms: float,
+        wait_ms: float = 0.0,
+    ) -> None:
+        """
+        Indexes trace context into Redis so DistributedTraceExplorer can immediately resolve it.
+        """
+        if not trace_id:
+            return
+        try:
+            trace_key = f"trace:{trace_id}"
+            existing = await client.exists(trace_key)
+            if not existing:
+                snapshot = {
+                    "job_id": f"cqrs-{ticker.lower()}",
+                    "ticker": ticker.upper(),
+                    "status": "completed",
+                    "telemetry": {
+                        "parent_span_id": "api-gateway",
+                        "span_id": span_id,
+                        "queue_wait_ms": wait_ms,
+                        "execution_time_ms": exec_ms,
+                        "total_journey_ms": round(exec_ms + wait_ms + 0.8, 2),
+                    },
+                    "server_timestamp": int(time.time() * 1000),
+                }
+                await client.set(trace_key, json.dumps(snapshot), ex=3600)
+        except Exception as e:
+            logger.debug(f"Failed to auto-index trace {trace_id}: {e}")
 
     async def invalidate(self, ticker: str) -> bool:
         """
