@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { JobAuditEntry, SystemAuditResponse } from "@/types/api";
+import CachePrimeIndicator from "./CachePrimeIndicator";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Live Job Audit Panel
@@ -235,6 +236,7 @@ export default function JobAuditPanel({ onSelectTrace }: JobAuditPanelProps = {}
                 <th className="text-left pb-2 pr-3 font-normal">Ticker</th>
                 <th className="text-left pb-2 pr-3 font-normal">Status</th>
                 <th className="text-left pb-2 pr-3 font-normal">Signal</th>
+                <th className="text-left pb-2 pr-3 font-normal">Cache State</th>
                 <th className="text-left pb-2 pr-3 font-normal">Trace</th>
                 <th className="text-right pb-2 pr-3 font-normal">
                   Latency
@@ -268,6 +270,16 @@ export default function JobAuditPanel({ onSelectTrace }: JobAuditPanelProps = {}
                   {/* Signal */}
                   <td className="py-2 pr-3">
                     <SignalBadge signal={job.signal} />
+                  </td>
+
+                  {/* Cache State */}
+                  <td className="py-2 pr-3">
+                    <CachePrimeIndicator
+                      primed={job.cache_primed}
+                      ttlRemaining={job.cache_ttl_remaining}
+                      primedAt={job.primed_at}
+                      compact={true}
+                    />
                   </td>
 
                   {/* Distributed trace correlation */}
