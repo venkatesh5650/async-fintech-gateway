@@ -115,10 +115,10 @@ export default function DistributedTraceExplorer({
   const computeRatio = totalJourney > 0 ? (executionMs / totalJourney) * 100 : 0;
 
   return (
-    <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-6 font-mono text-left shadow-2xl space-y-6">
+    <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-4 sm:p-6 font-mono text-left shadow-2xl space-y-6">
       {/* ── Search & Filter Controls ── */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between border-b border-gray-800 pb-4 gap-3">
-        <form onSubmit={handleSearchSubmit} className="flex-1 flex items-center gap-2">
+        <form onSubmit={handleSearchSubmit} className="flex-1 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           <div className="relative flex-1">
             <input
               type="text"
@@ -131,7 +131,7 @@ export default function DistributedTraceExplorer({
           <button
             type="submit"
             disabled={isLoading || !searchInput.trim()}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-colors shrink-0"
+            className="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-colors shrink-0"
           >
             {isLoading ? "Querying..." : "Analyze Trace"}
           </button>
@@ -153,17 +153,17 @@ export default function DistributedTraceExplorer({
       {/* ── Trace Summary HUD ── */}
       {data && (
         <div className="bg-gray-950 border border-gray-800 rounded-lg p-4 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-gray-500 uppercase tracking-widest">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] text-gray-500 uppercase tracking-widest shrink-0">
                 Correlation Key
               </span>
-              <span className="text-xs text-blue-400 font-mono select-all">
+              <span className="text-xs text-blue-400 font-mono select-all break-all">
                 {data.trace_id}
               </span>
               <button
                 onClick={handleCopy}
-                className="text-[10px] px-2 py-0.5 rounded bg-gray-900 hover:bg-gray-800 text-gray-400 border border-gray-800 transition-colors"
+                className="text-[10px] px-2 py-0.5 rounded bg-gray-900 hover:bg-gray-800 text-gray-400 border border-gray-800 transition-colors shrink-0"
               >
                 {copied ? "Copied" : "Copy"}
               </button>
@@ -214,8 +214,8 @@ export default function DistributedTraceExplorer({
 
       {/* ── Latency Composition Strip ── */}
       {data && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="p-4 bg-gray-950 border border-gray-800 rounded-lg space-y-1">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+          <div className="p-3 sm:p-4 bg-gray-950 border border-gray-800 rounded-lg space-y-1">
             <span className="text-[10px] text-gray-500 uppercase block tracking-wider">
               Queue Wait Overhead
             </span>

@@ -93,7 +93,7 @@ export default function TraceWaterfallModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 font-mono"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-2 sm:p-4 font-mono"
       onClick={onClose}
     >
       <div
@@ -101,7 +101,7 @@ export default function TraceWaterfallModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 bg-gray-950/70">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-800 bg-gray-950/70">
           <div className="flex items-center gap-3">
             <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
             <span className="text-white text-sm font-bold tracking-wider uppercase">
@@ -121,15 +121,15 @@ export default function TraceWaterfallModal({
         </div>
 
         {/* Modal Content */}
-        <div className="p-6 overflow-y-auto space-y-6 text-left">
+        <div className="p-4 sm:p-6 overflow-y-auto space-y-4 sm:space-y-6 text-left">
           {/* Metadata Card */}
-          <div className="bg-gray-950 border border-gray-800 rounded-lg p-4 space-y-3">
+          <div className="bg-gray-950 border border-gray-800 rounded-lg p-3 sm:p-4 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] text-gray-500 uppercase tracking-widest">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] text-gray-500 uppercase tracking-widest shrink-0">
                   Trace ID
                 </span>
-                <span className="text-xs text-blue-400 font-mono select-all">
+                <span className="text-xs text-blue-400 font-mono select-all break-all">
                   {traceId}
                 </span>
                 <button

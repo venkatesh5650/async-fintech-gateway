@@ -154,7 +154,7 @@ export default function JobAuditPanel({ onSelectTrace }: JobAuditPanelProps = {}
     : "—";
 
   return (
-    <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-6 font-mono text-left mt-6 shadow-xl">
+    <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-4 sm:p-6 font-mono text-left shadow-xl">
       {/* ── Panel Header ── */}
       <div className="flex items-center justify-between border-b border-gray-800 pb-3 mb-4">
         <div className="flex items-center gap-2">
@@ -181,25 +181,25 @@ export default function JobAuditPanel({ onSelectTrace }: JobAuditPanelProps = {}
       </div>
 
       {/* ── Summary Counters ── */}
-      <div className="flex justify-around border border-gray-800 rounded-lg py-3 mb-4 bg-gray-950/50">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-0 sm:flex sm:justify-around border border-gray-800 rounded-lg p-3 sm:py-3 mb-4 bg-gray-950/50 text-center">
         <SummaryCounter
           label="Total"
           value={auditData.total_active_jobs}
           color="text-white"
         />
-        <div className="w-px bg-gray-800" />
+        <div className="hidden sm:block w-px bg-gray-800" />
         <SummaryCounter
           label="Active"
           value={auditData.processing}
           color="text-amber-400"
         />
-        <div className="w-px bg-gray-800" />
+        <div className="hidden sm:block w-px bg-gray-800" />
         <SummaryCounter
           label="Done"
           value={auditData.completed}
           color="text-emerald-400"
         />
-        <div className="w-px bg-gray-800" />
+        <div className="hidden sm:block w-px bg-gray-800" />
         <SummaryCounter
           label="Failed"
           value={auditData.failed}

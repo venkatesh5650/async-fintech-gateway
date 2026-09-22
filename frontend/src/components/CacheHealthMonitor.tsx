@@ -141,9 +141,9 @@ export default function CacheHealthMonitor() {
   );
 
   return (
-    <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-6 font-mono text-left shadow-2xl">
+    <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-4 sm:p-6 font-mono text-left shadow-2xl">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-800 pb-3 mb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-800 pb-3 mb-5">
         <div className="flex items-center gap-2.5">
           <span className="relative flex h-2.5 w-2.5">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -154,12 +154,12 @@ export default function CacheHealthMonitor() {
           </span>
         </div>
 
-        <div className="flex items-center gap-3 text-xs text-gray-500">
+        <div className="flex items-center justify-between sm:justify-end gap-3 text-xs text-gray-500 w-full sm:w-auto">
           <span>Synced: {lastUpdate}</span>
           <button
             onClick={fetchHealth}
             disabled={isLoading}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-900 hover:bg-gray-800 border border-gray-800 hover:border-gray-700 text-gray-300 transition-colors text-[10px] disabled:opacity-50"
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-gray-900 hover:bg-gray-800 border border-gray-800 hover:border-gray-700 text-gray-300 transition-colors text-[10px] disabled:opacity-50 shrink-0"
             title="Poll fresh cache health metrics"
           >
             <span className={isLoading ? "animate-spin inline-block" : ""}>
@@ -177,7 +177,7 @@ export default function CacheHealthMonitor() {
       )}
 
       {/* Main Grid: Donut + Memory Gauge + Tiles */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-center">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5 items-stretch">
         {/* Donut Chart */}
         <div className="flex flex-col items-center justify-center p-4 bg-gray-900/30 border border-gray-800/80 rounded-xl">
           <DonutGauge hitRatioPct={data.hit_ratio_pct} />

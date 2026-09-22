@@ -96,7 +96,7 @@ export default function CircuitBreakerPanel() {
     cooldownTotal > 0 ? Math.min(100, Math.max(0, (cooldownRemaining / cooldownTotal) * 100)) : 0;
 
   return (
-    <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-6 font-mono text-left shadow-2xl space-y-6">
+    <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-4 sm:p-6 font-mono text-left shadow-2xl space-y-6">
       {/* ── Header & Radar Status ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-800 pb-4 gap-3">
         <div className="flex items-center gap-3">
@@ -118,13 +118,13 @@ export default function CircuitBreakerPanel() {
           </div>
         </div>
 
-        <div className="flex items-center space-x-3 text-xs">
+        <div className="flex items-center justify-between sm:justify-end space-x-3 text-xs w-full sm:w-auto">
           <span className="text-gray-500 text-[11px] tabular-nums">
             Next poll: {countdown}s
           </span>
           <button
             onClick={fetchTelemetry}
-            className="px-3 py-1 bg-gray-900 hover:bg-gray-800 border border-gray-800 hover:border-gray-700 text-gray-400 hover:text-white rounded text-xs transition-colors"
+            className="px-3 py-1 bg-gray-900 hover:bg-gray-800 border border-gray-800 hover:border-gray-700 text-gray-400 hover:text-white rounded text-xs transition-colors shrink-0"
           >
             ↻ Refresh
           </button>
@@ -171,8 +171,8 @@ export default function CircuitBreakerPanel() {
       )}
 
       {/* ── Metric Strip ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="p-4 bg-gray-950 border border-gray-800 rounded-lg space-y-1">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+        <div className="p-3 sm:p-4 bg-gray-950 border border-gray-800 rounded-lg space-y-1">
           <span className="text-[10px] text-gray-500 uppercase block tracking-wider">
             Circuit State
           </span>

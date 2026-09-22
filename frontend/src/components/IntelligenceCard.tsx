@@ -49,16 +49,16 @@ export default function IntelligenceCard({
   return (
     <div className="w-full bg-gray-900 border border-gray-800 rounded-xl shadow-2xl overflow-hidden font-mono">
       {/* Card Header */}
-      <div className="flex flex-wrap justify-between items-center gap-3 bg-black px-6 py-4 border-b border-gray-800">
+      <div className="flex flex-wrap justify-between items-center gap-3 bg-black px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-800">
         <div className="flex items-center space-x-3">
           <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"></div>
-          <span className="text-gray-400 text-sm tracking-widest uppercase">
+          <span className="text-gray-400 text-xs sm:text-sm tracking-widest uppercase">
             System Status: Optimal
           </span>
         </div>
 
         {/* Cache Telemetry Badge */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <CacheStatusBadge
             cacheHit={data.cache_hit}
             source={data.source}
@@ -79,7 +79,7 @@ export default function IntelligenceCard({
         </div>
 
         {/* Granular Latency Telemetry */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {data.execution_time_ms !== undefined && (
             <span
               className="text-cyan-400 font-medium text-xs tracking-wider border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1 rounded shadow-[0_0_10px_rgba(6,182,212,0.1)] flex items-center gap-1.5"
@@ -103,15 +103,15 @@ export default function IntelligenceCard({
       </div>
       
       {/* Card Body */}
-      <div className="p-6 space-y-6">
+      <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
         {/* Signal Banner */}
         <div
-          className={`p-4 rounded-lg border ${signalStyle} flex justify-between items-center`}
+          className={`p-3.5 sm:p-4 rounded-lg border ${signalStyle} flex flex-col sm:flex-row sm:items-center justify-between gap-2`}
         >
-          <span className="text-sm uppercase tracking-widest opacity-80">
+          <span className="text-xs sm:text-sm uppercase tracking-widest opacity-80">
             Computed Alpha Signal
           </span>
-          <span className="text-2xl font-bold">{data.signal || "NEUTRAL"}</span>
+          <span className="text-xl sm:text-2xl font-bold">{data.signal || "NEUTRAL"}</span>
         </div>
 
         {/* Reasoning Section */}

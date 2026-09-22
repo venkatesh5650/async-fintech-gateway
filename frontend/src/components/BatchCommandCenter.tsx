@@ -22,7 +22,7 @@ export default function BatchCommandCenter({
   const isAllDone = completedCount + failedCount === assets.length;
 
   return (
-    <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-6 font-mono text-left mt-8 shadow-2xl">
+    <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-4 sm:p-6 font-mono text-left mt-8 shadow-2xl">
       {/* Batch Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-800 pb-4 mb-6 gap-3">
         <div>
@@ -33,11 +33,11 @@ export default function BatchCommandCenter({
             </h3>
           </div>
           <span className="text-gray-500 text-xs mt-1 block">
-            Batch Ref: <span className="text-gray-400 font-mono">{batchId}</span>
+            Batch Ref: <span className="text-gray-400 font-mono break-all">{batchId}</span>
           </span>
         </div>
 
-        <div className="flex items-center space-x-3 text-xs">
+        <div className="flex items-center justify-between sm:justify-end space-x-3 text-xs w-full sm:w-auto">
           <div className="bg-gray-900 border border-gray-800 px-3 py-1.5 rounded-md">
             <span className="text-gray-400">Progress: </span>
             <span className="text-blue-400 font-bold">

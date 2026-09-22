@@ -73,7 +73,7 @@ export default function DLQInspectorPanel({
   };
 
   return (
-    <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-6 font-mono text-left shadow-2xl">
+    <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-4 sm:p-6 font-mono text-left shadow-2xl">
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-800 pb-4 mb-6 gap-3">
         <div className="flex items-center gap-3">
@@ -107,17 +107,17 @@ export default function DLQInspectorPanel({
           </div>
         </div>
 
-        <div className="flex items-center space-x-3 text-xs">
+        <div className="flex items-center justify-between sm:justify-end space-x-3 text-xs w-full sm:w-auto">
           <input
             type="text"
             placeholder="Filter ticker..."
             value={filterTicker}
             onChange={(e) => setFilterTicker(e.target.value)}
-            className="px-3 py-1 bg-gray-900 border border-gray-800 rounded text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors w-32"
+            className="px-3 py-1 bg-gray-900 border border-gray-800 rounded text-xs text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 transition-colors w-28 sm:w-32"
           />
           <button
             onClick={fetchDLQ}
-            className="px-3 py-1 bg-gray-900 hover:bg-gray-800 border border-gray-800 hover:border-gray-700 text-gray-400 hover:text-white rounded text-xs transition-colors"
+            className="px-3 py-1 bg-gray-900 hover:bg-gray-800 border border-gray-800 hover:border-gray-700 text-gray-400 hover:text-white rounded text-xs transition-colors shrink-0"
           >
             ↻ Refresh
           </button>
@@ -125,7 +125,7 @@ export default function DLQInspectorPanel({
       </div>
 
       {/* Observability Metric Counters */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 mb-6">
         <div className="p-3 bg-gray-950 border border-gray-800 rounded-lg">
           <span className="text-[10px] text-gray-500 uppercase block tracking-wider">
             Quarantined Total

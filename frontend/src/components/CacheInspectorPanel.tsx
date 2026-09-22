@@ -138,7 +138,7 @@ export default function CacheInspectorPanel({
   };
 
   return (
-    <div className="bg-[#0b0f19] border border-gray-800/80 rounded-2xl p-6 shadow-2xl space-y-6">
+    <div className="bg-[#0b0f19] border border-gray-800/80 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-6">
       {/* Header & Watchlist Selector */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-800 pb-5">
         <div>
@@ -154,8 +154,8 @@ export default function CacheInspectorPanel({
         </div>
 
         {/* Watchlist Quick Pills & Custom Input */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1 bg-gray-900/90 border border-gray-800 rounded-lg p-1">
+        <div className="flex items-center gap-2 flex-wrap w-full md:w-auto">
+          <div className="flex items-center gap-1 bg-gray-900/90 border border-gray-800 rounded-lg p-1 flex-wrap">
             {DEFAULT_WATCHLIST.map((ticker) => (
               <button
                 key={ticker}
@@ -207,7 +207,7 @@ export default function CacheInspectorPanel({
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-500 font-mono">REDIS KEY:</span>
-                <span className="text-sm font-mono font-bold text-white tracking-wide">
+                <span className="text-sm font-mono font-bold text-white tracking-wide break-all">
                   cache:intel:{data.ticker}
                 </span>
               </div>
@@ -228,7 +228,7 @@ export default function CacheInspectorPanel({
             </div>
 
             {/* Invalidation & Refresh Action Cluster */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 onClick={() => fetchInspector(selectedTicker)}
                 disabled={isLoading || isEvicting}
@@ -355,7 +355,7 @@ export default function CacheInspectorPanel({
             <div className="border border-gray-800 rounded-xl overflow-hidden bg-gray-950/40">
               <button
                 onClick={() => setIsPayloadOpen(!isPayloadOpen)}
-                className="w-full flex items-center justify-between px-4 py-3 bg-gray-900/60 hover:bg-gray-900 text-xs font-mono font-semibold text-gray-300 transition-colors"
+                className="w-full flex flex-col sm:flex-row sm:items-center justify-between gap-1 px-4 py-3 bg-gray-900/60 hover:bg-gray-900 text-xs font-mono font-semibold text-gray-300 transition-colors text-left"
               >
                 <div className="flex items-center gap-2">
                   <span>{isPayloadOpen ? "▼" : "▶"}</span>

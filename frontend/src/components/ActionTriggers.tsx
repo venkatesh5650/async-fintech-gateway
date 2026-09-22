@@ -41,9 +41,9 @@ export default function ActionTriggers({
   };
 
   return (
-    <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-6 font-mono text-left mt-6 shadow-xl">
+    <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-4 sm:p-6 font-mono text-left mt-6 shadow-xl">
       {/* Header & Mode Switcher */}
-      <div className="flex items-center justify-between border-b border-gray-800 pb-3 mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-gray-800 pb-3 mb-4">
         <h3 className="text-gray-500 text-xs uppercase tracking-widest">
           Terminal Command Center
         </h3>

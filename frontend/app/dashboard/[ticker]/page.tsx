@@ -6,14 +6,8 @@ import IntelligenceCard from "@/components/IntelligenceCard";
 import LogoutButton from "@/components/LogoutButton";
 import ActionTriggers from "@/components/ActionTriggers";
 import BatchCommandCenter from "@/components/BatchCommandCenter";
-import JobAuditPanel from "@/components/JobAuditPanel";
-import DLQInspectorPanel from "@/components/DLQInspectorPanel";
-import StreamHealthMonitor from "@/components/StreamHealthMonitor";
-import CircuitBreakerPanel from "@/components/CircuitBreakerPanel";
-import DistributedTraceExplorer from "@/components/DistributedTraceExplorer";
 import TraceWaterfallModal from "@/components/TraceWaterfallModal";
-import CacheHealthMonitor from "@/components/CacheHealthMonitor";
-import CacheInspectorPanel from "@/components/CacheInspectorPanel";
+import OperationsConsole, { OpsTab } from "@/components/OperationsConsole";
 import MarketChart from "@/components/MarketChart";
 import useWebSocket from "@/hooks/useWebSocket";
 import { BatchAssetStatus, BatchJobAcceptedResponse } from "@/types/api";
@@ -37,7 +31,7 @@ export default function DynamicDashboardPage() {
   const [cooldown, setCooldown] = useState<number>(0);
   const [jobId, setJobId] = useState<string | undefined>(undefined);
   const [traceId, setTraceId] = useState<string | undefined>(undefined);
-  const [activeOpsTab, setActiveOpsTab] = useState<"registry" | "dlq" | "health" | "circuit" | "trace" | "cache" | "inspector">("registry");
+  const [activeOpsTab, setActiveOpsTab] = useState<OpsTab>("registry");
   const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
 
   const handleCloseTraceModal = useCallback(() => {
@@ -641,7 +635,7 @@ export default function DynamicDashboardPage() {
     }
 
     return (
-      <div className="p-10 flex flex-col items-center justify-center min-h-screen bg-black font-mono">
+      <div className="px-4 py-8 sm:p-10 flex flex-col items-center justify-center min-h-screen bg-black font-mono">
         <div className="max-w-md w-full bg-gray-900 border border-yellow-500/30 rounded-xl p-8 shadow-2xl text-center space-y-4">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-yellow-500/10 text-yellow-500 mb-2 text-xl">
             ⚡
@@ -677,7 +671,7 @@ export default function DynamicDashboardPage() {
   // --------------------------------------------------
   if (isExhausted) {
     return (
-      <div className="p-10 flex flex-col items-center justify-center min-h-screen bg-black font-mono">
+      <div className="px-4 py-8 sm:p-10 flex flex-col items-center justify-center min-h-screen bg-black font-mono">
         <div className="max-w-md w-full bg-gray-900 border border-orange-500/30 rounded-xl p-8 shadow-2xl text-center space-y-4">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-orange-500/10 text-orange-500 mb-2 text-xl">
             🔌
@@ -715,9 +709,9 @@ export default function DynamicDashboardPage() {
   // --------------------------------------------------
   if (!ticker || !jobState || jobState.status === "processing") {
     return (
-      <div className="p-10 min-h-screen bg-black relative flex flex-col items-center">
+      <div className="px-3.5 py-4 sm:p-6 md:p-10 min-h-screen bg-black relative flex flex-col items-center">
         {/* TCP Connection Indicator */}
-        <div className="absolute top-8 right-8 flex items-center space-x-2 text-xs font-mono">
+        <div className="w-full max-w-4xl flex items-center justify-end mb-2 sm:mb-0 sm:absolute sm:top-8 sm:right-8 space-x-2 text-xs font-mono">
           <span
             className={`w-2 h-2 rounded-full ${
               isConnected
@@ -730,8 +724,8 @@ export default function DynamicDashboardPage() {
           </span>
         </div>
 
-        <div className="w-full max-w-4xl space-y-6 mt-8">
-          <h1 className="text-3xl font-bold text-white mb-6 border-b border-gray-800 pb-2 font-mono flex items-center justify-between">
+        <div className="w-full max-w-4xl space-y-6 mt-2 sm:mt-8">
+          <h1 className="text-2xl sm:text-3xl font-bold text-white mb-6 border-b border-gray-800 pb-3 font-mono flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <span>{ticker || "Asset"} AI Analysis</span>
             <LogoutButton />
           </h1>
@@ -741,27 +735,27 @@ export default function DynamicDashboardPage() {
             <MarketChart ticker={ticker} data={chartData} />
           )}
 
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 flex flex-col items-center space-y-4 font-mono">
-            <div className="h-8 w-8 border-2 border-t-blue-500 border-gray-800 rounded-full animate-spin" />
-            <div className="text-gray-400 text-sm">
-              LangGraph AI Engine is reasoning on {ticker || "ASSET"}...
-            </div>
-            {traceId && (
-              <button
-                onClick={() => setSelectedTraceId(traceId)}
-                className="flex items-center gap-2 mt-1 hover:opacity-80 transition-opacity"
-                title="View distributed trace waterfall"
-              >
-                <span className="text-[10px] text-gray-600 uppercase tracking-widest">Trace</span>
-                <span className="text-[11px] text-blue-400 font-mono bg-blue-500/10 border border-blue-500/30 px-2 py-0.5 rounded flex items-center gap-1">
-                  <span>⤢</span>
-                  <span>{traceId.slice(0, 12)}…</span>
-                </span>
-              </button>
-            )}
+          <div className="p-4 sm:p-8 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl flex flex-col items-center justify-center space-y-4 font-mono text-center">
+            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-gray-400 text-sm">
+              AI Quantitative Agents analyzing{" "}
+              <span className="text-blue-400 font-bold">{ticker || "Asset"}</span>{" "}
+              via LangGraph pipeline...
+            </p>
+            <p className="text-gray-600 text-xs">
+              Streaming distributed state machine updates over WebSocket.
+            </p>
           </div>
 
-          {/* Render Batch Matrix if batch is active during processing */}
+          <ActionTriggers
+            ticker={ticker || ""}
+            onDispatch={handleManualDispatch}
+            onBatchDispatch={handleBatchDispatch}
+            isProcessing={isBatchProcessing}
+            cooldown={cooldown}
+          />
+
+          {/* Real-time Multi-Asset Batch Matrix */}
           {batchId && batchAssets.length > 0 && (
             <BatchCommandCenter
               batchId={batchId}
@@ -783,101 +777,13 @@ export default function DynamicDashboardPage() {
           )}
 
           {/* Operational Observability Console */}
-          <div className="mt-8">
-            <div className="flex items-center space-x-2 border-b border-gray-800 pb-3 mb-4 font-mono text-xs">
-              <button
-                onClick={() => setActiveOpsTab("registry")}
-                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold ${
-                  activeOpsTab === "registry"
-                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
-                    : "text-gray-500 hover:text-gray-300"
-                }`}
-              >
-                Live Job Registry
-              </button>
-              <button
-                onClick={() => setActiveOpsTab("dlq")}
-                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
-                  activeOpsTab === "dlq"
-                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
-                    : "text-gray-500 hover:text-gray-300"
-                }`}
-              >
-                <span>DLQ Inspector</span>
-              </button>
-              <button
-                onClick={() => setActiveOpsTab("health")}
-                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
-                  activeOpsTab === "health"
-                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
-                    : "text-gray-500 hover:text-gray-300"
-                }`}
-              >
-                <span>Stream Health</span>
-              </button>
-              <button
-                onClick={() => setActiveOpsTab("circuit")}
-                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
-                  activeOpsTab === "circuit"
-                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
-                    : "text-gray-500 hover:text-gray-300"
-                }`}
-              >
-                <span>Circuit Breaker</span>
-              </button>
-              <button
-                onClick={() => setActiveOpsTab("trace")}
-                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
-                  activeOpsTab === "trace"
-                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
-                    : "text-gray-500 hover:text-gray-300"
-                }`}
-              >
-                <span>Distributed Trace</span>
-              </button>
-              <button
-                onClick={() => setActiveOpsTab("cache")}
-                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
-                  activeOpsTab === "cache"
-                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
-                    : "text-gray-500 hover:text-gray-300"
-                }`}
-              >
-                <span>Cache Health</span>
-              </button>
-              <button
-                onClick={() => setActiveOpsTab("inspector")}
-                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
-                  activeOpsTab === "inspector"
-                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
-                    : "text-gray-500 hover:text-gray-300"
-                }`}
-              >
-                <span>Cache Inspector</span>
-              </button>
-            </div>
-
-            {activeOpsTab === "registry" ? (
-              <JobAuditPanel onSelectTrace={(tId) => setSelectedTraceId(tId)} />
-            ) : activeOpsTab === "dlq" ? (
-              <DLQInspectorPanel onSelectTrace={(tId) => setSelectedTraceId(tId)} />
-            ) : activeOpsTab === "health" ? (
-              <StreamHealthMonitor />
-            ) : activeOpsTab === "circuit" ? (
-              <CircuitBreakerPanel />
-            ) : activeOpsTab === "cache" ? (
-              <CacheHealthMonitor />
-            ) : activeOpsTab === "inspector" ? (
-              <CacheInspectorPanel
-                onSelectTrace={(tId) => setSelectedTraceId(tId)}
-                initialTicker={ticker || "AAPL"}
-              />
-            ) : (
-              <DistributedTraceExplorer
-                initialTraceId={traceId || undefined}
-              />
-            )}
-          </div>
+          <OperationsConsole
+            activeOpsTab={activeOpsTab}
+            setActiveOpsTab={setActiveOpsTab}
+            onSelectTrace={(tId) => setSelectedTraceId(tId)}
+            ticker={ticker}
+            traceId={traceId}
+          />
 
           <TraceWaterfallModal
             traceId={selectedTraceId}
@@ -893,19 +799,19 @@ export default function DynamicDashboardPage() {
   // --------------------------------------------------
   if (jobState.status === "completed") {
     return (
-      <div className="p-10 min-h-screen bg-black">
-        <h1 className="text-3xl font-bold text-white mb-6 border-b border-gray-800 pb-2 font-mono flex items-center justify-between">
-          <span>{ticker} AI Analysis</span>
-          <div className="flex items-center space-x-4">
-            <span className="text-xs text-green-500 flex items-center border border-green-500/30 px-3 py-1 rounded bg-green-500/5">
-              <span className="w-1.5 h-1.5 bg-green-500 rounded-full mr-2 shadow-[0_0_5px_rgba(34,197,94,1)]" />
-              Live Data
-            </span>
-            <LogoutButton />
-          </div>
-        </h1>
-
+      <div className="px-3.5 py-4 sm:p-6 md:p-10 min-h-screen bg-black">
         <div className="max-w-4xl mx-auto space-y-6">
+          <h1 className="text-2xl sm:text-3xl font-bold text-white border-b border-gray-800 pb-3 font-mono flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <span>{ticker} AI Analysis</span>
+            <div className="flex items-center justify-between sm:justify-end space-x-3 w-full sm:w-auto">
+              <span className="text-xs text-green-500 flex items-center border border-green-500/30 px-3 py-1 rounded bg-green-500/5">
+                <span className="w-1.5 h-1.5 bg-green-500 rounded-full mr-2 shadow-[0_0_5px_rgba(34,197,94,1)]" />
+                Live Data
+              </span>
+              <LogoutButton />
+            </div>
+          </h1>
+
           {/* Candlestick Chart Visualization */}
           {ticker && <MarketChart ticker={ticker} data={chartData} />}
 
@@ -958,101 +864,13 @@ export default function DynamicDashboardPage() {
           />
 
           {/* Operational Observability Console */}
-          <div className="mt-8">
-            <div className="flex items-center space-x-2 border-b border-gray-800 pb-3 mb-4 font-mono text-xs">
-              <button
-                onClick={() => setActiveOpsTab("registry")}
-                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold ${
-                  activeOpsTab === "registry"
-                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
-                    : "text-gray-500 hover:text-gray-300"
-                }`}
-              >
-                Live Job Registry
-              </button>
-              <button
-                onClick={() => setActiveOpsTab("dlq")}
-                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
-                  activeOpsTab === "dlq"
-                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
-                    : "text-gray-500 hover:text-gray-300"
-                }`}
-              >
-                <span>DLQ Inspector</span>
-              </button>
-              <button
-                onClick={() => setActiveOpsTab("health")}
-                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
-                  activeOpsTab === "health"
-                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
-                    : "text-gray-500 hover:text-gray-300"
-                }`}
-              >
-                <span>Stream Health</span>
-              </button>
-              <button
-                onClick={() => setActiveOpsTab("circuit")}
-                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
-                  activeOpsTab === "circuit"
-                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
-                    : "text-gray-500 hover:text-gray-300"
-                }`}
-              >
-                <span>Circuit Breaker</span>
-              </button>
-              <button
-                onClick={() => setActiveOpsTab("trace")}
-                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
-                  activeOpsTab === "trace"
-                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
-                    : "text-gray-500 hover:text-gray-300"
-                }`}
-              >
-                <span>Distributed Trace</span>
-              </button>
-              <button
-                onClick={() => setActiveOpsTab("cache")}
-                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
-                  activeOpsTab === "cache"
-                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
-                    : "text-gray-500 hover:text-gray-300"
-                }`}
-              >
-                <span>Cache Health</span>
-              </button>
-              <button
-                onClick={() => setActiveOpsTab("inspector")}
-                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
-                  activeOpsTab === "inspector"
-                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
-                    : "text-gray-500 hover:text-gray-300"
-                }`}
-              >
-                <span>Cache Inspector</span>
-              </button>
-            </div>
-
-            {activeOpsTab === "registry" ? (
-              <JobAuditPanel onSelectTrace={(tId) => setSelectedTraceId(tId)} />
-            ) : activeOpsTab === "dlq" ? (
-              <DLQInspectorPanel onSelectTrace={(tId) => setSelectedTraceId(tId)} />
-            ) : activeOpsTab === "health" ? (
-              <StreamHealthMonitor />
-            ) : activeOpsTab === "circuit" ? (
-              <CircuitBreakerPanel />
-            ) : activeOpsTab === "cache" ? (
-              <CacheHealthMonitor />
-            ) : activeOpsTab === "inspector" ? (
-              <CacheInspectorPanel
-                onSelectTrace={(tId) => setSelectedTraceId(tId)}
-                initialTicker={ticker || "AAPL"}
-              />
-            ) : (
-              <DistributedTraceExplorer
-                initialTraceId={traceId || undefined}
-              />
-            )}
-          </div>
+          <OperationsConsole
+            activeOpsTab={activeOpsTab}
+            setActiveOpsTab={setActiveOpsTab}
+            onSelectTrace={(tId) => setSelectedTraceId(tId)}
+            ticker={ticker}
+            traceId={traceId}
+          />
 
           <TraceWaterfallModal
             traceId={selectedTraceId}
@@ -1067,11 +885,11 @@ export default function DynamicDashboardPage() {
   // FAILURE STATE
   // --------------------------------------------------
   return (
-    <div className="p-10 min-h-screen bg-black font-mono">
-      <div className="text-red-500 mb-6 text-center text-xl">
+    <div className="px-3.5 py-4 sm:p-6 md:p-10 min-h-screen bg-black font-mono">
+      <div className="text-red-500 mb-6 text-center text-lg sm:text-xl">
         Job failed or timed out. Please try again.
       </div>
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-4xl mx-auto space-y-6">
         {ticker && (
           <ActionTriggers
             ticker={ticker}
@@ -1100,101 +918,13 @@ export default function DynamicDashboardPage() {
         />
 
         {/* Operational Observability Console */}
-        <div className="mt-8">
-          <div className="flex items-center space-x-2 border-b border-gray-800 pb-3 mb-4 font-mono text-xs">
-            <button
-              onClick={() => setActiveOpsTab("registry")}
-              className={`px-3 py-1.5 rounded-lg transition-colors font-semibold ${
-                activeOpsTab === "registry"
-                  ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
-                  : "text-gray-500 hover:text-gray-300"
-              }`}
-            >
-              Live Job Registry
-            </button>
-            <button
-              onClick={() => setActiveOpsTab("dlq")}
-              className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
-                activeOpsTab === "dlq"
-                  ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
-                  : "text-gray-500 hover:text-gray-300"
-              }`}
-            >
-              <span>DLQ Inspector</span>
-            </button>
-            <button
-              onClick={() => setActiveOpsTab("health")}
-              className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
-                activeOpsTab === "health"
-                  ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
-                  : "text-gray-500 hover:text-gray-300"
-              }`}
-            >
-              <span>Stream Health</span>
-            </button>
-            <button
-              onClick={() => setActiveOpsTab("circuit")}
-              className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
-                activeOpsTab === "circuit"
-                  ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
-                  : "text-gray-500 hover:text-gray-300"
-              }`}
-            >
-              <span>Circuit Breaker</span>
-            </button>
-            <button
-              onClick={() => setActiveOpsTab("trace")}
-              className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
-                activeOpsTab === "trace"
-                  ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
-                  : "text-gray-500 hover:text-gray-300"
-              }`}
-            >
-              <span>Distributed Trace</span>
-            </button>
-            <button
-              onClick={() => setActiveOpsTab("cache")}
-              className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
-                activeOpsTab === "cache"
-                  ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
-                  : "text-gray-500 hover:text-gray-300"
-              }`}
-            >
-              <span>Cache Health</span>
-            </button>
-            <button
-              onClick={() => setActiveOpsTab("inspector")}
-              className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
-                activeOpsTab === "inspector"
-                  ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
-                  : "text-gray-500 hover:text-gray-300"
-              }`}
-            >
-              <span>Cache Inspector</span>
-            </button>
-          </div>
-
-          {activeOpsTab === "registry" ? (
-            <JobAuditPanel onSelectTrace={(tId) => setSelectedTraceId(tId)} />
-          ) : activeOpsTab === "dlq" ? (
-            <DLQInspectorPanel onSelectTrace={(tId) => setSelectedTraceId(tId)} />
-          ) : activeOpsTab === "health" ? (
-            <StreamHealthMonitor />
-          ) : activeOpsTab === "circuit" ? (
-            <CircuitBreakerPanel />
-          ) : activeOpsTab === "cache" ? (
-            <CacheHealthMonitor />
-          ) : activeOpsTab === "inspector" ? (
-            <CacheInspectorPanel
-              onSelectTrace={(tId) => setSelectedTraceId(tId)}
-              initialTicker={ticker || "AAPL"}
-            />
-          ) : (
-            <DistributedTraceExplorer
-              initialTraceId={traceId || undefined}
-            />
-          )}
-        </div>
+        <OperationsConsole
+          activeOpsTab={activeOpsTab}
+          setActiveOpsTab={setActiveOpsTab}
+          onSelectTrace={(tId) => setSelectedTraceId(tId)}
+          ticker={ticker}
+          traceId={traceId}
+        />
 
         <TraceWaterfallModal
           traceId={selectedTraceId}
