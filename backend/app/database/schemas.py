@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field, field_validator
 
 class MarketDataPayload(BaseModel):
@@ -139,6 +139,9 @@ class JobAuditEntry(BaseModel):
     signal: Optional[str] = Field(default=None, description="BUY/SELL/HOLD/INVALID — populated on completion only")
     execution_time_ms: Optional[float] = Field(default=None, description="Agent execution latency — populated on completion only")
     trace_id: Optional[str] = Field(default=None, description="Distributed W3C trace identifier for correlation")
+    cache_primed: bool = Field(default=False, description="Whether the intelligence result is primed in write-through/CQRS cache")
+    primed_at: Optional[str] = Field(default=None, description="ISO timestamp when result was primed into cache")
+    cache_ttl_remaining: Optional[int] = Field(default=None, description="Remaining TTL in seconds for the primed cache entry")
 
 
 class SystemAuditResponse(BaseModel):
@@ -206,4 +209,43 @@ class TraceWaterfallResponse(BaseModel):
     total_journey_ms: float = Field(..., description="End-to-end journey latency from edge ingest to client delivery")
     spans: list[TraceSpanEntry] = Field(..., description="Ordered list of execution spans across microservice boundaries")
     server_timestamp_ms: int = Field(..., description="Server wall-clock timestamp of the trace query")
+
+
+# ==================================================
+# DISTRIBUTED CACHE HEALTH & TELEMETRY CONTRACTS
+# ==================================================
+
+class CacheHealthResponse(BaseModel):
+    """
+    Real-time operational health and memory efficiency metrics for the distributed cache.
+    """
+    hit_count: int = Field(..., description="Total cumulative cache hits")
+    miss_count: int = Field(..., description="Total cumulative cache misses")
+    total_requests: int = Field(..., description="Total cache inquiries processed")
+    hit_ratio_pct: float = Field(..., description="Percentage of requests satisfied by in-memory cache")
+    contention_count: int = Field(..., description="Total concurrent stampede contention events absorbed by mutex")
+    total_cached_keys: int = Field(..., description="Active cache:intel:* keys in Redis")
+    memory_used_mb: float = Field(..., description="Current Redis memory footprint in MB")
+    memory_peak_mb: float = Field(..., description="Historical peak Redis memory consumption in MB")
+    server_timestamp_ms: int = Field(..., description="Unix timestamp of metrics calculation")
+
+
+# ==================================================
+# DISTRIBUTED CACHE INSPECTOR CONTRACTS
+# ==================================================
+
+class CacheInspectorResponse(BaseModel):
+    """
+    Per-ticker granular cache state, TTL progression, and memory inspection.
+    """
+    ticker: str = Field(..., description="Target equity ticker symbol")
+    is_cached: bool = Field(..., description="Whether a hot cache entry currently exists in Redis")
+    ttl_remaining_seconds: int = Field(..., description="Remaining seconds before key expiration")
+    ttl_total_seconds: int = Field(default=300, description="Baseline maximum TTL duration")
+    payload_size_bytes: int = Field(..., description="Memory footprint of the cached payload in bytes")
+    prime_origin: Optional[str] = Field(default=None, description="Priming source: WRITE_THROUGH | CACHE_ASIDE | MUTEX_WAIT")
+    trace_id: Optional[str] = Field(default=None, description="Associated W3C trace ID from pipeline execution")
+    primed_at_iso: Optional[str] = Field(default=None, description="ISO timestamp when key was primed in Redis")
+    raw_payload_preview: Optional[Dict[str, Any]] = Field(default=None, description="Structured preview of cached intelligence data")
+    server_timestamp_ms: int = Field(..., description="Server wall-clock timestamp of inspection")
 

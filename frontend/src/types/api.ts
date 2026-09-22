@@ -6,6 +6,20 @@ export interface IntelligenceResponse {
   execution_time_ms: number;
 }
 
+export interface CachedIntelligenceResult extends IntelligenceResponse {
+  cache_hit: boolean;
+  source: "CACHE" | "DATABASE" | string;
+  prime_origin?: string;
+  primed_at?: string | null;
+  cache_ttl_remaining?: number;
+  data_source_latency_ms?: number;
+  total_request_latency_ms?: number;
+  mutex_contention?: boolean;
+  lock_wait_ms?: number;
+  span_id?: string;
+  trace_id?: string;
+}
+
 // Immediate response returned when a single job is accepted (HTTP 202)
 export interface JobAcceptedResponse {
   job_id: string;
@@ -58,6 +72,9 @@ export interface JobAuditEntry {
   signal?: "BUY" | "SELL" | "HOLD" | "INVALID";
   execution_time_ms?: number;
   trace_id?: string;
+  cache_primed?: boolean;
+  primed_at?: string | null;
+  cache_ttl_remaining?: number | null;
 }
 
 export interface SystemAuditResponse {
@@ -147,5 +164,30 @@ export interface StreamHealthResponse {
   health_status: StreamHealthStatus;
   circuit_breaker?: CircuitBreakerTelemetrySnapshot;
   audit_timestamp_ms: number;
+}
+
+export interface CacheHealthResponse {
+  hit_count: number;
+  miss_count: number;
+  total_requests: number;
+  hit_ratio_pct: number;
+  contention_count: number;
+  total_cached_keys: number;
+  memory_used_mb: number;
+  memory_peak_mb: number;
+  server_timestamp_ms: number;
+}
+
+export interface CacheInspectorResponse {
+  ticker: string;
+  is_cached: boolean;
+  ttl_remaining_seconds: number;
+  ttl_total_seconds: number;
+  payload_size_bytes: number;
+  prime_origin?: string | null;
+  trace_id?: string | null;
+  primed_at_iso?: string | null;
+  raw_payload_preview?: Record<string, any> | null;
+  server_timestamp_ms: number;
 }
 

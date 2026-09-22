@@ -18,3 +18,6 @@ __pycache__/
 
 # Database Dumps
 *.dump
+
+# IDE / Agents
+.agents/

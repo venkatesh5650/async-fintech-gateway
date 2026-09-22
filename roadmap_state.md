@@ -1,83 +1,79 @@
 # ROADMAP STATE - 120-Day Automated Equity Research Engine
 
 ## 1. Project Context & Current Position
-* **Current Day:** Day 64 (Phase 2 - Day 64 Locked)
-* **Target Role:** FinTech AI Automation Engineer / Systems Architect[cite: 14]
-* **Core Philosophy:** We strictly follow the principles outlined in "The 1% Advantage: Engineering a Durable FinTech Career". 
-* **AI Agent Directive:** Do not write black-box code or rewrite existing architecture. You are operating as a 1% Systems Architect. Read the completed days to understand the existing context, then execute the Phase 2 objectives.
+* **Current Day:** Day 66 Complete (Phase 2 Milestone 2 - In Progress)
+* **Next Action:** Begin Day 67 — Write-Through Cache on Job Completion & `CachePrimeIndicator.tsx`
+* **Target Role:** FinTech AI Automation Engineer / Systems Architect
+* **Core Philosophy:** We strictly follow the principles outlined in "The 1% Advantage: Engineering a Durable FinTech Career".
+* **AI Agent Directive:** Do not write black-box code or rewrite existing architecture. You are operating as a 1% Systems Architect. Read the completed days to understand the existing context, then execute strictly according to `canonical_roadmap.md` in `.agents/rules/`.
 
-## 2. Locked & Completed Architecture (Days 1-60)
-We have successfully engineered a zero-trust, cloud-native FinTech microservice pipeline. 
+## 2. CANONICAL ROADMAP STRUCTURE (Source-Aligned)
+
+```
+Phase 1  (Days 1–60)   → Core Engine — LOCKED
+Phase 2  (Days 61–65)  → Redis Streams & Message Brokers — LOCKED
+Phase 2  (Days 66–70)  → Distributed Caching ← CURRENT
+Phase 2  (Days 71–75)  → Quantitative Analytics (SMA, RSI, Bollinger)
+Phase 2  (Days 76–80)  → Document Ingestion & RAG Pipelines (pgvector, 10-K/10-Q)
+Phase 2  (Days 81–85)  → Stress Testing & Chaos Engineering (Locust)
+Phase 2  (Days 86–90)  → Production Dry Run & Capstone Polish
+Phase 3  (Days 91–100) → Live Cloud Orchestration (Render, Docker, Prometheus, Grafana)
+Phase 3  (Days 101–110)→ Build in Public (LangGraph Visualizer, Loom, Portfolio)
+Phase 3  (Days 111–120)→ US Founder Infiltration & Contract Seeding
+```
+
+> **Full day-by-day breakdown is in `.agents/rules/canonical_roadmap.md` — that file is the single source of truth.**
+
+## 3. Locked & Completed Architecture (Days 1–60)
+We have successfully engineered a zero-trust, cloud-native FinTech microservice pipeline.
 
 **Backend & Compute Core (Phases 1 & 2):**
-* Built a FastAPI asynchronous ingestion engine[cite: 13].
-* Integrated a PostgreSQL time-series database for historical data persistence[cite: 13].
-* Engineered a Redis-backed background worker queue to prevent ASGI thread starvation[cite: 13].
-* Deployed a LangGraph multi-agent state machine that outputs deterministic ternary signals (BUY, SELL, INVALID)[cite: 4, 13].
+* Built a FastAPI asynchronous ingestion engine.
+* Integrated a PostgreSQL time-series database for historical data persistence.
+* Engineered a Redis-backed background worker queue to prevent ASGI thread starvation.
+* Deployed a LangGraph multi-agent state machine that outputs deterministic ternary signals (BUY, SELL, INVALID).
 
 **Security & Orchestration (Weeks 4 & 7):**
-* Secured the perimeter with a Zero-Trust JWT authentication edge via a Next.js Backend-For-Frontend (BFF) proxy[cite: 10, 13].
-* Established an M2M (Machine-to-Machine) security bridge using `X-N8N-API-KEY` headers[cite: 12].
-* Bootstrapped self-hosted `n8n` for autonomous multi-asset surveillance, cron scheduling, and Discord webhook alerting[cite: 7, 19].
+* Secured the perimeter with a Zero-Trust JWT authentication edge via a Next.js Backend-For-Frontend (BFF) proxy.
+* Established an M2M (Machine-to-Machine) security bridge using `X-N8N-API-KEY` headers.
+* Bootstrapped self-hosted `n8n` for autonomous multi-asset surveillance, cron scheduling, and Discord webhook alerting.
 
 **Real-Time Presentation & Hardening Edge (Week 8 & Capstone, Days 50-60):**
-* **Day 51:** Upgraded `IntelligenceCard.tsx` to display conditional Tailwind styling (green/red) and millisecond execution latency telemetry[cite: 8].
-* **Day 53:** Engineered a client-side state machine in `ActionTriggers.tsx` enforcing a strict 60-second cooldown timer to prevent backend rate-limiter spam[cite: 8].
-* **Day 54:** Eradicated the legacy HTTP polling loop and implemented a persistent, event-driven WebSocket architecture using a custom `useWebSocket.ts` hook and an O(1) in-memory backend `ConnectionManager`[cite: 2].
-* **Day 55:** Hardened the WebSocket tunnel with a 30-second ping/pong heartbeat keep-alive, client-side circuit breakers (`MAX_RETRIES = 3`), and end-to-end `server_timestamp` latency benchmarking[cite: 2].
-* **Day 56:** Fully implemented Multi-Asset Batch Orchestration:
-  * Pydantic V2 `BatchAnalysisRequest` zero-trust perimeter with smart filtration (1-50 assets).
-  * Controlled backend concurrency worker pool using `asyncio.Semaphore(5)` to prevent LLM rate limits and thread starvation on `POST /v1/intelligence/batch`.
-  * Unique UUID mapping and pre-warmed Redis states for real-time WebSocket stream binding.
-  * Secure Next.js BFF proxy route (`POST /api/jobs/batch`) injecting JWT Bearer tokens.
-  * `ActionTriggers.tsx` batch presets/custom input and `BatchCommandCenter.tsx` real-time progress matrix bound to the 60-second cooldown rate limiter.
-* **Day 57:** Hardened WebSocket packet integrity with monotonic sequence numbering (`sequence_number`), out-of-order frame rejection, and automated sequence gap recovery triggers.
-* **Day 58:** Hardened the Next.js 15 App Router BFF authentication pipeline by transitioning cookie mutations from read-only headers to outgoing `NextResponse.cookies.set()`.
-* **Day 59:** Shipped Structured Telemetry & Live Job Audit Registry:
-  * Upgraded ASGI telemetry middleware with UUID `request_id`, service domain route classification (`INTELLIGENCE`, `MARKET`, `AUTH`), sub-millisecond `perf_counter` latency, and `X-Request-ID` response headers.
-  * Added CQRS read route `GET /v1/intelligence/audit` powered by non-blocking Redis `SCAN` cursor iteration and pipelined batch retrieval (zero PostgreSQL load).
-  * Built real-time `JobAuditPanel.tsx` operational console with automatic 5s countdown polling, status badges, and SSR hydration mismatch safety.
-* **Day 60:** Phase 1 Capstone Live-Fire System Audit:
-  * Executed automated 7-point audit suite (`audit_system.py`) verifying PostgreSQL, Redis, Telemetry headers, Pydantic Data Firewall, Bcrypt JWT Auth, CQRS Live Audit, and Semaphore Concurrency Fan-Out.
-  * 100% test pass rate (7/7 assertions verified).
-  * Phase 1 formally signed off and locked.
-* **Day 61:** Advanced Message Brokers & Redis Streams Migration:
-  * Engineered enterprise broker abstraction in `app/core/broker.py` with idempotent consumer group bootstrapping (`intel_workers_group` on `stream:intel_jobs`).
-  * Converted FastAPI endpoints (`POST /v1/intelligence/jobs/{ticker}` and `POST /v1/intelligence/batch`) into pure, non-blocking stream publishers (`XADD`), eliminating ASGI `BackgroundTasks` thread starvation.
-  * Engineered standalone async `StreamConsumerWorker` daemon (`app/workers/consumer.py`) with consumer group concurrency limits, explicit acknowledgment (`XACK`), and zero PEL leakage.
-  * Added dedicated `worker` service container in `docker-compose.yml` with embedded lifespan fallback.
-  * Executed automated 5-point audit suite (`audit_broker.py`) and verified 100% test pass rate (5/5 assertions passed) alongside 7/7 Phase 1 regression assertions.
-* **Day 62:** Consumer Crash Recovery & Dead-Letter Queue (DLQ) Integration:
-  * Engineered autonomous crash recovery using `XAUTOCLAIM` (`reclaim_abandoned_jobs` in `app/core/broker.py`) to safely steal orphaned PEL jobs from dead or frozen workers after a 30s idle timeout.
-  * Implemented poison pill gatekeeper (`MAX_DELIVERY_ATTEMPTS = 3`) quarantine system in `app/workers/consumer.py`. Toxic payloads exceeding the threshold are cleanly routed to `stream:intel_jobs:dlq` and purged from the primary stream with `XACK`.
-  * Integrated external Dead-Letter alerting with Discord/n8n DLQ webhook notifications.
-  * Built public CQRS observability endpoint `GET /v1/intelligence/dlq` exposing diagnostic root-cause metadata and delivery attempt counts.
-  * Executed automated 4-point audit suite (`audit_recovery.py`) and verified 100% test pass rate (4/4 assertions passed) with zero main stream PEL residual leaks.
-* **Day 63:** Stream Lag Monitor & Dynamic Concurrency Tuning:
-  * Engineered `get_stream_lag()` and `get_stream_health_snapshot()` primitives in `app/core/broker.py` using native Redis 7 `XINFO GROUPS` lag reporting and concurrent `asyncio.gather` reads.
-  * Integrated `DynamicConcurrencyController` into `StreamConsumerWorker` (`app/workers/consumer.py`) as a sibling background task that auto-tunes `asyncio.Semaphore` between `MIN=3` and `MAX=10` every 10 seconds based on real stream lag readings, with LLM rate-limit safety hardcoded at `MAX=10`.
-  * Added public CQRS observability route `GET /v1/intelligence/stream-health` exposing `stream_len`, `lag`, `pel_count`, `consumer_count`, and `health_status` (HEALTHY / ACTIVE / DEGRADED / CRITICAL).
-  * Executed automated 4-point audit suite (`audit_lag_monitor.py`) and verified 100% test pass rate (4/4 assertions: lag primitive structure, synthetic load detection, scaling logic isolation, CQRS endpoint schema).
-* **Day 64:** Backpressure & Rate-Limit Aware Retry Scheduling:
-  * Engineered `GroqLLMCircuitBreaker`, `CircuitState` (CLOSED, OPEN, HALF_OPEN), `is_rate_limit_error`, and AWS full-jitter exponential backoff in `app/core/resilience.py`.
-  * Integrated circuit breaker into `StreamConsumerWorker` (`app/workers/consumer.py`): stream ingestion polling paused when circuit is OPEN, per-job rate-limit retry loop with jittered backoff, and immediate concurrency backpressure clamping down to `MIN_CONCURRENCY=3` upon 429 detection.
-  * Concurrency controller strictly pins target to `MIN_CONCURRENCY` while downstream LLM circuit is tripped.
-  * Added public CQRS telemetry route `GET /v1/intelligence/circuit-breaker` and embedded circuit telemetry into `GET /v1/intelligence/stream-health`.
-  * Executed automated 4-point audit suite (`audit_retry_scheduler.py`) with 100% pass rate (4/4 assertions: error classification/jitter bounds, state transitions, concurrency dampening, CQRS schema) and 0 regressions on Day 63 audit.
+* **Day 51:** Upgraded `IntelligenceCard.tsx` to display conditional Tailwind styling (green/red) and millisecond execution latency telemetry.
+* **Day 53:** Engineered a client-side state machine in `ActionTriggers.tsx` enforcing a strict 60-second cooldown timer to prevent backend rate-limiter spam.
+* **Day 54:** Eradicated the legacy HTTP polling loop and implemented a persistent, event-driven WebSocket architecture using a custom `useWebSocket.ts` hook and an O(1) in-memory backend `ConnectionManager`.
+* **Day 55:** Hardened the WebSocket tunnel with a 30-second ping/pong heartbeat keep-alive, client-side circuit breakers (`MAX_RETRIES = 3`), and end-to-end `server_timestamp` latency benchmarking.
+* **Day 56:** Fully implemented Multi-Asset Batch Orchestration: Pydantic V2 `BatchAnalysisRequest`, `asyncio.Semaphore(5)`, UUID mapping, pre-warmed Redis states, BFF proxy, `BatchCommandCenter.tsx`.
+* **Day 57:** Hardened WebSocket packet integrity with monotonic sequence numbering, out-of-order frame rejection, and automated sequence gap recovery triggers.
+* **Day 58:** Hardened Next.js 15 App Router BFF authentication pipeline with `NextResponse.cookies.set()`.
+* **Day 59:** Shipped Structured Telemetry & Live Job Audit Registry: UUID `request_id`, service domain classification, sub-millisecond `perf_counter`, CQRS `GET /v1/intelligence/audit`, `JobAuditPanel.tsx`.
+* **Day 60:** Phase 1 Capstone — `audit_system.py` 7/7 pass. Phase 1 formally signed off and locked.
 
-* **Day 65:** Distributed Stream Tracing & Correlation ID Context Propagation (Phase 2 Milestone 1 Capstone):
-  * Engineered W3C TraceContext compliant telemetry primitives in `app/core/telemetry.py` (`generate_trace_id`, `generate_span_id`, `format_traceparent`, `parse_traceparent`) and upgraded `StructuredLoggingMiddleware` with distributed context extraction/injection (`traceparent`, `X-Trace-ID`, `X-Request-ID`).
-  * Enriched Redis Streams message schema in `app/core/broker.py` with causal span lineage (`trace_id`, `parent_span_id`, `enqueue_span_id`) across single and batch job ingestion, preserving full trace context into the Dead-Letter Queue (`stream:intel_jobs:dlq`).
-  * Upgraded `StreamConsumerWorker` (`app/workers/consumer.py`) to extract trace context upon dequeue, generate worker execution spans, calculate sub-millisecond `queue_wait_ms`, and pass end-to-end trace lineage into worker execution.
-  * Augmented job completion payloads, WebSocket broadcast events, and fast $O(1)$ index key `trace:{trace_id}` with comprehensive telemetry metadata (`trace_id`, `span_id`, `parent_span_id`, `queue_wait_ms`).
-  * Added public CQRS query endpoint `GET /v1/intelligence/trace/{trace_id}` providing deep observability into the complete lifecycle waterfall from HTTP ingest to Redis stream queueing, worker execution, and WebSocket dispatch.
-  * Executed automated 5-point audit suite (`audit_distributed_tracing.py`) with 100% pass rate (5/5 assertions: W3C primitives, ingest-to-stream context propagation, worker dequeue queue wait, WebSocket/cache lineage, CQRS trace waterfall endpoint) and verified zero regressions across Day 63 and Day 64 test suites.
+## 4. Phase 2 Milestone 1 — Redis Streams (Days 61–65) — LOCKED
 
-## 3. Current Position: Day 65 Complete & Locked (Phase 2 Milestone 1 Capstone Complete)
-Phase 2 Milestone 1 (Advanced Message Brokers & Resilient Stream Processing, Days 61–65) is certified and sealed. The architecture features full horizontal decoupling, autonomous poison-pill quarantine, adaptive backpressure, circuit-breaking resilience, and distributed end-to-end W3C trace propagation.
+* **Day 61:** Redis Streams broker (`app/core/broker.py`), `intel_workers_group`, `StreamConsumerWorker` daemon. `audit_broker.py` 5/5 pass.
+* **Day 62:** DLQ + poison-pill gatekeeper (`MAX_DELIVERY_ATTEMPTS=3`), `XAUTOCLAIM` crash recovery, Discord DLQ alerts, `GET /v1/intelligence/dlq`. `audit_recovery.py` 4/4 pass.
+* **Day 63:** `get_stream_lag()`, `DynamicConcurrencyController` (auto-tunes Semaphore MIN=3/MAX=10 every 10s), `GET /v1/intelligence/stream-health`. `audit_lag_monitor.py` 4/4 pass.
+* **Day 64:** `GroqLLMCircuitBreaker` (CLOSED/OPEN/HALF_OPEN), AWS full-jitter exponential backoff, concurrency clamping on 429, `GET /v1/intelligence/circuit-breaker`. `audit_retry_scheduler.py` 4/4 pass.
+* **Day 65:** W3C `traceparent` compliant telemetry, `generate_trace_id/span_id/format_traceparent/parse_traceparent`, span lineage in Redis Streams + DLQ, worker dequeue span, `queue_wait_ms`, `GET /v1/intelligence/trace/{trace_id}`. `audit_distributed_tracing.py` 5/5 pass.
+* **Frontend (Days 65–70):** `StreamHealthMonitor.tsx`, `CircuitBreakerPanel.tsx`, `DLQInspectorPanel.tsx`, `DistributedTraceExplorer.tsx`, `TraceWaterfallModal.tsx`.
 
-## 4. Phase 2 Directives (Days 61–90)
-* **Milestone 1 (Days 61–65) [LOCKED]:** Advanced Message Brokers & Resilient Stream Processing.
-* **Milestone 2 (Days 66–75) Target:** Distributed Caching, Cache-Aside Read Optimization & Real-Time Sync Edge.
-* **Do not regress:** Preserve zero-trust Pydantic perimeter, WebSocket sequence validation, adaptive concurrency control, and distributed telemetry tracing.
-* **Protect the Event Loop:** Retain strict async I/O boundaries and non-blocking caching.
+Phase 2 Milestone 1 certified and sealed. Zero regressions across all prior suites.
+
+## 5. Phase 2 Milestone 2 — Distributed Caching & Read Optimization (Days 66–70)
+
+* **Day 66:** Cache-Aside Read Optimization Layer & Real-Time Status Telemetry:
+  * Engineered `CacheAsideManager` (`app/core/cache.py`) supporting non-blocking Redis GET queries on `cache:intel:{ticker}`, automatic fallback to PostgreSQL time-series storage upon miss, automated 300s TTL cache priming, and explicit eviction (`invalidate`).
+  * Mounted CQRS read endpoints `GET /v1/intelligence/results/{ticker}` (with optional `?refresh=true`) and administrative cache eviction `POST /v1/intelligence/cache/invalidate/{ticker}`.
+  * Shipped Next.js 15 App Router BFF proxy `GET /api/results/[ticker]` with cookie-forwarded bearer JWT token.
+  * Engineered and integrated `CacheStatusBadge.tsx` into `IntelligenceCard.tsx` and the research dashboard, rendering live 🟢 Cache Hit (Redis) vs 🟡 DB Read (PostgreSQL), dynamic client-side TTL countdown timer, and source latency telemetry.
+  * Executed automated 5-point audit suite (`audit_cache_aside.py`) with 100% pass rate (5/5 assertions: cold miss, auto-prime, warm hit, invalidation, operational regressions) and 0 regressions on Day 65 distributed tracing audit.
+
+## 6. INVARIANT CONSTRAINTS — Never Violate
+
+* **Do not regress:** Zero-trust Pydantic perimeter, WebSocket sequence validation, adaptive concurrency control, distributed telemetry tracing.
+* **Protect the Event Loop:** Retain strict async I/O boundaries. No blocking calls in hot paths.
+* **LLM never does math:** All quantitative metrics (SMA, RSI, Bollinger) must be computed in PostgreSQL and passed as pre-calculated deterministic numbers to LangGraph.
+* **pgvector on existing PostgreSQL only:** No new database services for RAG. One Alembic migration.
+* **Every day = Backend + Frontend.** No day ends without both a backend feature and a frontend visual.
+* **All audit scripts must pass at 100%** before moving to the next day.

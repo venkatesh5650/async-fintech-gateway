@@ -12,6 +12,8 @@ import StreamHealthMonitor from "@/components/StreamHealthMonitor";
 import CircuitBreakerPanel from "@/components/CircuitBreakerPanel";
 import DistributedTraceExplorer from "@/components/DistributedTraceExplorer";
 import TraceWaterfallModal from "@/components/TraceWaterfallModal";
+import CacheHealthMonitor from "@/components/CacheHealthMonitor";
+import CacheInspectorPanel from "@/components/CacheInspectorPanel";
 import MarketChart from "@/components/MarketChart";
 import useWebSocket from "@/hooks/useWebSocket";
 import { BatchAssetStatus, BatchJobAcceptedResponse } from "@/types/api";
@@ -20,6 +22,7 @@ interface JobState {
   status: "processing" | "completed" | "failed";
   job_id: string;
   result?: any;
+  trace_id?: string;
 }
 
 export default function DynamicDashboardPage() {
@@ -34,7 +37,7 @@ export default function DynamicDashboardPage() {
   const [cooldown, setCooldown] = useState<number>(0);
   const [jobId, setJobId] = useState<string | undefined>(undefined);
   const [traceId, setTraceId] = useState<string | undefined>(undefined);
-  const [activeOpsTab, setActiveOpsTab] = useState<"registry" | "dlq" | "health" | "circuit" | "trace">("registry");
+  const [activeOpsTab, setActiveOpsTab] = useState<"registry" | "dlq" | "health" | "circuit" | "trace" | "cache" | "inspector">("registry");
   const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
 
   const handleCloseTraceModal = useCallback(() => {
@@ -81,9 +84,43 @@ export default function DynamicDashboardPage() {
     }
   }, [ticker]);
 
+  // Cache-Aside intelligence fetching state
+  const [isCacheRefreshing, setIsCacheRefreshing] = useState(false);
+
+  // Fetch intelligence from Cache-Aside layer
+  const fetchCachedIntelligence = useCallback(async (forceRefresh = false) => {
+    if (!ticker) return;
+    setIsCacheRefreshing(true);
+    try {
+      const res = await fetch(`/api/results/${ticker}${forceRefresh ? "?refresh=true" : ""}`);
+      if (res.ok) {
+        const data = await res.json();
+        setJobState((prev) => ({
+          status: "completed",
+          job_id: prev?.job_id || `cache-${ticker}`,
+          result: {
+            ...(prev?.result || {}),
+            ...data,
+          },
+          trace_id: data.trace_id || prev?.trace_id,
+        }));
+        if (data.trace_id) {
+          setTraceId(data.trace_id);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch cached intelligence:", err);
+    } finally {
+      setIsCacheRefreshing(false);
+    }
+  }, [ticker]);
+
   useEffect(() => {
     fetchHistory();
-  }, [fetchHistory]);
+    if (ticker) {
+      fetchCachedIntelligence(false);
+    }
+  }, [fetchHistory, ticker, fetchCachedIntelligence]);
 
   // REST API status checker for job recovery and batch reconciliation
   const fetchJobStatus = useCallback(async (targetJobId: string) => {
@@ -798,6 +835,26 @@ export default function DynamicDashboardPage() {
               >
                 <span>Distributed Trace</span>
               </button>
+              <button
+                onClick={() => setActiveOpsTab("cache")}
+                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
+                  activeOpsTab === "cache"
+                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
+                    : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                <span>Cache Health</span>
+              </button>
+              <button
+                onClick={() => setActiveOpsTab("inspector")}
+                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
+                  activeOpsTab === "inspector"
+                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
+                    : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                <span>Cache Inspector</span>
+              </button>
             </div>
 
             {activeOpsTab === "registry" ? (
@@ -808,6 +865,13 @@ export default function DynamicDashboardPage() {
               <StreamHealthMonitor />
             ) : activeOpsTab === "circuit" ? (
               <CircuitBreakerPanel />
+            ) : activeOpsTab === "cache" ? (
+              <CacheHealthMonitor />
+            ) : activeOpsTab === "inspector" ? (
+              <CacheInspectorPanel
+                onSelectTrace={(tId) => setSelectedTraceId(tId)}
+                initialTicker={ticker || "AAPL"}
+              />
             ) : (
               <DistributedTraceExplorer
                 initialTraceId={traceId || undefined}
@@ -845,7 +909,11 @@ export default function DynamicDashboardPage() {
           {/* Candlestick Chart Visualization */}
           {ticker && <MarketChart ticker={ticker} data={chartData} />}
 
-          <IntelligenceCard data={jobState.result} />
+          <IntelligenceCard
+            data={jobState.result}
+            onRefresh={fetchCachedIntelligence}
+            isRefreshing={isCacheRefreshing}
+          />
 
           {/* Distributed trace context */}
           {traceId && (
@@ -942,6 +1010,26 @@ export default function DynamicDashboardPage() {
               >
                 <span>Distributed Trace</span>
               </button>
+              <button
+                onClick={() => setActiveOpsTab("cache")}
+                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
+                  activeOpsTab === "cache"
+                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
+                    : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                <span>Cache Health</span>
+              </button>
+              <button
+                onClick={() => setActiveOpsTab("inspector")}
+                className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
+                  activeOpsTab === "inspector"
+                    ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
+                    : "text-gray-500 hover:text-gray-300"
+                }`}
+              >
+                <span>Cache Inspector</span>
+              </button>
             </div>
 
             {activeOpsTab === "registry" ? (
@@ -952,6 +1040,13 @@ export default function DynamicDashboardPage() {
               <StreamHealthMonitor />
             ) : activeOpsTab === "circuit" ? (
               <CircuitBreakerPanel />
+            ) : activeOpsTab === "cache" ? (
+              <CacheHealthMonitor />
+            ) : activeOpsTab === "inspector" ? (
+              <CacheInspectorPanel
+                onSelectTrace={(tId) => setSelectedTraceId(tId)}
+                initialTicker={ticker || "AAPL"}
+              />
             ) : (
               <DistributedTraceExplorer
                 initialTraceId={traceId || undefined}
@@ -1057,6 +1152,26 @@ export default function DynamicDashboardPage() {
             >
               <span>Distributed Trace</span>
             </button>
+            <button
+              onClick={() => setActiveOpsTab("cache")}
+              className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
+                activeOpsTab === "cache"
+                  ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
+                  : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              <span>Cache Health</span>
+            </button>
+            <button
+              onClick={() => setActiveOpsTab("inspector")}
+              className={`px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center gap-2 ${
+                activeOpsTab === "inspector"
+                  ? "bg-gray-800 text-white border border-gray-700 shadow-sm"
+                  : "text-gray-500 hover:text-gray-300"
+              }`}
+            >
+              <span>Cache Inspector</span>
+            </button>
           </div>
 
           {activeOpsTab === "registry" ? (
@@ -1067,6 +1182,13 @@ export default function DynamicDashboardPage() {
             <StreamHealthMonitor />
           ) : activeOpsTab === "circuit" ? (
             <CircuitBreakerPanel />
+          ) : activeOpsTab === "cache" ? (
+            <CacheHealthMonitor />
+          ) : activeOpsTab === "inspector" ? (
+            <CacheInspectorPanel
+              onSelectTrace={(tId) => setSelectedTraceId(tId)}
+              initialTicker={ticker || "AAPL"}
+            />
           ) : (
             <DistributedTraceExplorer
               initialTraceId={traceId || undefined}

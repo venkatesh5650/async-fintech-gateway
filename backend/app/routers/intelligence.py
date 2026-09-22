@@ -27,6 +27,8 @@ from app.database.schemas import (
     DeadLetterRegistryResponse,
     TraceWaterfallResponse,
     TraceSpanEntry,
+    CacheHealthResponse,
+    CacheInspectorResponse,
 )
 from app.core.security import get_current_user
 from app.core.limiter import RateLimiter
@@ -47,6 +49,7 @@ from app.core.broker import (
     STREAM_INTEL_DLQ,
 )
 from app.core.resilience import groq_circuit_breaker
+from app.core.cache import cache_aside_manager
 
 MAX_CONCURRENCY = int(os.getenv("BATCH_CONCURRENCY_LIMIT", "5"))
 
@@ -154,6 +157,23 @@ async def run_intelligence_worker(
         # Maintain trace index for O(1) distributed trace waterfall lookups
         if trace_id:
             await redis_client.set(f"trace:{trace_id}", json.dumps(payload), ex=3600)
+
+        # Write-through cache priming: Pre-warm CQRS query cache for instant client retrieval
+        cache_entry = {
+            "ticker": ticker.upper(),
+            "signal": extracted_signal,
+            "analysis_report": report,
+            "execution_time_ms": round(execution_time, 2),
+            "job_id": job_id,
+            "trace_id": trace_id or "",
+            "source": "WRITE_THROUGH",
+        }
+        await cache_aside_manager.set_cached_result(
+            ticker=ticker.upper(),
+            data=cache_entry,
+            ttl=300,
+            source="WRITE_THROUGH",
+        )
         
         # Dispatch result to active WebSocket channels and event broadcaster
         await manager.send_personal_message(payload, job_id=job_id)
@@ -434,6 +454,9 @@ async def get_live_job_audit():
     raw_values = results[:n]
     ttl_values = results[n:]
 
+    parsed_jobs = []
+    tickers_to_check: set[str] = set()
+
     for key, raw, ttl in zip(job_keys, raw_values, ttl_values):
         if not raw:
             continue
@@ -441,35 +464,65 @@ async def get_live_job_audit():
             data = json.loads(raw)
             status_val = data.get("status", "unknown")
             result = data.get("result") or {}
-
-            # Age estimate: jobs are stored with a 3600s TTL.
-            # age = 3600 - remaining_ttl gives seconds since dispatch.
-            # ttl == -1 means no expiry set (edge case), ttl == -2 means key vanished.
-            age_seconds = max(0, 3600 - ttl) if ttl > 0 else 0
-
-            entry = JobAuditEntry(
-                job_id=data.get("job_id", key),
-                ticker=data.get("ticker") or result.get("ticker", "UNKNOWN"),
-                status=status_val,
-                batch_id=data.get("batch_id"),
-                age_seconds=age_seconds,
-                signal=result.get("signal"),
-                execution_time_ms=result.get("execution_time_ms"),
-                trace_id=data.get("trace_id") or None,
-            )
-            audit_entries.append(entry)
-
-            if status_val == "processing":
-                processing_count += 1
-            elif status_val == "completed":
-                completed_count += 1
-            elif status_val == "failed":
-                failed_count += 1
-
+            ticker_val = data.get("ticker") or result.get("ticker", "UNKNOWN")
+            if ticker_val and ticker_val != "UNKNOWN":
+                tickers_to_check.add(ticker_val.upper())
+            parsed_jobs.append((key, data, status_val, result, ticker_val, ttl))
         except (json.JSONDecodeError, Exception):
-            # Malformed Redis entry — skip silently, do not crash the audit scan
             logging.warning(f"[AUDIT] Skipped malformed Redis key: {key}")
             continue
+
+    cache_meta: dict[str, dict] = {}
+    if tickers_to_check:
+        cache_pipe = redis_client.pipeline()
+        sorted_tickers = sorted(list(tickers_to_check))
+        for t in sorted_tickers:
+            cache_pipe.get(f"cache:intel:{t}")
+            cache_pipe.ttl(f"cache:intel:{t}")
+        cache_results = await cache_pipe.execute()
+        for idx, t in enumerate(sorted_tickers):
+            raw_c = cache_results[idx * 2]
+            ttl_c = cache_results[idx * 2 + 1]
+            if raw_c and ttl_c > 0:
+                try:
+                    c_data = json.loads(raw_c)
+                    cache_meta[t] = {
+                        "primed": True,
+                        "primed_at": c_data.get("primed_at"),
+                        "ttl_remaining": ttl_c,
+                    }
+                except Exception:
+                    cache_meta[t] = {
+                        "primed": True,
+                        "primed_at": None,
+                        "ttl_remaining": ttl_c,
+                    }
+
+    for key, data, status_val, result, ticker_val, ttl in parsed_jobs:
+        age_seconds = max(0, 3600 - ttl) if ttl > 0 else 0
+        c_info = cache_meta.get(ticker_val.upper())
+
+        entry = JobAuditEntry(
+            job_id=data.get("job_id", key),
+            ticker=ticker_val,
+            status=status_val,
+            batch_id=data.get("batch_id"),
+            age_seconds=age_seconds,
+            signal=result.get("signal"),
+            execution_time_ms=result.get("execution_time_ms"),
+            trace_id=data.get("trace_id") or None,
+            cache_primed=c_info["primed"] if c_info else False,
+            primed_at=c_info["primed_at"] if c_info else None,
+            cache_ttl_remaining=c_info["ttl_remaining"] if c_info else None,
+        )
+        audit_entries.append(entry)
+
+        if status_val == "processing":
+            processing_count += 1
+        elif status_val == "completed":
+            completed_count += 1
+        elif status_val == "failed":
+            failed_count += 1
 
     # Sort: processing jobs float to top (most urgent for an operator),
     # then sort by age ascending within each status group.
@@ -669,3 +722,74 @@ async def get_distributed_trace_waterfall(trace_id: str):
         spans=spans,
         server_timestamp_ms=job_data.get("server_timestamp", int(time.time() * 1000)),
     )
+
+
+# ==================================================
+# CQRS READ: CACHE-ASIDE INTELLIGENCE RETRIEVAL
+# ==================================================
+
+@router.get("/results/{ticker}", status_code=status.HTTP_200_OK)
+async def get_intelligence_result(
+    request: Request,
+    ticker: str = Path(..., pattern="^[a-zA-Z]{1,5}$", description="US Equity Ticker Symbol"),
+    refresh: bool = False,
+):
+    """
+    CQRS Read Route: High-speed Cache-Aside intelligence retrieval.
+    Queries the Redis cache first for sub-millisecond response times.
+    Falls back to PostgreSQL time-series storage and auto-primes cache state on miss.
+    """
+    t_start = time.perf_counter()
+    trace_id = (
+        getattr(request.state, "trace_id", None)
+        or getattr(request.state, "request_id", None)
+        or request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    )
+    result = await cache_aside_manager.get_cached_result(
+        ticker=ticker,
+        trace_id=trace_id,
+        force_refresh=refresh,
+    )
+    total_latency = round((time.perf_counter() - t_start) * 1000, 2)
+    io_latency = float(result.get("data_source_latency_ms", 0.0))
+    result["total_request_latency_ms"] = max(total_latency, io_latency)
+    return result
+
+
+@router.post("/cache/invalidate/{ticker}", status_code=status.HTTP_200_OK)
+async def invalidate_intelligence_cache(
+    ticker: str = Path(..., pattern="^[a-zA-Z]{1,5}$", description="US Equity Ticker Symbol"),
+    auth_verified: dict = Security(verify_m2m_or_user),
+):
+    """
+    Admin & Operations Route: Explicitly purges the Redis cache key for a ticker.
+    """
+    evicted = await cache_aside_manager.invalidate(ticker)
+    return {
+        "ticker": ticker.upper(),
+        "evicted": evicted,
+        "message": f"Cache key for {ticker.upper()} {'successfully purged' if evicted else 'was not found'}.",
+        "timestamp_ms": int(time.time() * 1000),
+    }
+
+
+@router.get("/cache-health", response_model=CacheHealthResponse, status_code=status.HTTP_200_OK)
+async def get_cache_health():
+    """
+    CQRS Read Route: Real-time distributed cache operational health and memory efficiency.
+    Returns hit/miss ratios, memory consumption in MB, and stampede contention statistics.
+    """
+    metrics = await cache_aside_manager.get_health_metrics()
+    return CacheHealthResponse(**metrics)
+
+
+@router.get("/cache-inspector/{ticker}", response_model=CacheInspectorResponse, status_code=status.HTTP_200_OK)
+async def inspect_cache_ticker(
+    ticker: str = Path(..., pattern="^[a-zA-Z]{1,5}$", description="US Equity Ticker Symbol")
+):
+    """
+    CQRS Read Route: Granular inspection of an equity symbol's cached footprint in Redis.
+    Returns remaining TTL, byte memory size, priming origin, trace lineage, and payload preview.
+    """
+    data = await cache_aside_manager.inspect_ticker_cache(ticker)
+    return CacheInspectorResponse(**data)
