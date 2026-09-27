@@ -17,8 +17,17 @@ elif DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("p
 if "@db:" in DATABASE_URL and not os.path.exists("/.dockerenv"):
     DATABASE_URL = DATABASE_URL.replace("@db:", "@localhost:")
 
+connect_args = {}
+if not any(local_host in DATABASE_URL for local_host in ["localhost", "@db:", "127.0.0.1"]):
+    import ssl
+    ssl_ctx = ssl.create_default_context()
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
+    connect_args["ssl"] = ssl_ctx
+
 engine = create_async_engine(
     DATABASE_URL,
+    connect_args=connect_args,
     echo=False,          
     pool_size=20,        
     max_overflow=10      
