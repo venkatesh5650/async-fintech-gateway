@@ -1,5 +1,7 @@
 import asyncio
 import os
+import ssl as _ssl_module
+import re
 import random
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
@@ -17,7 +19,21 @@ if DATABASE_URL.startswith("postgres://"):
 elif DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+asyncpg://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-engine = create_async_engine(DATABASE_URL, echo=False)
+# 3. Strip ssl= query params — handled via connect_args below
+DATABASE_URL = re.sub(r"[?&]ssl(mode)?=[^&]*", "", DATABASE_URL)
+DATABASE_URL = re.sub(r"[?&]$", "", DATABASE_URL)
+
+# 4. Detect cloud DB and set SSL via connect_args (asyncpg-compatible)
+_LOCAL_HOSTS = ("localhost", "@db:", "127.0.0.1", "@postgres:", "@fintech_postgres:")
+_is_cloud_db = not any(h in DATABASE_URL for h in _LOCAL_HOSTS)
+_connect_args: dict = {}
+if _is_cloud_db:
+    ssl_ctx = _ssl_module.create_default_context()
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = _ssl_module.CERT_NONE
+    _connect_args["ssl"] = ssl_ctx
+
+engine = create_async_engine(DATABASE_URL, echo=False, connect_args=_connect_args)
 AsyncSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
 
 # Dictionary of tickers and their realistic baseline starting prices for simulation

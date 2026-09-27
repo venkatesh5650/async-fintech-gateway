@@ -35,6 +35,23 @@ async def lifespan(app: FastAPI):
     except Exception as seed_err:
         logging.warning(f"⚠️ [AUTO-SEED WARNING] User seeding check failed: {seed_err}")
 
+    # Auto Historical Data Seeding: seeds 100 days of OHLC data if DB is empty
+    # This ensures dashboards (volatility, correlation, Sharpe) work immediately on fresh DBs
+    try:
+        from sqlalchemy import text
+        async with engine.connect() as conn:
+            result = await conn.execute(text("SELECT COUNT(*) FROM market_pricing"))
+            row_count = result.scalar()
+        if row_count == 0:
+            logging.warning("📊 [AUTO-SEED] Empty market_pricing table detected. Seeding 100-day historical data...")
+            from seed_premium_data import seed_premium_data
+            await seed_premium_data()
+            logging.warning("✅ [AUTO-SEED] Historical market data seeded successfully.")
+        else:
+            logging.info(f"✅ [AUTO-SEED] market_pricing already has {row_count} rows — skipping seed.")
+    except Exception as data_seed_err:
+        logging.warning(f"⚠️ [AUTO-SEED WARNING] Historical data seeding failed: {data_seed_err}")
+
 
     # Infrastructure Bootstrap: Redis Streams & Consumer Groups
     try:
