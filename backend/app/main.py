@@ -28,6 +28,14 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
     logging.warning("✅ [DATABASE INIT] Verified/Created all PostgreSQL tables in the cloud.")
 
+    # Automatic User Seeding
+    try:
+        from seed_user import seed_users
+        await seed_users()
+    except Exception as seed_err:
+        logging.warning(f"⚠️ [AUTO-SEED WARNING] User seeding check failed: {seed_err}")
+
+
     # Infrastructure Bootstrap: Redis Streams & Consumer Groups
     try:
         await ensure_consumer_group()
