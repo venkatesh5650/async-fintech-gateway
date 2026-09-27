@@ -3,9 +3,14 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 import logging
 import time
+import random
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
-from app.database.database import engine, Base
+from sqlalchemy import text, select, delete
+from app.database.database import engine, Base, AsyncSessionLocal
+from app.database.models import Ticker, MarketPricing
 from app.core.limiter import RateLimiter
 from app.core.telemetry import StructuredLoggingMiddleware  
 from app.routers import auth, intelligence, market, websocket, analytics
@@ -15,6 +20,68 @@ import asyncio
 from app.core.broker import ensure_consumer_group, close_redis_client
 from app.workers.consumer import StreamConsumerWorker
 from app.workers.market_poller import MarketPollerWorker
+
+
+# ── Inline historical seeder using the app's own engine ────────────────────────
+START_PRICES = {
+    "AAPL": Decimal("150.00"),
+    "MSFT": Decimal("320.00"),
+    "GOOGL": Decimal("140.00"),
+    "META": Decimal("450.00"),
+    "NVDA": Decimal("95.00"),
+    "AMD": Decimal("130.00"),
+    "TSLA": Decimal("170.00"),
+    "JPM": Decimal("160.00"),
+    "GS": Decimal("380.00"),
+    "MS": Decimal("85.00"),
+}
+
+async def _seed_historical_data_inline():
+    """Seeds 100 days of OHLCV data using the app's own AsyncSessionLocal."""
+    logging.warning("📊 [AUTO-SEED] Starting inline 100-day OHLCV seed for all tickers...")
+    days_to_seed = 100
+    start_date = datetime.now(timezone.utc) - timedelta(days=days_to_seed)
+
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            await session.execute(delete(MarketPricing))
+
+            for symbol, start_price in START_PRICES.items():
+                ticker_stmt = select(Ticker).where(Ticker.symbol == symbol)
+                ticker_result = await session.execute(ticker_stmt)
+                ticker_obj = ticker_result.scalars().first()
+
+                if not ticker_obj:
+                    ticker_obj = Ticker(
+                        symbol=symbol,
+                        company_name=f"{symbol} Corp",
+                        is_active=True,
+                    )
+                    session.add(ticker_obj)
+                    await session.flush()
+
+                current_close = start_price
+                for i in range(days_to_seed):
+                    candle_date = start_date + timedelta(days=i)
+                    candle_ts = candle_date.replace(hour=16, minute=0, second=0, microsecond=0)
+                    open_price = current_close
+                    fluctuation = Decimal(str(random.uniform(-0.02, 0.03)))
+                    close_price = open_price * (Decimal("1.0") + fluctuation)
+                    high_price = max(open_price, close_price) * (Decimal("1.0") + Decimal(str(random.uniform(0.001, 0.012))))
+                    low_price = min(open_price, close_price) * (Decimal("1.0") - Decimal(str(random.uniform(0.001, 0.012))))
+                    volume = random.randint(10_000_000, 75_000_000)
+                    current_close = close_price
+                    session.add(MarketPricing(
+                        ticker_id=ticker_obj.id,
+                        timestamp=candle_ts,
+                        open_price=round(open_price, 4),
+                        high_price=round(high_price, 4),
+                        low_price=round(low_price, 4),
+                        close_price=round(close_price, 4),
+                        volume=volume,
+                    ))
+
+    logging.warning("✅ [AUTO-SEED] 100-day historical data seeded for all 10 tickers.")
 
 # Track container boot time for uptime metrics
 START_TIME = time.time()
@@ -35,22 +102,18 @@ async def lifespan(app: FastAPI):
     except Exception as seed_err:
         logging.warning(f"⚠️ [AUTO-SEED WARNING] User seeding check failed: {seed_err}")
 
-    # Auto Historical Data Seeding: seeds 100 days of OHLC data if DB is empty
-    # This ensures dashboards (volatility, correlation, Sharpe) work immediately on fresh DBs
+    # Auto Historical Data Seeding: seeds 100 days of OHLC data if DB is empty.
+    # Uses the app's own engine/session — no separate connection or SSL issues.
     try:
-        from sqlalchemy import text
-        async with engine.connect() as conn:
-            result = await conn.execute(text("SELECT COUNT(*) FROM market_pricing"))
+        async with engine.connect() as check_conn:
+            result = await check_conn.execute(text("SELECT COUNT(*) FROM market_pricing"))
             row_count = result.scalar()
         if row_count == 0:
-            logging.warning("📊 [AUTO-SEED] Empty market_pricing table detected. Seeding 100-day historical data...")
-            from seed_premium_data import seed_premium_data
-            await seed_premium_data()
-            logging.warning("✅ [AUTO-SEED] Historical market data seeded successfully.")
+            await _seed_historical_data_inline()
         else:
-            logging.info(f"✅ [AUTO-SEED] market_pricing already has {row_count} rows — skipping seed.")
+            logging.warning(f"✅ [AUTO-SEED] market_pricing has {row_count} rows — skipping seed.")
     except Exception as data_seed_err:
-        logging.warning(f"⚠️ [AUTO-SEED WARNING] Historical data seeding failed: {data_seed_err}")
+        logging.warning(f"⚠️ [AUTO-SEED WARNING] Historical data seeding failed: {data_seed_err}", exc_info=True)
 
 
     # Infrastructure Bootstrap: Redis Streams & Consumer Groups
@@ -147,3 +210,25 @@ async def liveness_probe():
             "environment": "production"
         }
     )
+
+
+@app.post("/admin/seed-data", tags=["System Telemetry"])
+async def manual_seed_data():
+    """
+    Admin endpoint: manually triggers 100-day historical OHLCV seed.
+    Safe to call multiple times — always wipes and re-seeds.
+    """
+    try:
+        await _seed_historical_data_inline()
+        async with engine.connect() as conn:
+            result = await conn.execute(text("SELECT COUNT(*) FROM market_pricing"))
+            count = result.scalar()
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"status": "seeded", "rows_inserted": count}
+        )
+    except Exception as e:
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={"status": "error", "detail": str(e)}
+        )
