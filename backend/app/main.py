@@ -22,22 +22,36 @@ from app.workers.consumer import StreamConsumerWorker
 from app.workers.market_poller import MarketPollerWorker
 
 
-# ── Inline historical seeder using the app's own engine ────────────────────────
-START_PRICES = {
-    "AAPL": Decimal("150.00"),
-    "MSFT": Decimal("320.00"),
-    "GOOGL": Decimal("140.00"),
-    "META": Decimal("450.00"),
-    "NVDA": Decimal("95.00"),
-    "AMD": Decimal("130.00"),
-    "TSLA": Decimal("170.00"),
-    "JPM": Decimal("160.00"),
-    "GS": Decimal("380.00"),
-    "MS": Decimal("85.00"),
+# Per-ticker profiles: (start_price, daily_drift_low, daily_drift_high, volatility_wick)
+# Drift range controls trend bias → directly drives RSI, SMA crossovers, Sharpe ratio
+TICKER_PROFILES = {
+    # Strong bull trend → STRONG_BUY signal
+    "AAPL": (Decimal("150.00"), 0.005, 0.025,  0.008),  # Steady uptrend
+    # Aggressive bull, high volatility → BUY with HIGH_RISK
+    "NVDA": (Decimal("95.00"),  0.010, 0.045,  0.020),  # Explosive growth
+    # Mild bull → BUY/NEUTRAL
+    "MSFT": (Decimal("320.00"), 0.002, 0.015,  0.006),  # Slow steady grind up
+    # Bearish, declining → SELL signal
+    "TSLA": (Decimal("250.00"), -0.030, 0.005, 0.025),  # Downtrend
+    # Bearish moderate → SELL
+    "META": (Decimal("450.00"), -0.015, 0.008, 0.015),  # Slight downtrend
+    # Neutral/flat, low vol → NEUTRAL
+    "GOOGL": (Decimal("140.00"), -0.005, 0.010, 0.005), # Sideways chop
+    # Strong bear → STRONG_SELL
+    "AMD":  (Decimal("180.00"), -0.035, 0.008, 0.022),  # Sharp decline
+    # Mild bull, low vol → BUY (safe)
+    "JPM":  (Decimal("160.00"), 0.003, 0.018,  0.004),  # Blue chip uptrend
+    # Flat/neutral, low vol → NEUTRAL
+    "GS":   (Decimal("380.00"), -0.003, 0.012, 0.006),  # Sideways
+    # Moderate bull → BUY
+    "MS":   (Decimal("85.00"),  0.004, 0.020,  0.007),  # Mild uptrend
 }
 
 async def _seed_historical_data_inline():
-    """Seeds 100 days of OHLCV data using the app's own AsyncSessionLocal."""
+    """Seeds 100 days of OHLCV data using the app's own AsyncSessionLocal.
+    Each ticker has a distinct personality (trend, volatility) so composite
+    signals differ meaningfully across tickers.
+    """
     logging.warning("📊 [AUTO-SEED] Starting inline 100-day OHLCV seed for all tickers...")
     days_to_seed = 100
     start_date = datetime.now(timezone.utc) - timedelta(days=days_to_seed)
@@ -46,7 +60,7 @@ async def _seed_historical_data_inline():
         async with session.begin():
             await session.execute(delete(MarketPricing))
 
-            for symbol, start_price in START_PRICES.items():
+            for symbol, (start_price, drift_low, drift_high, wick) in TICKER_PROFILES.items():
                 ticker_stmt = select(Ticker).where(Ticker.symbol == symbol)
                 ticker_result = await session.execute(ticker_stmt)
                 ticker_obj = ticker_result.scalars().first()
@@ -65,10 +79,13 @@ async def _seed_historical_data_inline():
                     candle_date = start_date + timedelta(days=i)
                     candle_ts = candle_date.replace(hour=16, minute=0, second=0, microsecond=0)
                     open_price = current_close
-                    fluctuation = Decimal(str(random.uniform(-0.02, 0.03)))
+                    # Use per-ticker drift range for meaningful differentiation
+                    fluctuation = Decimal(str(random.uniform(drift_low, drift_high)))
                     close_price = open_price * (Decimal("1.0") + fluctuation)
-                    high_price = max(open_price, close_price) * (Decimal("1.0") + Decimal(str(random.uniform(0.001, 0.012))))
-                    low_price = min(open_price, close_price) * (Decimal("1.0") - Decimal(str(random.uniform(0.001, 0.012))))
+                    # Ensure price never goes below $1
+                    close_price = max(close_price, Decimal("1.00"))
+                    high_price = max(open_price, close_price) * (Decimal("1.0") + Decimal(str(random.uniform(0.001, wick))))
+                    low_price  = min(open_price, close_price) * (Decimal("1.0") - Decimal(str(random.uniform(0.001, wick))))
                     volume = random.randint(10_000_000, 75_000_000)
                     current_close = close_price
                     session.add(MarketPricing(
@@ -81,7 +98,7 @@ async def _seed_historical_data_inline():
                         volume=volume,
                     ))
 
-    logging.warning("✅ [AUTO-SEED] 100-day historical data seeded for all 10 tickers.")
+    logging.warning("✅ [AUTO-SEED] 100-day historical data seeded for all 10 tickers with distinct profiles.")
 
 # Track container boot time for uptime metrics
 START_TIME = time.time()
