@@ -23,6 +23,8 @@ logger = logging.getLogger(__name__)
 
 # --- CONFIGURATION & IDENTIFIERS ---
 DEFAULT_REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+if "redis://redis:" in DEFAULT_REDIS_URL and not os.path.exists("/.dockerenv"):
+    DEFAULT_REDIS_URL = DEFAULT_REDIS_URL.replace("redis://redis:", "redis://localhost:")
 STREAM_INTEL_JOBS = os.getenv("INTEL_STREAM_NAME", "stream:intel_jobs")
 GROUP_INTEL_WORKERS = os.getenv("INTEL_CONSUMER_GROUP", "intel_workers_group")
 STREAM_INTEL_DLQ = os.getenv("INTEL_DLQ_STREAM_NAME", "stream:intel_jobs:dlq")

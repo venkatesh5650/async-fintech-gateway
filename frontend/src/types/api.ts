@@ -191,3 +191,99 @@ export interface CacheInspectorResponse {
   server_timestamp_ms: number;
 }
 
+// ==================================================
+// QUANTITATIVE TIME-SERIES ANALYTICS CONTRACTS
+// ==================================================
+
+export interface BollingerBandsData {
+  upper: number | null;
+  middle: number | null;
+  lower: number | null;
+  bandwidth_pct: number | null;
+  status: "ABOVE_UPPER" | "BELOW_LOWER" | "WITHIN_BANDS" | "INSUFFICIENT_DATA" | string;
+}
+
+export interface IndicatorsData {
+  sma_10: number | null;
+  sma_50: number | null;
+  sma_200: number | null;
+  ema_14: number | null;
+  vwap: number | null;
+  rsi_14: number | null;
+  rsi_status: "OVERBOUGHT" | "OVERSOLD" | "NEUTRAL" | "INSUFFICIENT_DATA" | string;
+  bollinger_bands: BollingerBandsData;
+}
+
+export interface CrossoverSignalData {
+  status:
+    | "BULLISH_GOLDEN_CROSS"
+    | "BEARISH_DEATH_CROSS"
+    | "BULLISH_SHORT_CROSS"
+    | "BEARISH_SHORT_CROSS"
+    | "NEUTRAL"
+    | "INSUFFICIENT_DATA"
+    | string;
+  strength: "STRONG" | "MODERATE" | "NEUTRAL" | string;
+  description: string;
+}
+
+export interface TickerAnalyticsResponse {
+  symbol: string;
+  calculated_at: string | null;
+  data_points_analyzed: number;
+  current_price: number | null;
+  indicators: IndicatorsData;
+  crossover_signal: CrossoverSignalData;
+  trace_id: string;
+}
+
+export interface VolatilityMetricsResponse {
+  symbol: string;
+  calculated_at: string | null;
+  data_points_analyzed: number;
+  volatility_30d_pct: number | null;
+  sharpe_ratio: number | null;
+  max_drawdown_pct: number | null;
+  risk_level: "LOW_RISK" | "MODERATE_RISK" | "HIGH_RISK" | string;
+  sharpe_rating: "EXCELLENT" | "GOOD" | "SUBPAR" | "NEGATIVE" | string;
+  trace_id: string;
+}
+
+export interface CompositeComponentDetail {
+  score: number;
+  weight: number;
+  signal?: string;
+  val?: number | null;
+  status?: string;
+  rating?: string;
+}
+
+export interface CompositeComponents {
+  sma_crossover: CompositeComponentDetail;
+  rsi_14: CompositeComponentDetail;
+  bollinger_bands: CompositeComponentDetail;
+  sharpe_ratio: CompositeComponentDetail;
+}
+
+export interface CompositeSignalResponse {
+  symbol: string;
+  calculated_at: string | null;
+  data_points_analyzed: number;
+  composite_score: number;
+  recommendation: "STRONG_BUY" | "BUY" | "NEUTRAL" | "SELL" | "STRONG_SELL" | string;
+  components: CompositeComponents;
+  trace_id: string;
+}
+
+export interface CorrelationMatrixResponse {
+  symbols: string[];
+  matrix: Record<string, Record<string, number | null>>;
+  days_analyzed: number;
+  data_points_analyzed: number;
+  trace_id: string;
+}
+
+
+
+
+

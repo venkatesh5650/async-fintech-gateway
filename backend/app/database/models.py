@@ -41,3 +41,24 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ComputedSignal(Base):
+    __tablename__ = "computed_signals"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    ticker_id: Mapped[int] = mapped_column(ForeignKey("tickers.id", ondelete="CASCADE"), nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    rsi_14: Mapped[Decimal] = mapped_column(DECIMAL(10, 4), nullable=True)
+    rsi_status: Mapped[str] = mapped_column(String(50), nullable=True)
+    bollinger_upper: Mapped[Decimal] = mapped_column(DECIMAL(10, 4), nullable=True)
+    bollinger_middle: Mapped[Decimal] = mapped_column(DECIMAL(10, 4), nullable=True)
+    bollinger_lower: Mapped[Decimal] = mapped_column(DECIMAL(10, 4), nullable=True)
+    bollinger_status: Mapped[str] = mapped_column(String(50), nullable=True)
+    bandwidth_pct: Mapped[Decimal] = mapped_column(DECIMAL(10, 4), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("ticker_id", "timestamp", name="uix_computed_ticker_timestamp"),
+        Index("idx_computed_ticker_ts_desc", "ticker_id", timestamp.desc()),
+    )

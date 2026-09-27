@@ -63,6 +63,7 @@ class JobStatusResponse(BaseModel):
     job_id: str
     status: str = Field(..., description="'processing', 'completed', or 'failed'")
     result: Optional[IntelligenceResponse] = Field(default=None, description="The final payload if completed")
+    error: Optional[str] = Field(default=None, description="Error detail if failed")
     trace_id: Optional[str] = Field(default=None, description="Distributed W3C trace identifier")
 
 

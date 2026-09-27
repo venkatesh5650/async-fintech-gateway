@@ -8,12 +8,13 @@ from contextlib import asynccontextmanager
 from app.database.database import engine, Base
 from app.core.limiter import RateLimiter
 from app.core.telemetry import StructuredLoggingMiddleware  
-from app.routers import auth, intelligence, market,websocket  
+from app.routers import auth, intelligence, market, websocket, analytics
 
 import os
 import asyncio
 from app.core.broker import ensure_consumer_group, close_redis_client
 from app.workers.consumer import StreamConsumerWorker
+from app.workers.market_poller import MarketPollerWorker
 
 # Track container boot time for uptime metrics
 START_TIME = time.time()
@@ -45,9 +46,24 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logging.warning(f"⚠️ Could not start embedded stream consumer: {e}")
 
+    # Autonomous Market Data Poller: continuously pulls real yfinance OHLCV data
+    poller_task = None
+    poller = None
+    if os.getenv("ENABLE_MARKET_POLLER", "true").lower() == "true":
+        poller = MarketPollerWorker()
+        try:
+            poller_task = asyncio.create_task(poller.run())
+            logging.info("🚀 [MARKET POLLER] Started autonomous market poller daemon.")
+        except Exception as e:
+            logging.warning(f"⚠️ Could not start market poller: {e}")
+
     yield
 
     # Graceful shutdown hooks
+    if poller:
+        await poller.shutdown()
+    if poller_task:
+        poller_task.cancel()
     if worker:
         await worker.shutdown()
     if consumer_task:
@@ -64,6 +80,7 @@ app.include_router(auth.router)
 app.include_router(intelligence.router)
 app.include_router(market.router)
 app.include_router(websocket.router)
+app.include_router(analytics.router)
 
 # Perimeter Defense: Rate Limiter Configuration
 limiter = RateLimiter(requests_per_minute=5)

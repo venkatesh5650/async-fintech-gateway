@@ -14,6 +14,9 @@ if DATABASE_URL.startswith("postgres://"):
 elif DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith("postgresql+asyncpg://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
+if "@db:" in DATABASE_URL and not os.path.exists("/.dockerenv"):
+    DATABASE_URL = DATABASE_URL.replace("@db:", "@localhost:")
+
 engine = create_async_engine(
     DATABASE_URL,
     echo=False,          

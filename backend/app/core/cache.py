@@ -16,6 +16,8 @@ from app.core.telemetry import generate_span_id
 logger = logging.getLogger("cache_manager")
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+if "redis://redis:" in REDIS_URL and not os.path.exists("/.dockerenv"):
+    REDIS_URL = REDIS_URL.replace("redis://redis:", "redis://localhost:")
 DEFAULT_CACHE_TTL_SEC = int(os.getenv("INTEL_CACHE_TTL_SEC", "300"))
 MUTEX_LOCK_TIMEOUT_SEC = int(os.getenv("MUTEX_LOCK_TIMEOUT_SEC", "5"))
 MUTEX_WAIT_TIMEOUT_SEC = float(os.getenv("MUTEX_WAIT_TIMEOUT_SEC", "2.5"))
@@ -510,5 +512,30 @@ class CacheAsideManager:
         }
 
 
+    async def acquire_mutex(self, ticker: str, ttl: int = MUTEX_LOCK_TIMEOUT_SEC) -> tuple[bool, Optional[str]]:
+        client = await self.get_client()
+        lock_key = self.get_lock_key(ticker)
+        token = str(uuid.uuid4())
+        acquired = await client.set(lock_key, token, nx=True, ex=ttl)
+        if acquired:
+            return True, token
+        return False, None
+
+    async def release_mutex(self, ticker: str, token: str) -> bool:
+        client = await self.get_client()
+        lock_key = self.get_lock_key(ticker)
+        if token:
+            res = await client.eval(LUA_RELEASE_LOCK, 1, lock_key, token)
+            return bool(res)
+        return False
+
+    async def close(self) -> None:
+        if self._client:
+            await self._client.aclose()
+            self._client = None
+
+
+
 # Global singleton instance
 cache_aside_manager = CacheAsideManager()
+

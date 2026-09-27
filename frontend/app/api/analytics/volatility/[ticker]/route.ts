@@ -1,17 +1,12 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-type Context = { params: Promise<{ traceId: string }> };
-
-/**
- * BFF Proxy: Distributed Trace Waterfall
- *
- * Fetches the end-to-end distributed span execution lifecycle for a given trace_id.
- */
-export async function GET(request: Request, context: Context) {
-  const { traceId } = await context.params;
-  const backendUrl =
-    process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ ticker: string }> }
+) {
+  const { ticker } = await params;
+  const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
   try {
     const cookieStore = await cookies();
@@ -25,7 +20,7 @@ export async function GET(request: Request, context: Context) {
     }
 
     const response = await fetch(
-      `${backendUrl}/v1/intelligence/trace/${traceId}`,
+      `${backendUrl}/v1/analytics/volatility/${encodeURIComponent(ticker)}`,
       {
         method: "GET",
         headers: {
@@ -37,7 +32,7 @@ export async function GET(request: Request, context: Context) {
 
     if (!response.ok) {
       const res = NextResponse.json(
-        { error: `Trace query returned status ${response.status}` },
+        { error: `Volatility analytics backend returned ${response.status}` },
         { status: response.status }
       );
       if (response.status === 401 || response.status === 403) {
@@ -50,7 +45,7 @@ export async function GET(request: Request, context: Context) {
     return NextResponse.json(data);
   } catch {
     return NextResponse.json(
-      { error: "Trace telemetry gateway unreachable" },
+      { error: "Volatility analytics service unreachable." },
       { status: 503 }
     );
   }

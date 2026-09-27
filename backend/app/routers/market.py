@@ -1,5 +1,6 @@
 from fastapi import APIRouter, BackgroundTasks, status, Depends, Security
 import asyncio
+import math
 import logging
 import yfinance as yf
 from datetime import datetime, timezone
@@ -24,19 +25,25 @@ def _fetch_yfinance_data_sync(ticker: str) -> dict:
     """
     t = yf.Ticker(ticker.upper())
     # Fetch the last 5 days to ensure we always have at least 1 valid trading day
-    hist = t.history(period="5d")
+    hist = t.history(period="5d").dropna(subset=["Close"])
 
     if hist.empty:
         raise ValueError(f"yfinance returned no data for ticker: {ticker.upper()}")
 
-    # Take the most recent row
+    # Take the most recent row with valid data
     latest = hist.iloc[-1]
+    close_p = float(latest["Close"])
+    open_p = float(latest["Open"]) if not math.isnan(float(latest["Open"])) else close_p
+    high_p = float(latest["High"]) if not math.isnan(float(latest["High"])) else close_p
+    low_p = float(latest["Low"]) if not math.isnan(float(latest["Low"])) else close_p
+    vol = int(latest["Volume"]) if not math.isnan(float(latest["Volume"])) else 0
+
     return {
-        "open":   round(float(latest["Open"]),   4),
-        "high":   round(float(latest["High"]),    4),
-        "low":    round(float(latest["Low"]),     4),
-        "close":  round(float(latest["Close"]),   4),
-        "volume": int(latest["Volume"]),
+        "open":   round(open_p,  4),
+        "high":   round(high_p,   4),
+        "low":    round(low_p,    4),
+        "close":  round(close_p,  4),
+        "volume": vol,
     }
 
 
@@ -153,44 +160,167 @@ async def ingest_market_data(payload: MarketDataPayload, background_tasks: Backg
     }
 
 
+def _fetch_yfinance_history_sync(ticker: str, interval: str = "5m") -> list:
+    """
+    Synchronous yfinance historical candle fetcher.
+    Supports intervals: 5m, 15m, 1h, 4h, 1d.
+    """
+    is_4h = interval.lower() == "4h"
+    tf_map = {
+        "5m":  ("5d", "5m"),
+        "15m": ("5d", "15m"),
+        "1h":  ("1mo", "1h"),
+        "4h":  ("3mo", "1h"), # Fetch 1h candles to aggregate into 4h
+        "1d":  ("6mo", "1d"),
+    }
+    period, inv = tf_map.get(interval.lower(), ("5d", "5m"))
+    t = yf.Ticker(ticker.upper())
+    hist = t.history(period=period, interval=inv).dropna(subset=["Close"])
+
+    raw_records = []
+    for idx, row in hist.iterrows():
+        ts = int(idx.timestamp())
+        close_p = float(row["Close"])
+        open_p = float(row["Open"]) if not math.isnan(float(row["Open"])) else close_p
+        high_p = float(row["High"]) if not math.isnan(float(row["High"])) else close_p
+        low_p = float(row["Low"]) if not math.isnan(float(row["Low"])) else close_p
+        vol = int(row["Volume"]) if not math.isnan(float(row["Volume"])) else 0
+        raw_records.append({
+            "time": ts,
+            "open": round(open_p, 4),
+            "high": round(high_p, 4),
+            "low": round(low_p, 4),
+            "close": round(close_p, 4),
+            "volume": vol,
+        })
+
+    if not is_4h or not raw_records:
+        return raw_records
+
+    # Aggregate 1h candles into 4h buckets (4 x 1h bars)
+    aggregated = []
+    chunk_size = 4
+    for i in range(0, len(raw_records), chunk_size):
+        chunk = raw_records[i:i + chunk_size]
+        if not chunk:
+            continue
+        agg_open = chunk[0]["open"]
+        agg_close = chunk[-1]["close"]
+        agg_high = max(c["high"] for c in chunk)
+        agg_low = min(c["low"] for c in chunk)
+        agg_vol = sum(c["volume"] for c in chunk)
+        agg_time = chunk[0]["time"]
+        aggregated.append({
+            "time": agg_time,
+            "open": agg_open,
+            "high": agg_high,
+            "low": agg_low,
+            "close": agg_close,
+            "volume": agg_vol,
+        })
+    return aggregated
+
+
 @router.get(
     "/history/{ticker}",
     status_code=status.HTTP_200_OK
 )
 async def get_market_history(
     ticker: str,
-    auth_verified: dict = Security(verify_m2m_or_user),
+    interval: str = "5m",
 ):
     """
-    CQRS Query Edge: Retrieve time-series historical pricing data for a ticker symbol.
+    CQRS Query Edge: Retrieve public time-series historical pricing data for a ticker symbol.
+    Fetches real OHLCV timeframe candles from Yahoo Finance (5m, 15m, 1h, 4h, 1d)
+    and merges with local database records.
     """
-    async with AsyncSessionLocal() as session:
-        # 1. Resolve ticker symbol to id
-        ticker_stmt = select(Ticker).where(Ticker.symbol == ticker.upper())
-        ticker_result = await session.execute(ticker_stmt)
-        ticker_obj = ticker_result.scalars().first()
+    try:
+        yf_records = await asyncio.to_thread(_fetch_yfinance_history_sync, ticker, interval)
+    except Exception as e:
+        logging.warning(f"⚠️ [YFINANCE HISTORY WARN] Could not fetch {interval} history for {ticker}: {e}")
+        yf_records = []
 
-        if not ticker_obj:
-            return []
+    db_records = []
+    try:
+        async with AsyncSessionLocal() as session:
+            ticker_stmt = select(Ticker).where(Ticker.symbol == ticker.upper())
+            ticker_result = await session.execute(ticker_stmt)
+            ticker_obj = ticker_result.scalars().first()
 
-        # 2. Query market_pricing for that ticker, sorted chronologically (ascending)
-        pricing_stmt = (
-            select(MarketPricing)
-            .where(MarketPricing.ticker_id == ticker_obj.id)
-            .order_by(MarketPricing.timestamp.asc())
-        )
-        pricing_result = await session.execute(pricing_stmt)
-        pricing_list = pricing_result.scalars().all()
+            if ticker_obj:
+                pricing_stmt = (
+                    select(MarketPricing)
+                    .where(MarketPricing.ticker_id == ticker_obj.id)
+                    .order_by(MarketPricing.timestamp.asc())
+                )
+                pricing_result = await session.execute(pricing_stmt)
+                pricing_list = pricing_result.scalars().all()
+                raw_db_records = [
+                    {
+                        "time": int(item.timestamp.replace(tzinfo=timezone.utc).timestamp()),
+                        "open": float(item.open_price),
+                        "high": float(item.high_price),
+                        "low": float(item.low_price),
+                        "close": float(item.close_price),
+                        "volume": int(item.volume),
+                    }
+                    for item in pricing_list
+                    if not math.isnan(float(item.close_price)) and float(item.close_price) > 5.0
+                ]
 
-        # 3. Format response to match candlestick chart data points
-        return [
-            {
-                "time":   int(item.timestamp.replace(tzinfo=timezone.utc).timestamp()),
-                "open":   float(item.open_price),
-                "high":   float(item.high_price),
-                "low":    float(item.low_price),
-                "close":  float(item.close_price),
-                "volume": int(item.volume),
+                # Group DB records into the active timeframe interval buckets
+                tf_sec_map = {
+                    "5m": 300,
+                    "15m": 900,
+                    "1h": 3600,
+                    "4h": 14400,
+                    "1d": 86400,
+                }
+                step_sec = tf_sec_map.get(interval.lower(), 300)
+
+                buckets = {}
+                for r in raw_db_records:
+                    b_time = r["time"] - (r["time"] % step_sec)
+                    if b_time not in buckets:
+                        buckets[b_time] = []
+                    buckets[b_time].append(r)
+
+                for b_time, items in buckets.items():
+                    db_records.append({
+                        "time": b_time,
+                        "open": items[0]["open"],
+                        "high": max(i["high"] for i in items),
+                        "low": min(i["low"] for i in items),
+                        "close": items[-1]["close"],
+                        "volume": max(i["volume"] for i in items),
+                    })
+    except Exception as db_err:
+        logging.warning(f"⚠️ [DB HISTORY WARN] {db_err}")
+
+    # Merge records cleanly: yf_records provides official historical baseline;
+    # DB records provide live telemetry for current active window only.
+    if not yf_records:
+        merged = sorted(db_records, key=lambda x: x["time"])
+        return merged
+
+    by_time = {r["time"]: r for r in yf_records}
+    latest_yf_time = yf_records[-1]["time"]
+
+    # Only apply DB live telemetry to update/append the SINGLE active live candle
+    if raw_db_records:
+        latest_db = raw_db_records[-1]
+        live_bucket_time = latest_db["time"] - (latest_db["time"] % step_sec)
+
+        if live_bucket_time >= latest_yf_time:
+            # Overwrite or append the single active live candle
+            by_time[live_bucket_time] = {
+                "time": live_bucket_time,
+                "open": latest_db["open"],
+                "high": max(latest_db["high"], yf_records[-1]["high"]) if live_bucket_time == latest_yf_time else latest_db["high"],
+                "low": min(latest_db["low"], yf_records[-1]["low"]) if live_bucket_time == latest_yf_time else latest_db["low"],
+                "close": latest_db["close"],
+                "volume": latest_db["volume"],
             }
-            for item in pricing_list
-        ]
+
+    merged = sorted(by_time.values(), key=lambda x: x["time"])
+    return merged

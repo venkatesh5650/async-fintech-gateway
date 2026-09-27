@@ -1,0 +1,581 @@
+import math
+from datetime import datetime
+from decimal import Decimal
+from typing import Dict, Any, Optional
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+from app.database.models import ComputedSignal
+
+
+def safe_float(val: Any) -> Optional[float]:
+    """
+    Safely casts database numeric values to float, converting NaN/Inf/None 
+    to valid JSON-serializable None.
+    """
+    if val is None:
+        return None
+    try:
+        f = float(val)
+        if math.isnan(f) or math.isinf(f):
+            return None
+        return f
+    except (ValueError, TypeError):
+        return None
+
+
+class QuantitativeAnalyticsEngine:
+    """
+    Quantitative technical analysis engine executing native PostgreSQL 
+    window functions over distinct historical time-series pricing data.
+    """
+
+    @staticmethod
+    async def compute_indicators(session: AsyncSession, symbol: str) -> Dict[str, Any]:
+        symbol_upper = symbol.upper()
+
+        query = text("""
+            WITH raw_pricing AS (
+                SELECT 
+                    mp.ticker_id,
+                    mp.timestamp,
+                    mp.close_price,
+                    mp.high_price,
+                    mp.low_price,
+                    mp.volume,
+                    DATE(mp.timestamp) as price_date
+                FROM market_pricing mp
+                JOIN tickers t ON mp.ticker_id = t.id
+                WHERE t.symbol = :symbol
+            ),
+            distinct_daily_pricing AS (
+                SELECT DISTINCT ON (price_date)
+                    ticker_id,
+                    timestamp,
+                    close_price,
+                    high_price,
+                    low_price,
+                    volume
+                FROM raw_pricing
+                ORDER BY price_date DESC, timestamp DESC
+            ),
+            ordered_pricing AS (
+                SELECT * FROM distinct_daily_pricing ORDER BY timestamp ASC
+            ),
+            price_changes AS (
+                SELECT 
+                    ticker_id,
+                    timestamp,
+                    close_price,
+                    high_price,
+                    low_price,
+                    volume,
+                    close_price - LAG(close_price, 1) OVER (ORDER BY timestamp) AS price_diff,
+                    AVG(close_price) OVER (ORDER BY timestamp ROWS BETWEEN 9 PRECEDING AND CURRENT ROW) AS sma_10,
+                    AVG(close_price) OVER (ORDER BY timestamp ROWS BETWEEN 49 PRECEDING AND CURRENT ROW) AS sma_50,
+                    AVG(close_price) OVER (ORDER BY timestamp ROWS BETWEEN 199 PRECEDING AND CURRENT ROW) AS sma_200,
+                    AVG(close_price) OVER (ORDER BY timestamp ROWS BETWEEN 19 PRECEDING AND CURRENT ROW) AS bb_middle,
+                    STDDEV_SAMP(close_price) OVER (ORDER BY timestamp ROWS BETWEEN 19 PRECEDING AND CURRENT ROW) AS bb_stddev,
+                    (high_price + low_price + close_price) / 3.0 AS typical_price
+                FROM ordered_pricing
+            ),
+            gains_losses AS (
+                SELECT 
+                    *,
+                    CASE WHEN price_diff > 0 THEN price_diff ELSE 0 END AS gain,
+                    CASE WHEN price_diff < 0 THEN ABS(price_diff) ELSE 0 END AS loss
+                FROM price_changes
+            ),
+            avg_gains_losses AS (
+                SELECT 
+                    *,
+                    AVG(gain) OVER (ORDER BY timestamp ROWS BETWEEN 13 PRECEDING AND CURRENT ROW) AS avg_gain_14,
+                    AVG(loss) OVER (ORDER BY timestamp ROWS BETWEEN 13 PRECEDING AND CURRENT ROW) AS avg_loss_14,
+                    SUM(typical_price * COALESCE(NULLIF(volume, 0), 1)) OVER (ORDER BY timestamp) / 
+                        NULLIF(SUM(COALESCE(NULLIF(volume, 0), 1)) OVER (ORDER BY timestamp), 0) AS vwap,
+                    ROW_NUMBER() OVER (ORDER BY timestamp DESC) AS rn,
+                    COUNT(*) OVER () AS total_count
+                FROM gains_losses
+            )
+            SELECT 
+                ticker_id,
+                timestamp,
+                close_price,
+                sma_10,
+                sma_50,
+                sma_200,
+                vwap,
+                bb_middle,
+                bb_middle + (2.0 * COALESCE(bb_stddev, 0)) AS bb_upper,
+                bb_middle - (2.0 * COALESCE(bb_stddev, 0)) AS bb_lower,
+                CASE 
+                    WHEN avg_loss_14 = 0 OR avg_loss_14 IS NULL THEN 
+                        CASE WHEN avg_gain_14 > 0 THEN 100.0 ELSE 50.0 END
+                    ELSE 100.0 - (100.0 / (1.0 + (avg_gain_14 / avg_loss_14)))
+                END AS rsi_14,
+                total_count
+            FROM avg_gains_losses
+            WHERE rn = 1;
+        """)
+
+        res = await session.execute(query, {"symbol": symbol_upper})
+        row = res.fetchone()
+
+        if not row:
+            return {
+                "symbol": symbol_upper,
+                "calculated_at": None,
+                "data_points_analyzed": 0,
+                "current_price": None,
+                "indicators": {
+                    "sma_10": None,
+                    "sma_50": None,
+                    "sma_200": None,
+                    "ema_14": None,
+                    "vwap": None,
+                    "rsi_14": None,
+                    "rsi_status": "INSUFFICIENT_DATA",
+                    "bollinger_bands": {
+                        "upper": None,
+                        "middle": None,
+                        "lower": None,
+                        "bandwidth_pct": None,
+                        "status": "INSUFFICIENT_DATA",
+                    }
+                },
+                "crossover_signal": {
+                    "status": "INSUFFICIENT_DATA",
+                    "strength": "NEUTRAL",
+                    "description": f"No pricing history recorded for ticker {symbol_upper}."
+                }
+            }
+
+        ticker_id, timestamp, close_price, sma_10, sma_50, sma_200, vwap, bb_middle, bb_upper, bb_lower, rsi_14, total_count = row
+
+        cp_val = safe_float(close_price) or 0.0
+        sma_10_val = safe_float(sma_10)
+        sma_50_val = safe_float(sma_50)
+        sma_200_val = safe_float(sma_200)
+        vwap_val = safe_float(vwap) or cp_val
+        rsi_14_val = safe_float(rsi_14)
+        bb_middle_val = safe_float(bb_middle)
+        bb_upper_val = safe_float(bb_upper)
+        bb_lower_val = safe_float(bb_lower)
+
+        ema_14_val = sma_10_val
+
+        # RSI status classification
+        rsi_status = "NEUTRAL"
+        if rsi_14_val is not None:
+            if rsi_14_val >= 70.0:
+                rsi_status = "OVERBOUGHT"
+            elif rsi_14_val <= 30.0:
+                rsi_status = "OVERSOLD"
+
+        # Bollinger Bands status & bandwidth classification
+        bb_status = "WITHIN_BANDS"
+        bandwidth_pct = None
+        if bb_upper_val is not None and bb_lower_val is not None and bb_middle_val is not None and bb_middle_val > 0:
+            bandwidth_pct = ((bb_upper_val - bb_lower_val) / bb_middle_val) * 100.0
+            if cp_val > bb_upper_val:
+                bb_status = "ABOVE_UPPER"
+            elif cp_val < bb_lower_val:
+                bb_status = "BELOW_LOWER"
+
+        # Crossover logic
+        signal_status = "NEUTRAL"
+        signal_strength = "NEUTRAL"
+        description = "Indicator signals are balanced across windows."
+
+        if sma_10_val and sma_200_val:
+            if sma_10_val > sma_200_val:
+                signal_status = "BULLISH_GOLDEN_CROSS"
+                signal_strength = "STRONG"
+                description = f"10-period SMA (${sma_10_val:.2f}) trades above 200-period SMA (${sma_200_val:.2f})."
+            elif sma_10_val < sma_200_val:
+                signal_status = "BEARISH_DEATH_CROSS"
+                signal_strength = "STRONG"
+                description = f"10-period SMA (${sma_10_val:.2f}) trades below 200-period SMA (${sma_200_val:.2f})."
+        elif sma_10_val and sma_50_val:
+            if sma_10_val > sma_50_val:
+                signal_status = "BULLISH_SHORT_CROSS"
+                signal_strength = "MODERATE"
+                description = f"10-period SMA (${sma_10_val:.2f}) trades above 50-period SMA (${sma_50_val:.2f})."
+            elif sma_10_val < sma_50_val:
+                signal_status = "BEARISH_SHORT_CROSS"
+                signal_strength = "MODERATE"
+                description = f"10-period SMA (${sma_10_val:.2f}) trades below 50-period SMA (${sma_50_val:.2f})."
+
+        # Upsert computed signals into database table
+        if ticker_id and timestamp:
+            try:
+                stmt = pg_insert(ComputedSignal).values({
+                    "ticker_id": ticker_id,
+                    "timestamp": timestamp,
+                    "rsi_14": Decimal(str(round(rsi_14_val, 4))) if rsi_14_val is not None else None,
+                    "rsi_status": rsi_status,
+                    "bollinger_upper": Decimal(str(round(bb_upper_val, 4))) if bb_upper_val is not None else None,
+                    "bollinger_middle": Decimal(str(round(bb_middle_val, 4))) if bb_middle_val is not None else None,
+                    "bollinger_lower": Decimal(str(round(bb_lower_val, 4))) if bb_lower_val is not None else None,
+                    "bollinger_status": bb_status,
+                    "bandwidth_pct": Decimal(str(round(bandwidth_pct, 4))) if bandwidth_pct is not None else None,
+                }).on_conflict_do_update(
+                    constraint="uix_computed_ticker_timestamp",
+                    set_={
+                        "rsi_14": Decimal(str(round(rsi_14_val, 4))) if rsi_14_val is not None else None,
+                        "rsi_status": rsi_status,
+                        "bollinger_upper": Decimal(str(round(bb_upper_val, 4))) if bb_upper_val is not None else None,
+                        "bollinger_middle": Decimal(str(round(bb_middle_val, 4))) if bb_middle_val is not None else None,
+                        "bollinger_lower": Decimal(str(round(bb_lower_val, 4))) if bb_lower_val is not None else None,
+                        "bollinger_status": bb_status,
+                        "bandwidth_pct": Decimal(str(round(bandwidth_pct, 4))) if bandwidth_pct is not None else None,
+                    }
+                )
+                await session.execute(stmt)
+                await session.commit()
+            except Exception:
+                await session.rollback()
+
+        return {
+            "symbol": symbol_upper,
+            "calculated_at": timestamp.isoformat() if isinstance(timestamp, datetime) else str(timestamp) if timestamp else None,
+            "data_points_analyzed": total_count,
+            "current_price": cp_val,
+            "indicators": {
+                "sma_10": round(sma_10_val, 4) if sma_10_val is not None else None,
+                "sma_50": round(sma_50_val, 4) if sma_50_val is not None else None,
+                "sma_200": round(sma_200_val, 4) if sma_200_val is not None else None,
+                "ema_14": round(ema_14_val, 4) if ema_14_val is not None else None,
+                "vwap": round(vwap_val, 4) if vwap_val is not None else None,
+                "rsi_14": round(rsi_14_val, 4) if rsi_14_val is not None else None,
+                "rsi_status": rsi_status,
+                "bollinger_bands": {
+                    "upper": round(bb_upper_val, 4) if bb_upper_val is not None else None,
+                    "middle": round(bb_middle_val, 4) if bb_middle_val is not None else None,
+                    "lower": round(bb_lower_val, 4) if bb_lower_val is not None else None,
+                    "bandwidth_pct": round(bandwidth_pct, 4) if bandwidth_pct is not None else None,
+                    "status": bb_status,
+                }
+            },
+            "crossover_signal": {
+                "status": signal_status,
+                "strength": signal_strength,
+                "description": description
+            }
+        }
+
+    @staticmethod
+    async def compute_volatility_metrics(session: AsyncSession, symbol: str) -> Dict[str, Any]:
+        symbol_upper = symbol.upper()
+
+        query = text("""
+            WITH raw_pricing AS (
+                SELECT 
+                    mp.ticker_id,
+                    mp.timestamp,
+                    mp.close_price,
+                    DATE(mp.timestamp) AS price_date
+                FROM market_pricing mp
+                JOIN tickers t ON mp.ticker_id = t.id
+                WHERE t.symbol = :symbol
+            ),
+            distinct_daily AS (
+                SELECT DISTINCT ON (price_date)
+                    ticker_id,
+                    timestamp,
+                    close_price
+                FROM raw_pricing
+                ORDER BY price_date DESC, timestamp DESC
+            ),
+            ordered_pricing AS (
+                SELECT * FROM distinct_daily ORDER BY timestamp ASC
+            ),
+            daily_returns AS (
+                SELECT 
+                    ticker_id,
+                    timestamp,
+                    close_price,
+                    MAX(close_price) OVER (ORDER BY timestamp ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS peak_price,
+                    (close_price - LAG(close_price, 1) OVER (ORDER BY timestamp)) / 
+                        NULLIF(LAG(close_price, 1) OVER (ORDER BY timestamp), 0) AS daily_return
+                FROM ordered_pricing
+            ),
+            drawdowns AS (
+                SELECT 
+                    *,
+                    ((close_price - peak_price) / NULLIF(peak_price, 0)) * 100.0 AS drawdown_pct
+                FROM daily_returns
+            ),
+            rolling_metrics AS (
+                SELECT 
+                    ticker_id,
+                    timestamp,
+                    close_price,
+                    drawdown_pct,
+                    MIN(drawdown_pct) OVER () AS max_drawdown_pct,
+                    AVG(daily_return) OVER (ORDER BY timestamp ROWS BETWEEN 29 PRECEDING AND CURRENT ROW) AS avg_return_30d,
+                    STDDEV_SAMP(daily_return) OVER (ORDER BY timestamp ROWS BETWEEN 29 PRECEDING AND CURRENT ROW) AS stddev_return_30d,
+                    ROW_NUMBER() OVER (ORDER BY timestamp DESC) AS rn,
+                    COUNT(*) OVER () AS total_count
+                FROM drawdowns
+            )
+            SELECT 
+                ticker_id,
+                timestamp,
+                close_price,
+                max_drawdown_pct,
+                avg_return_30d,
+                stddev_return_30d,
+                total_count
+            FROM rolling_metrics
+            WHERE rn = 1;
+        """)
+
+        res = await session.execute(query, {"symbol": symbol_upper})
+        row = res.fetchone()
+
+        if not row:
+            return {
+                "symbol": symbol_upper,
+                "calculated_at": None,
+                "data_points_analyzed": 0,
+                "volatility_30d_pct": None,
+                "sharpe_ratio": None,
+                "max_drawdown_pct": None,
+                "risk_level": "NEUTRAL",
+                "sharpe_rating": "NEUTRAL",
+            }
+
+        ticker_id, timestamp, close_price, max_dd, avg_ret, stddev_ret, total_count = row
+
+        stddev_val = safe_float(stddev_ret) or 0.0
+        avg_ret_val = safe_float(avg_ret) or 0.0
+        max_dd_val = safe_float(max_dd) or 0.0
+
+        volatility_30d_pct = stddev_val * math.sqrt(252) * 100.0
+        annualized_return_pct = avg_ret_val * 252.0 * 100.0
+        risk_free_rate = 4.0
+
+        if volatility_30d_pct > 0:
+            sharpe_ratio = (annualized_return_pct - risk_free_rate) / volatility_30d_pct
+        else:
+            sharpe_ratio = 0.0
+
+        risk_level = "MODERATE_RISK"
+        if volatility_30d_pct < 15.0:
+            risk_level = "LOW_RISK"
+        elif volatility_30d_pct > 30.0:
+            risk_level = "HIGH_RISK"
+
+        sharpe_rating = "SUBPAR"
+        if sharpe_ratio >= 2.0:
+            sharpe_rating = "EXCELLENT"
+        elif sharpe_ratio >= 1.0:
+            sharpe_rating = "GOOD"
+        elif sharpe_ratio < 0.0:
+            sharpe_rating = "NEGATIVE"
+
+        return {
+            "symbol": symbol_upper,
+            "calculated_at": timestamp.isoformat() if isinstance(timestamp, datetime) else str(timestamp) if timestamp else None,
+            "data_points_analyzed": total_count,
+            "volatility_30d_pct": round(volatility_30d_pct, 2),
+            "sharpe_ratio": round(sharpe_ratio, 2),
+            "max_drawdown_pct": round(abs(max_dd_val), 2),
+            "risk_level": risk_level,
+            "sharpe_rating": sharpe_rating,
+        }
+
+    @staticmethod
+    async def compute_correlation_matrix(
+        session: AsyncSession,
+        symbols: Optional[list[str]] = None,
+        days: int = 30
+    ) -> Dict[str, Any]:
+        if not symbols:
+            res_syms = await session.execute(text("SELECT symbol FROM tickers ORDER BY symbol ASC LIMIT 10;"))
+            symbols = [r[0] for r in res_syms.fetchall()]
+        else:
+            symbols = [s.strip().upper() for s in symbols if s.strip()]
+
+        if not symbols:
+            return {
+                "symbols": [],
+                "matrix": {},
+                "days_analyzed": days,
+                "data_points_analyzed": 0,
+            }
+
+        query = text("""
+            WITH raw_pricing AS (
+                SELECT 
+                    t.symbol,
+                    mp.timestamp,
+                    mp.close_price,
+                    DATE(mp.timestamp) AS price_date
+                FROM market_pricing mp
+                JOIN tickers t ON mp.ticker_id = t.id
+                WHERE t.symbol = ANY(:symbols)
+                  AND mp.timestamp >= (CURRENT_TIMESTAMP - (:days * INTERVAL '1 day'))
+            ),
+            distinct_daily AS (
+                SELECT DISTINCT ON (symbol, price_date)
+                    symbol,
+                    price_date,
+                    close_price
+                FROM raw_pricing
+                ORDER BY symbol, price_date DESC, timestamp DESC
+            ),
+            paired AS (
+                SELECT 
+                    p1.symbol AS symbol_a,
+                    p2.symbol AS symbol_b,
+                    CORR(p1.close_price, p2.close_price) AS corr_val,
+                    COUNT(*) AS pair_count
+                FROM distinct_daily p1
+                JOIN distinct_daily p2 ON p1.price_date = p2.price_date
+                GROUP BY p1.symbol, p2.symbol
+            )
+            SELECT symbol_a, symbol_b, corr_val, pair_count FROM paired;
+        """)
+
+        res = await session.execute(query, {"symbols": symbols, "days": days})
+        rows = res.fetchall()
+
+        matrix: Dict[str, Dict[str, Optional[float]]] = {s: {s2: None for s2 in symbols} for s in symbols}
+        total_points = 0
+
+        for r in rows:
+            sym_a, sym_b, corr, cnt = r
+            if sym_a in matrix and sym_b in matrix[sym_a]:
+                c_val = safe_float(corr)
+                if c_val is not None:
+                    c_val = round(c_val, 4)
+                if sym_a == sym_b and c_val is not None:
+                    c_val = 1.0
+                matrix[sym_a][sym_b] = c_val
+                total_points += cnt
+
+        for s in symbols:
+            if any(matrix[s][s2] is not None for s2 in symbols):
+                matrix[s][s] = 1.0
+
+        return {
+            "symbols": symbols,
+            "matrix": matrix,
+            "days_analyzed": days,
+            "data_points_analyzed": total_points,
+        }
+
+    @staticmethod
+    async def compute_composite_signal(session: AsyncSession, symbol: str) -> Dict[str, Any]:
+        symbol_upper = symbol.upper()
+
+        indicators_res = await QuantitativeAnalyticsEngine.compute_indicators(session, symbol_upper)
+        volatility_res = await QuantitativeAnalyticsEngine.compute_volatility_metrics(session, symbol_upper)
+
+        indicators = indicators_res.get("indicators", {})
+        crossover = indicators_res.get("crossover_signal", {})
+
+        sma_signal = crossover.get("status", "NEUTRAL")
+        rsi_val = indicators.get("rsi_14")
+        bb_status = indicators.get("bollinger_bands", {}).get("status", "WITHIN_BANDS")
+        sharpe_ratio = volatility_res.get("sharpe_ratio")
+
+        sma_score = 50.0
+        if sma_signal == "BULLISH_GOLDEN_CROSS":
+            sma_score = 100.0
+        elif sma_signal == "BULLISH_SHORT_CROSS":
+            sma_score = 75.0
+        elif sma_signal == "NEUTRAL":
+            sma_score = 50.0
+        elif sma_signal == "BEARISH_SHORT_CROSS":
+            sma_score = 25.0
+        elif sma_signal == "BEARISH_DEATH_CROSS":
+            sma_score = 0.0
+
+        rsi_score = 50.0
+        if rsi_val is not None:
+            if rsi_val <= 30.0:
+                rsi_score = 90.0
+            elif 30.0 < rsi_val <= 50.0:
+                rsi_score = 50.0
+            elif 50.0 < rsi_val < 70.0:
+                rsi_score = 70.0
+            elif rsi_val >= 70.0:
+                rsi_score = 10.0
+
+        bb_score = 50.0
+        if bb_status == "BELOW_LOWER":
+            bb_score = 90.0
+        elif bb_status == "WITHIN_BANDS":
+            bb_score = 50.0
+        elif bb_status == "ABOVE_UPPER":
+            bb_score = 10.0
+
+        sharpe_score = 50.0
+        if sharpe_ratio is not None:
+            if sharpe_ratio >= 2.0:
+                sharpe_score = 100.0
+            elif sharpe_ratio >= 1.0:
+                sharpe_score = 75.0
+            elif sharpe_ratio >= 0.0:
+                sharpe_score = 50.0
+            else:
+                sharpe_score = 10.0
+
+        composite_score = (
+            0.30 * sma_score +
+            0.25 * rsi_score +
+            0.25 * bb_score +
+            0.20 * sharpe_score
+        )
+
+        composite_score = round(composite_score, 2)
+
+        if composite_score >= 75.0:
+            recommendation = "STRONG_BUY"
+        elif composite_score >= 60.0:
+            recommendation = "BUY"
+        elif composite_score >= 40.0:
+            recommendation = "NEUTRAL"
+        elif composite_score >= 25.0:
+            recommendation = "SELL"
+        else:
+            recommendation = "STRONG_SELL"
+
+        return {
+            "symbol": symbol_upper,
+            "calculated_at": indicators_res.get("calculated_at"),
+            "data_points_analyzed": indicators_res.get("data_points_analyzed", 0),
+            "composite_score": composite_score,
+            "recommendation": recommendation,
+            "components": {
+                "sma_crossover": {
+                    "signal": sma_signal,
+                    "score": round(sma_score, 1),
+                    "weight": 0.30,
+                },
+                "rsi_14": {
+                    "val": rsi_val,
+                    "status": indicators.get("rsi_status", "NEUTRAL"),
+                    "score": round(rsi_score, 1),
+                    "weight": 0.25,
+                },
+                "bollinger_bands": {
+                    "status": bb_status,
+                    "score": round(bb_score, 1),
+                    "weight": 0.25,
+                },
+                "sharpe_ratio": {
+                    "val": sharpe_ratio,
+                    "rating": volatility_res.get("sharpe_rating", "SUBPAR"),
+                    "score": round(sharpe_score, 1),
+                    "weight": 0.20,
+                }
+            }
+        }
+
+
+

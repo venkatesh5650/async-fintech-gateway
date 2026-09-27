@@ -41,14 +41,14 @@ export async function POST(request: Request, context: Context) {
           : errorData.detail;
       }
 
-      if (response.status === 401 || response.status === 403) {
-        cookieStore.delete("session_token");
-      }
-
-      return NextResponse.json(
+      const res = NextResponse.json(
         { error: errorMessage },
-        { status: response.status },
+        { status: response.status }
       );
+      if (response.status === 401 || response.status === 403) {
+        res.cookies.delete("session_token");
+      }
+      return res;
     }
 
     const data = await response.json();
@@ -99,14 +99,14 @@ export async function GET(request: Request, context: Context) {
           : errorData.detail;
       }
 
-      if (response.status === 401 || response.status === 403) {
-        cookieStore.delete("session_token");
-      }
-
-      return NextResponse.json(
+      const res = NextResponse.json(
         { error: errorMessage },
-        { status: response.status },
+        { status: response.status }
       );
+      if (response.status === 401 || response.status === 403) {
+        res.cookies.delete("session_token");
+      }
+      return res;
     }
 
     const data = await response.json();

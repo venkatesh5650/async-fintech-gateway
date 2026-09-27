@@ -4,6 +4,8 @@ from fastapi import HTTPException, Request, status
 import os
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+if "redis://redis:" in REDIS_URL and not os.path.exists("/.dockerenv"):
+    REDIS_URL = REDIS_URL.replace("redis://redis:", "redis://localhost:")
 limiter_redis = redis.from_url(REDIS_URL, decode_responses=True)
 
 class RateLimiter:

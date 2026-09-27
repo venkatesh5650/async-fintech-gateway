@@ -2,13 +2,18 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
+import { AnalyticsSummaryCard } from "@/components/AnalyticsSummaryCard";
+import { TechnicalIndicatorPanel } from "@/components/TechnicalIndicatorPanel";
+import { VolatilityMetricsCard } from "@/components/VolatilityMetricsCard";
+import { CorrelationHeatmap } from "@/components/CorrelationHeatmap";
+import { CompositeSignalMeter } from "@/components/CompositeSignalMeter";
 import IntelligenceCard from "@/components/IntelligenceCard";
 import LogoutButton from "@/components/LogoutButton";
 import ActionTriggers from "@/components/ActionTriggers";
 import BatchCommandCenter from "@/components/BatchCommandCenter";
 import TraceWaterfallModal from "@/components/TraceWaterfallModal";
 import OperationsConsole, { OpsTab } from "@/components/OperationsConsole";
-import MarketChart from "@/components/MarketChart";
+import MarketChart, { Timeframe } from "@/components/MarketChart";
 import useWebSocket from "@/hooks/useWebSocket";
 import { BatchAssetStatus, BatchJobAcceptedResponse } from "@/types/api";
 
@@ -33,6 +38,7 @@ export default function DynamicDashboardPage() {
   const [traceId, setTraceId] = useState<string | undefined>(undefined);
   const [activeOpsTab, setActiveOpsTab] = useState<OpsTab>("registry");
   const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
+  const [timeframe, setTimeframe] = useState<Timeframe>("5m");
 
   const handleCloseTraceModal = useCallback(() => {
     setSelectedTraceId(null);
@@ -59,24 +65,26 @@ export default function DynamicDashboardPage() {
   useEffect(() => { batchAssetsRef.current = batchAssets; }, [batchAssets]);
 
   // Fetch historical price points
-  const fetchHistory = useCallback(async () => {
+  const fetchHistory = useCallback(async (tf: Timeframe = timeframe) => {
     if (!ticker) return;
     try {
-      const res = await fetch(`/api/market-data/${ticker}`);
+      const res = await fetch(`/api/market-data/${ticker}?interval=${tf}`);
       if (res.ok) {
         const history = await res.json();
         setChartData(history);
       } else {
         const errPayload = await res.json().catch(() => ({}));
         console.error("Failed to fetch historical market data:", res.status, errPayload);
-        if (res.status === 401 || res.status === 403) {
-          setError("SESSION_EXPIRED");
-        }
       }
     } catch (err) {
       console.error("Error fetching historical market data:", err);
     }
-  }, [ticker]);
+  }, [ticker, timeframe]);
+
+  const handleTimeframeChange = (tf: Timeframe) => {
+    setTimeframe(tf);
+    fetchHistory(tf);
+  };
 
   // Cache-Aside intelligence fetching state
   const [isCacheRefreshing, setIsCacheRefreshing] = useState(false);
@@ -732,7 +740,12 @@ export default function DynamicDashboardPage() {
 
           {/* Show chart immediately if we have data, even when AI is reasoning */}
           {ticker && chartData.length > 0 && (
-            <MarketChart ticker={ticker} data={chartData} />
+            <MarketChart
+              ticker={ticker}
+              data={chartData}
+              selectedTimeframe={timeframe}
+              onTimeframeChange={handleTimeframeChange}
+            />
           )}
 
           <div className="p-4 sm:p-8 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl flex flex-col items-center justify-center space-y-4 font-mono text-center">
@@ -812,8 +825,33 @@ export default function DynamicDashboardPage() {
             </div>
           </h1>
 
+          {/* Composite Quantitative Technical Signal Fusion Gauge */}
+          {ticker && <CompositeSignalMeter ticker={ticker} />}
+
+          {/* Quantitative Technical Indicators Summary */}
+          {ticker && (
+            <AnalyticsSummaryCard
+              ticker={ticker}
+              onSelectTrace={(tId) => setSelectedTraceId(tId)}
+            />
+          )}
+
+          {/* Technical Oscillators — RSI & Bollinger Bands */}
+          {ticker && <TechnicalIndicatorPanel ticker={ticker} />}
+
+          {/* Risk & Volatility Profile — 30D Rolling Volatility, Sharpe & Max Drawdown */}
+          {ticker && <VolatilityMetricsCard ticker={ticker} />}
+
+          {/* Cross-Ticker Pairwise Correlation Matrix */}
+          {ticker && <CorrelationHeatmap activeTicker={ticker} />}
+
           {/* Candlestick Chart Visualization */}
-          {ticker && <MarketChart ticker={ticker} data={chartData} />}
+          {ticker && <MarketChart
+              ticker={ticker}
+              data={chartData}
+              selectedTimeframe={timeframe}
+              onTimeframeChange={handleTimeframeChange}
+            />}
 
           <IntelligenceCard
             data={jobState.result}
@@ -886,10 +924,31 @@ export default function DynamicDashboardPage() {
   // --------------------------------------------------
   return (
     <div className="px-3.5 py-4 sm:p-6 md:p-10 min-h-screen bg-black font-mono">
-      <div className="text-red-500 mb-6 text-center text-lg sm:text-xl">
-        Job failed or timed out. Please try again.
-      </div>
       <div className="max-w-4xl mx-auto space-y-6">
+        <h1 className="text-2xl sm:text-3xl font-bold text-white border-b border-gray-800 pb-3 font-mono flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <span>{ticker || "Asset"} AI Analysis</span>
+          <LogoutButton />
+        </h1>
+
+        {/* Always display MarketChart even if background AI job fails or times out */}
+        {ticker && (
+          <MarketChart
+            ticker={ticker}
+            data={chartData}
+            selectedTimeframe={timeframe}
+            onTimeframeChange={handleTimeframeChange}
+          />
+        )}
+
+        <div className="p-4 bg-red-950/40 border border-red-500/40 rounded-xl text-center space-y-2">
+          <div className="text-red-400 font-bold text-base">
+            ⚠️ Background AI Worker Analysis Timeout or Error
+          </div>
+          <p className="text-gray-400 text-xs">
+            The multi-agent reasoning graph encountered a timeout or rate-limit. Your live market chart remains active above. You can retry the AI analysis below.
+          </p>
+        </div>
+
         {ticker && (
           <ActionTriggers
             ticker={ticker}

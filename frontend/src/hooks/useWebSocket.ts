@@ -19,7 +19,7 @@ export default function useWebSocket({
   const onMessageRef = useRef(onMessage);
   const onSequenceGapRef = useRef(onSequenceGap);
   const retryCount = useRef(0);
-  const MAX_RETRIES = 3;
+  const MAX_RETRIES = 10; // Resilient 10-attempt reconnection limit
 
   const lastSequenceNumber = useRef<number>(0);
   const [reconnectTrigger, setReconnectTrigger] = useState(0);
@@ -56,15 +56,16 @@ export default function useWebSocket({
     ws.onopen = () => {
       if (cancelled) return;
       setIsConnected(true);
+      setIsExhausted(false);
       retryCount.current = 0;
-      lastSequenceNumber.current = 0; // Reset sequence tracking for fresh session
+      lastSequenceNumber.current = 0;
       console.log(`[WS] Secure handshake established for Job ID: ${jobId}`);
 
       pingInterval = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: "ping", timestamp: Date.now() }));
         }
-      }, 30000);
+      }, 25000);
     };
 
     ws.onmessage = (event) => {
@@ -78,11 +79,8 @@ export default function useWebSocket({
         if (typeof seq === "number") {
           const expectedSeq = lastSequenceNumber.current + 1;
           if (seq < expectedSeq) {
-            console.warn(
-              `[WS] Stale/out-of-order packet discarded. Expected >= ${expectedSeq}, got ${seq}.`
-            );
             return;
-          } else if (seq > expectedSeq) {
+          } else if (seq > expectedSeq && lastSequenceNumber.current > 0) {
             console.error(
               `[WS] Sequence gap detected! Expected ${expectedSeq}, got ${seq}. Triggering recovery.`
             );
@@ -99,7 +97,6 @@ export default function useWebSocket({
             ...parsedData.result,
             network_latency_ms: networkLatency,
           };
-          console.log(`[WS] Payload delivered in ${networkLatency}ms`);
         }
 
         onMessageRef.current(parsedData);
@@ -124,32 +121,31 @@ export default function useWebSocket({
       setIsConnected(false);
 
       if (retryCount.current >= MAX_RETRIES) {
-        console.error("[WS] CIRCUIT BREAKER TRIPPED");
+        console.error("[WS] CIRCUIT BREAKER TRIPPED after maximum retries");
         setIsExhausted(true);
         return;
       }
 
       retryCount.current += 1;
+      // Exponential backoff with ceiling at 8s
+      const backoffDelay = Math.min(8000, 1500 * Math.pow(1.5, retryCount.current));
       console.warn(
-        `[WS] Connection dropped. Attempt ${retryCount.current}/${MAX_RETRIES} in 3s...`
+        `[WS] Connection dropped. Attempt ${retryCount.current}/${MAX_RETRIES} in ${Math.round(backoffDelay / 1000)}s...`
       );
-      
+
       reconnectTimeout = setTimeout(() => {
         if (!cancelled) {
           setReconnectTrigger((prev) => prev + 1);
         }
-      }, 3000);
+      }, backoffDelay);
     };
 
-    // Cleanup only runs on real unmount, jobId change, or reconnectTrigger
     return () => {
       cancelled = true;
-      console.log("[WS] CLEANUP – closing socket for", jobId);
-
       if (pingInterval) clearInterval(pingInterval);
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
 
-      ws.onclose = null; // prevent the onclose handler from running
+      ws.onclose = null;
       if (
         ws.readyState === WebSocket.OPEN ||
         ws.readyState === WebSocket.CONNECTING
@@ -158,7 +154,7 @@ export default function useWebSocket({
       }
       socketRef.current = null;
     };
-  }, [jobId, reconnectTrigger]); // Re-run effect to reconnect when trigger increments
+  }, [jobId, reconnectTrigger]);
 
   return { isConnected, isExhausted };
 }

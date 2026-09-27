@@ -39,14 +39,14 @@ export async function POST(request: Request) {
         errorMessage = "Data Firewall Violation: Invalid or malformed ticker array.";
       }
 
-      if (response.status === 401 || response.status === 403) {
-        cookieStore.delete("session_token");
-      }
-
-      return NextResponse.json(
+      const res = NextResponse.json(
         { error: errorMessage, details: errorData.details || undefined },
         { status: response.status }
       );
+      if (response.status === 401 || response.status === 403) {
+        res.cookies.delete("session_token");
+      }
+      return res;
     }
 
     const data = await response.json();

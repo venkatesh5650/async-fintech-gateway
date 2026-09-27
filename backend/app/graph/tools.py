@@ -1,8 +1,11 @@
 import os
 import json
+import logging
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 from sqlalchemy import select, text
+
+logger = logging.getLogger(__name__)
 
 # Direct database session factory initialization
 from app.database.database import AsyncSessionLocal
@@ -21,7 +24,7 @@ async def get_historical_prices(ticker: str, days_back: int) -> str:
     Fetches the actual historical pricing data from the PostgreSQL time-series database.
     Use this tool whenever you need to evaluate the moving averages or momentum of an asset.
     """
-    print(f"\n[TOOL EXECUTING] 🛠️ Agent querying PostgreSQL for {ticker} (Last {days_back} days)")
+    logger.info(f"[TOOL EXECUTING] Agent querying PostgreSQL for {ticker} (Last {days_back} days)")
     
     async with AsyncSessionLocal() as session:
         try:
@@ -71,7 +74,7 @@ async def get_market_sentiment(ticker: str) -> str:
     Fetches alternative fundamental and news sentiment data for a ticker from the live database.
     Use this tool ONLY if the historical price data is inconclusive or you need institutional context.
     """
-    print(f"\n[TOOL EXECUTING] 🛠️ Agent querying LIVE PostgreSQL sentiment for {ticker}...")
+    logger.info(f"[TOOL EXECUTING] Agent querying LIVE PostgreSQL sentiment for {ticker}...")
     
     async with AsyncSessionLocal() as session:
         try:

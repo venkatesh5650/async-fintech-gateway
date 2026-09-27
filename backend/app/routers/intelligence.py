@@ -87,7 +87,11 @@ async def verify_m2m_or_user(
     )
 
 # Asynchronous Redis connection pool and perimeter rate limiter
-REDIS_URL = os.getenv("REDIS_URL", "redis://fintech_redis:6379/0")
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+if "redis://redis:" in REDIS_URL and not os.path.exists("/.dockerenv"):
+    REDIS_URL = REDIS_URL.replace("redis://redis:", "redis://localhost:")
+elif "redis://fintech_redis:" in REDIS_URL:
+    REDIS_URL = REDIS_URL.replace("redis://fintech_redis:", "redis://localhost:" if not os.path.exists("/.dockerenv") else "redis://redis:")
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 limiter = RateLimiter(requests_per_minute=5)
 
@@ -366,13 +370,12 @@ async def get_job_status(job_id: str):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job ID not found or expired.")
     
     job_data = json.loads(cached_data)
-    if job_data["status"] == "failed":
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Engine Failed: {job_data.get('error')}")
-        
     return JobStatusResponse(
         job_id=job_id,
         status=job_data["status"],
-        result=job_data.get("result")
+        result=job_data.get("result"),
+        error=job_data.get("error"),
+        trace_id=job_data.get("trace_id")
     )
 
 
