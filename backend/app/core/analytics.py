@@ -545,6 +545,33 @@ class QuantitativeAnalyticsEngine:
         else:
             recommendation = "STRONG_SELL"
 
+        try:
+            ver_res = await session.execute(
+                text("SELECT COALESCE(MAX(version), 0) + 1 FROM signal_snapshots WHERE ticker = :sym"),
+                {"sym": symbol_upper}
+            )
+            next_ver = ver_res.scalar() or 1
+
+            await session.execute(
+                text("""
+                    INSERT INTO signal_snapshots 
+                    (ticker, composite_score, recommendation, rsi_14, volatility_30d_pct, sharpe_ratio, version)
+                    VALUES (:ticker, :score, :rec, :rsi, :vol, :sharpe, :ver);
+                """),
+                {
+                    "ticker": symbol_upper,
+                    "score": composite_score,
+                    "rec": recommendation,
+                    "rsi": rsi_val,
+                    "vol": volatility_res.get("volatility_30d_pct"),
+                    "sharpe": sharpe_ratio,
+                    "ver": next_ver
+                }
+            )
+            await session.commit()
+        except Exception:
+            await session.rollback()
+
         return {
             "symbol": symbol_upper,
             "calculated_at": indicators_res.get("calculated_at"),
@@ -574,6 +601,106 @@ class QuantitativeAnalyticsEngine:
                     "score": round(sharpe_score, 1),
                     "weight": 0.20,
                 }
+            }
+        }
+
+    @staticmethod
+    async def get_snapshots(session: AsyncSession, symbol: str, limit: int = 10) -> Dict[str, Any]:
+        symbol_upper = symbol.upper()
+        res = await session.execute(
+            text("""
+                SELECT version, timestamp, composite_score, recommendation, rsi_14, volatility_30d_pct, sharpe_ratio
+                FROM signal_snapshots
+                WHERE ticker = :sym
+                ORDER BY version DESC LIMIT :limit;
+            """),
+            {"sym": symbol_upper, "limit": limit}
+        )
+        rows = res.fetchall()
+        snapshots = []
+        for r in rows:
+            snapshots.append({
+                "version": r[0],
+                "timestamp": r[1].isoformat() if r[1] else None,
+                "composite_score": safe_float(r[2]),
+                "recommendation": r[3],
+                "rsi_14": safe_float(r[4]),
+                "volatility_30d_pct": safe_float(r[5]),
+                "sharpe_ratio": safe_float(r[6]),
+            })
+        return {
+            "symbol": symbol_upper,
+            "total_snapshots": len(snapshots),
+            "snapshots": snapshots
+        }
+
+    @staticmethod
+    async def get_snapshot_diff(session: AsyncSession, symbol: str) -> Dict[str, Any]:
+        symbol_upper = symbol.upper()
+        res = await session.execute(
+            text("""
+                SELECT version, timestamp, composite_score, recommendation, rsi_14, volatility_30d_pct, sharpe_ratio
+                FROM signal_snapshots
+                WHERE ticker = :sym
+                ORDER BY version DESC LIMIT 2;
+            """),
+            {"sym": symbol_upper}
+        )
+        rows = res.fetchall()
+        if not rows:
+            return {
+                "symbol": symbol_upper,
+                "has_diff": False,
+                "message": "No snapshots recorded yet for this ticker."
+            }
+        
+        current = rows[0]
+        previous = rows[1] if len(rows) > 1 else rows[0]
+        
+        c_score = safe_float(current[2]) or 0.0
+        p_score = safe_float(previous[2]) or 0.0
+        score_diff = round(c_score - p_score, 2)
+        
+        c_rsi = safe_float(current[4]) or 0.0
+        p_rsi = safe_float(previous[4]) or 0.0
+        rsi_diff = round(c_rsi - p_rsi, 2)
+        
+        c_vol = safe_float(current[5]) or 0.0
+        p_vol = safe_float(previous[5]) or 0.0
+        vol_diff = round(c_vol - p_vol, 2)
+        
+        rec_changed = (current[3] != previous[3])
+        
+        return {
+            "symbol": symbol_upper,
+            "has_diff": len(rows) > 1,
+            "current_version": current[0],
+            "previous_version": previous[0],
+            "current_snapshot": {
+                "version": current[0],
+                "timestamp": current[1].isoformat() if current[1] else None,
+                "composite_score": c_score,
+                "recommendation": current[3],
+                "rsi_14": c_rsi,
+                "volatility_30d_pct": c_vol,
+                "sharpe_ratio": safe_float(current[6])
+            },
+            "previous_snapshot": {
+                "version": previous[0],
+                "timestamp": previous[1].isoformat() if previous[1] else None,
+                "composite_score": p_score,
+                "recommendation": previous[3],
+                "rsi_14": p_rsi,
+                "volatility_30d_pct": p_vol,
+                "sharpe_ratio": safe_float(previous[6])
+            },
+            "deltas": {
+                "composite_score_delta": score_diff,
+                "rsi_14_delta": rsi_diff,
+                "volatility_delta": vol_diff,
+                "recommendation_changed": rec_changed,
+                "recommendation_from": previous[3],
+                "recommendation_to": current[3]
             }
         }
 

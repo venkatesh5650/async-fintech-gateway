@@ -108,6 +108,37 @@ async def get_sector_rotation_analytics(
     return sector_data
 
 
+@router.get("/snapshots/diff/{ticker}")
+async def get_signal_snapshot_diff(
+    ticker: str,
+    session: AsyncSession = Depends(get_db),
+    auth_verified: dict = Security(verify_m2m_or_user)
+):
+    """
+    Compares the latest two quantitative signal snapshots for a ticker and returns exact metric deltas.
+    """
+    trace_id = generate_trace_id()
+    diff_data = await QuantitativeAnalyticsEngine.get_snapshot_diff(session=session, symbol=ticker)
+    diff_data["trace_id"] = trace_id
+    return diff_data
+
+
+@router.get("/snapshots/{ticker}")
+async def get_signal_snapshots_history(
+    ticker: str,
+    limit: int = 10,
+    session: AsyncSession = Depends(get_db),
+    auth_verified: dict = Security(verify_m2m_or_user)
+):
+    """
+    Returns historical versioned signal snapshots recorded for a specified equity ticker.
+    """
+    trace_id = generate_trace_id()
+    snapshots_data = await QuantitativeAnalyticsEngine.get_snapshots(session=session, symbol=ticker, limit=limit)
+    snapshots_data["trace_id"] = trace_id
+    return snapshots_data
+
+
 @router.get("/volatility/{ticker}", response_model=VolatilityMetricsResponse)
 async def get_ticker_volatility(
     ticker: str,

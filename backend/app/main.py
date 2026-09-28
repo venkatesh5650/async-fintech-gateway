@@ -110,7 +110,20 @@ async def lifespan(app: FastAPI):
     """
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    logging.warning("✅ [DATABASE INIT] Verified/Created all PostgreSQL tables in the cloud.")
+        await conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS signal_snapshots (
+                id SERIAL PRIMARY KEY,
+                ticker VARCHAR(10) NOT NULL,
+                timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                composite_score NUMERIC(5,2),
+                recommendation VARCHAR(20),
+                rsi_14 NUMERIC(5,2),
+                volatility_30d_pct NUMERIC(5,2),
+                sharpe_ratio NUMERIC(5,2),
+                version INTEGER DEFAULT 1
+            );
+        """))
+    logging.warning("✅ [DATABASE INIT] Verified/Created all PostgreSQL tables and signal_snapshots schema.")
 
     # Automatic User Seeding
     try:
