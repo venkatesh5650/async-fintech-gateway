@@ -1,6 +1,7 @@
 import React from "react";
 import CacheStatusBadge from "./CacheStatusBadge";
 import StampedeGuardBadge from "./StampedeGuardBadge";
+import AgentSignalDebugger from "./AgentSignalDebugger";
 
 // This interface must match your FastAPI backend's Pydantic response schema
 export interface IntelligenceData {
@@ -18,6 +19,8 @@ export interface IntelligenceData {
   total_request_latency_ms?: number;
   mutex_contention?: boolean;
   lock_wait_ms?: number;
+  quant_context_injected?: boolean;
+  quant_context?: Record<string, any>;
   [key: string]: any;
 }
 
@@ -125,6 +128,14 @@ export default function IntelligenceCard({
               JSON.stringify(data, null, 2)}
           </p>
         </div>
+
+        {/* Quant Context Injector Debugger */}
+        <AgentSignalDebugger
+          quantContextInjected={data.quant_context_injected}
+          quantContext={data.quant_context}
+          llmSignal={data.signal}
+          llmReport={data.analysis_report || data.reasoning}
+        />
       </div>
     </div>
   );

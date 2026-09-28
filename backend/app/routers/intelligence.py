@@ -122,6 +122,8 @@ async def run_intelligence_worker(
         # Invoke asynchronous multi-agent graph execution
         final_state = await intelligence_graph.ainvoke(initial_state)
         report = final_state.get("analysis_report", "ERROR: No report generated.")
+        quant_context = final_state.get("quant_context", {})
+        quant_context_injected = final_state.get("quant_context_injected", False)
        
         # Parse alpha signals deterministically from agent output
         report_upper = report.upper()
@@ -152,7 +154,9 @@ async def run_intelligence_worker(
                 "ticker": ticker.upper(),
                 "signal": extracted_signal,
                 "analysis_report": report,
-                "execution_time_ms": round(execution_time, 2)
+                "execution_time_ms": round(execution_time, 2),
+                "quant_context_injected": quant_context_injected,
+                "quant_context": quant_context,
             }
         }
         # Cache completed state in Redis with a 3600-second expiration TTL
