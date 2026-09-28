@@ -93,6 +93,21 @@ async def get_correlation_matrix(
     return correlation_data
 
 
+@router.get("/sectors")
+async def get_sector_rotation_analytics(
+    days: int = 30,
+    session: AsyncSession = Depends(get_db),
+    auth_verified: dict = Security(verify_m2m_or_user)
+):
+    """
+    Computes cross-asset sector performance averages, technical composite momentum, and rotation signals.
+    """
+    trace_id = generate_trace_id()
+    sector_data = await QuantitativeAnalyticsEngine.compute_sector_rotation(session=session, days=days)
+    sector_data["trace_id"] = trace_id
+    return sector_data
+
+
 @router.get("/volatility/{ticker}", response_model=VolatilityMetricsResponse)
 async def get_ticker_volatility(
     ticker: str,

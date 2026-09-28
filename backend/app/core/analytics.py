@@ -741,5 +741,77 @@ class QuantitativeAnalyticsEngine:
             "equity_curve": equity_curve
         }
 
+    SECTOR_MAP = {
+        "Technology": ["AAPL", "MSFT", "NVDA", "AMD", "INTC"],
+        "Consumer Discretionary": ["TSLA", "AMZN"],
+        "Communication Services": ["GOOGL", "META", "NFLX"]
+    }
+
+    @staticmethod
+    async def compute_sector_rotation(session: AsyncSession, days: int = 30) -> Dict[str, Any]:
+        sectors = []
+        for sector_name, symbols in QuantitativeAnalyticsEngine.SECTOR_MAP.items():
+            ticker_scores = []
+            sector_returns = []
+            top_ticker = None
+            top_return = -999.0
+
+            for sym in symbols:
+                comp = await QuantitativeAnalyticsEngine.compute_composite_signal(session, sym)
+                
+                res = await session.execute(text("""
+                    WITH raw_p AS (
+                        SELECT mp.close_price, DATE(mp.timestamp) as p_date
+                        FROM market_pricing mp JOIN tickers t ON mp.ticker_id = t.id
+                        WHERE t.symbol = :sym
+                        ORDER BY mp.timestamp DESC LIMIT :days
+                    )
+                    SELECT 
+                        (FIRST_VALUE(close_price) OVER (ORDER BY p_date DESC) - 
+                         LAST_VALUE(close_price) OVER (ORDER BY p_date DESC)) / 
+                         NULLIF(LAST_VALUE(close_price) OVER (ORDER BY p_date DESC), 0) * 100.0
+                    FROM raw_p LIMIT 1;
+                """), {"sym": sym, "days": days})
+                row = res.fetchone()
+                ret_pct = safe_float(row[0]) if row else 0.0
+                if ret_pct is None: ret_pct = 0.0
+
+                score = comp.get("composite_score", 50.0)
+                ticker_scores.append(score)
+                sector_returns.append(ret_pct)
+
+                if ret_pct > top_return:
+                    top_return = ret_pct
+                    top_ticker = sym
+
+            avg_score = round(sum(ticker_scores) / len(ticker_scores), 2) if ticker_scores else 50.0
+            avg_return = round(sum(sector_returns) / len(sector_returns), 2) if sector_returns else 0.0
+
+            rotation_status = "NEUTRAL"
+            if avg_score >= 65.0 and avg_return >= 2.0:
+                rotation_status = "OUTPERFORMING"
+            elif avg_score >= 55.0:
+                rotation_status = "INFLOW"
+            elif avg_score <= 35.0 or avg_return <= -2.0:
+                rotation_status = "UNDERPERFORMING"
+            else:
+                rotation_status = "OUTFLOW"
+
+            sectors.append({
+                "sector": sector_name,
+                "symbols": symbols,
+                "avg_composite_score": avg_score,
+                "avg_return_pct": avg_return,
+                "rotation_status": rotation_status,
+                "top_performing_symbol": top_ticker or symbols[0],
+                "top_symbol_return_pct": round(top_return, 2) if top_return != -999.0 else 0.0
+            })
+
+        return {
+            "days_analyzed": days,
+            "total_sectors": len(sectors),
+            "sectors": sectors
+        }
+
 
 
