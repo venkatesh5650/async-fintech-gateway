@@ -10,10 +10,10 @@ from decimal import Decimal
 
 from sqlalchemy import text, select, delete
 from app.database.database import engine, Base, AsyncSessionLocal
-from app.database.models import Ticker, MarketPricing
+from app.database.models import Ticker, MarketPricing, User, ComputedSignal, DocumentChunk
 from app.core.limiter import RateLimiter
 from app.core.telemetry import StructuredLoggingMiddleware  
-from app.routers import auth, intelligence, market, websocket, analytics
+from app.routers import auth, intelligence, market, websocket, analytics, documents
 
 import os
 import asyncio
@@ -108,6 +108,12 @@ async def lifespan(app: FastAPI):
     """
     Bootstraps persistent storage engines and Redis Streams consumer groups at boot.
     """
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+    except Exception as ext_err:
+        logging.warning(f"pgvector extension initialization deferred: {ext_err}")
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.execute(text("""
@@ -199,6 +205,7 @@ app.include_router(intelligence.router)
 app.include_router(market.router)
 app.include_router(websocket.router)
 app.include_router(analytics.router)
+app.include_router(documents.router)
 
 # Perimeter Defense: Rate Limiter Configuration
 limiter = RateLimiter(requests_per_minute=5)

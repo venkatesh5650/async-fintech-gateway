@@ -124,6 +124,9 @@ async def run_intelligence_worker(
         report = final_state.get("analysis_report", "ERROR: No report generated.")
         quant_context = final_state.get("quant_context", {})
         quant_context_injected = final_state.get("quant_context_injected", False)
+        rag_context = final_state.get("rag_context", [])
+        citations = final_state.get("citations", [])
+        rag_context_injected = final_state.get("rag_context_injected", False)
        
         # Parse alpha signals deterministically from agent output
         report_upper = report.upper()
@@ -157,6 +160,9 @@ async def run_intelligence_worker(
                 "execution_time_ms": round(execution_time, 2),
                 "quant_context_injected": quant_context_injected,
                 "quant_context": quant_context,
+                "rag_context_injected": rag_context_injected,
+                "rag_context": rag_context,
+                "citations": citations,
             }
         }
         # Cache completed state in Redis with a 3600-second expiration TTL
@@ -175,6 +181,8 @@ async def run_intelligence_worker(
             "job_id": job_id,
             "trace_id": trace_id or "",
             "source": "WRITE_THROUGH",
+            "quant_context_injected": quant_context_injected,
+            "quant_context": quant_context,
         }
         await cache_aside_manager.set_cached_result(
             ticker=ticker.upper(),
@@ -932,4 +940,43 @@ async def inspect_cache_ticker(
     Returns remaining TTL, byte memory size, priming origin, trace lineage, and payload preview.
     """
     data = await cache_aside_manager.inspect_ticker_cache(ticker)
-    return CacheInspectorResponse(**data)
+    return CacheInspectorResponse(**data)
+
+
+@router.get("/rag-context/{ticker}", status_code=status.HTTP_200_OK)
+async def get_ticker_rag_context(
+    request: Request,
+    ticker: str = Path(..., pattern="^[a-zA-Z]{1,5}$", description="US Equity Ticker Symbol"),
+):
+    from app.core.document_search import search_document_chunks
+    from app.core.telemetry import generate_trace_id
+
+    clean_ticker = ticker.upper().strip()
+    trace_id = getattr(request.state, "trace_id", None) or generate_trace_id()
+
+    hits = await search_document_chunks(
+        ticker=clean_ticker,
+        query="Risk Factors revenues gross margins guidance financial position",
+        top_k=3,
+        min_similarity=0.0,
+    )
+
+    citations = []
+    for hit in hits:
+        citations.append({
+            "citation_ref": f"[{hit['doc_type']} | {hit['source_file']} P.{hit['page_number']}]",
+            "doc_type": hit["doc_type"],
+            "source_file": hit["source_file"],
+            "page_number": hit["page_number"],
+            "similarity_score": hit["similarity_score"],
+            "excerpt": hit["content"],
+        })
+
+    return {
+        "ticker": clean_ticker,
+        "rag_injected": len(citations) > 0,
+        "total_citations": len(citations),
+        "citations": citations,
+        "rag_context": hits,
+        "trace_id": trace_id,
+    }

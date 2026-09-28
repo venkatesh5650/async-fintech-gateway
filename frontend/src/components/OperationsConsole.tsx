@@ -8,6 +8,10 @@ import CircuitBreakerPanel from "./CircuitBreakerPanel";
 import DistributedTraceExplorer from "./DistributedTraceExplorer";
 import CacheHealthMonitor from "./CacheHealthMonitor";
 import CacheInspectorPanel from "./CacheInspectorPanel";
+import DocumentUploadPanel from "./DocumentUploadPanel";
+import { DocumentSearchPanel } from "./DocumentSearchPanel";
+import { RAGContextViewer } from "./RAGContextViewer";
+import { DocumentLibraryPanel } from "./DocumentLibraryPanel";
 
 export type OpsTab =
   | "registry"
@@ -16,7 +20,11 @@ export type OpsTab =
   | "circuit"
   | "trace"
   | "cache"
-  | "inspector";
+  | "inspector"
+  | "documents"
+  | "library"
+  | "search"
+  | "rag";
 
 interface OperationsConsoleProps {
   activeOpsTab: OpsTab;
@@ -35,6 +43,10 @@ interface TabConfig {
 
 const OPS_TABS: TabConfig[] = [
   { id: "registry", label: "Live Job Registry", shortLabel: "Registry", icon: "📋" },
+  { id: "documents", label: "PDF Ingestion", shortLabel: "Docs", icon: "📑" },
+  { id: "library", label: "SEC EDGAR Library", shortLabel: "EDGAR", icon: "📚" },
+  { id: "search", label: "Semantic Search", shortLabel: "Search", icon: "🔎" },
+  { id: "rag", label: "RAG Citations", shortLabel: "RAG", icon: "🧬" },
   { id: "dlq", label: "DLQ Inspector", shortLabel: "DLQ", icon: "⚠️" },
   { id: "health", label: "Stream Health", shortLabel: "Stream", icon: "📡" },
   { id: "circuit", label: "Circuit Breaker", shortLabel: "Circuit", icon: "🛡️" },
@@ -92,6 +104,17 @@ export default function OperationsConsole({
       {/* Active Operational Telemetry View */}
       {activeOpsTab === "registry" ? (
         <JobAuditPanel onSelectTrace={onSelectTrace} />
+      ) : activeOpsTab === "documents" ? (
+        <DocumentUploadPanel initialTicker={ticker || "AAPL"} />
+      ) : activeOpsTab === "library" ? (
+        <DocumentLibraryPanel
+          onNavigateToSearch={() => setActiveOpsTab("search")}
+          onNavigateToRAG={() => setActiveOpsTab("rag")}
+        />
+      ) : activeOpsTab === "search" ? (
+        <DocumentSearchPanel initialTicker={ticker || "AAPL"} />
+      ) : activeOpsTab === "rag" ? (
+        <RAGContextViewer initialTicker={ticker || "AAPL"} />
       ) : activeOpsTab === "dlq" ? (
         <DLQInspectorPanel onSelectTrace={onSelectTrace} />
       ) : activeOpsTab === "health" ? (

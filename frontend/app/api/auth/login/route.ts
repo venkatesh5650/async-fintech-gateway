@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     formData.append('password', password);
 
     // Forward credentials to backend auth service
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const backendUrl = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || 'https://fintech-api-gateway-m2yl.onrender.com';
     
     const backendRes = await fetch(`${backendUrl}/v1/auth/token`, { 
       method: 'POST',
@@ -22,8 +22,20 @@ export async function POST(request: Request) {
     });
 
     if (!backendRes.ok) {
+      let errorMsg = 'Invalid credentials or unauthorized';
+      try {
+        const errorData = await backendRes.json();
+        if (typeof errorData.detail === 'string') {
+          errorMsg = errorData.detail;
+        } else if (Array.isArray(errorData.detail)) {
+          errorMsg = errorData.detail.map((e: any) => e.msg).join(', ');
+        }
+      } catch {
+        // Fall back to default error message if JSON parsing fails
+      }
+
       return NextResponse.json(
-        { error: 'Invalid credentials or unauthorized' },
+        { error: errorMsg },
         { status: backendRes.status }
       );
     }
@@ -46,11 +58,21 @@ export async function POST(request: Request) {
 
     return response;
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("BFF Authentication Error:", error);
+
+    const isNetworkError =
+      error?.code === 'ECONNREFUSED' ||
+      error?.cause?.code === 'ECONNREFUSED' ||
+      (error instanceof TypeError && error.message.includes('fetch failed'));
+
     return NextResponse.json(
-      { error: 'Internal Gateway Error' },
-      { status: 500 }
+      {
+        error: isNetworkError
+          ? 'Backend authentication service is unreachable. Ensure the backend FastAPI server is running.'
+          : 'Internal Gateway Error',
+      },
+      { status: isNetworkError ? 503 : 500 }
     );
   }
 }

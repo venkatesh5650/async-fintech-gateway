@@ -249,4 +249,73 @@ class CacheInspectorResponse(BaseModel):
     primed_at_iso: Optional[str] = Field(default=None, description="ISO timestamp when key was primed in Redis")
     raw_payload_preview: Optional[Dict[str, Any]] = Field(default=None, description="Structured preview of cached intelligence data")
     server_timestamp_ms: int = Field(..., description="Server wall-clock timestamp of inspection")
+
+
+# ==================================================
+# DOCUMENT INGESTION & RAG PIPELINE CONTRACTS
+# ==================================================
+
+class DocumentChunkItem(BaseModel):
+    chunk_id: str = Field(..., description="Unique deterministic identifier for the chunk")
+    chunk_index: int = Field(..., description="Sequential position index within the document")
+    ticker: str = Field(..., description="Target equity ticker symbol")
+    source_file: str = Field(..., description="Original PDF file name")
+    doc_type: str = Field(..., description="Filing type: 10-K, 10-Q, 8-K, RESEARCH")
+    page_number: int = Field(..., description="Primary page number in source document")
+    page_span: list[int] = Field(default_factory=list, description="List of source pages covered by this chunk")
+    content: str = Field(..., description="Extracted textual content of the chunk")
+    token_count: int = Field(..., description="Calculated token length")
+    char_count: int = Field(..., description="Character count")
+
+
+class DocumentIngestResponse(BaseModel):
+    document_id: str = Field(..., description="Unique generated document identifier")
+    ticker: str = Field(..., description="Target equity ticker symbol")
+    filename: str = Field(..., description="Uploaded document file name")
+    doc_type: str = Field(..., description="Classification of filing")
+    total_pages: int = Field(..., description="Total pages parsed from the PDF")
+    total_chunks: int = Field(..., description="Total sliding-window chunks generated")
+    total_tokens: int = Field(..., description="Sum of tokens across all chunks")
+    chunks_preview: list[DocumentChunkItem] = Field(..., description="Preview list of the first parsed chunks")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
+
+class EmbeddingJobResponse(BaseModel):
+    document_id: str = Field(..., description="Target document identifier")
+    ticker: str = Field(..., description="Target equity symbol")
+    chunks_embedded: int = Field(..., description="Count of successfully embedded chunks")
+    embedding_dim: int = Field(..., description="Vector dimensions (e.g., 1536)")
+    status: str = Field(default="COMPLETED", description="Vectorization pipeline status")
+    latency_ms: float = Field(..., description="Time elapsed during vector embedding generation")
+    trace_id: str = Field(..., description="Associated W3C trace ID")
+
+
+class EmbeddingProgressResponse(BaseModel):
+    document_id: str = Field(..., description="Target document identifier")
+    ticker: str = Field(..., description="Target equity ticker")
+    status: str = Field(..., description="Current status: PARSED | EMBEDDING | COMPLETED | FAILED")
+    total_chunks: int = Field(..., description="Total chunks in document")
+    embedded_chunks: int = Field(..., description="Number of embedded chunks stored in vector database")
+    percentage: float = Field(..., description="Completion percentage (0.0 - 100.0)")
+class DocumentSearchResultItem(BaseModel):
+    chunk_id: str = Field(..., description="Unique chunk primary key")
+    document_id: str = Field(..., description="Parent document identifier")
+    ticker: str = Field(..., description="Target equity ticker symbol")
+    source_file: str = Field(..., description="Source PDF filename")
+    doc_type: str = Field(..., description="Document type classification")
+    chunk_index: int = Field(..., description="Ordinal index of the chunk")
+    page_number: int = Field(..., description="Source page number")
+    content: str = Field(..., description="Textual passage content")
+    token_count: int = Field(..., description="Token count of chunk")
+    vector_similarity: float = Field(..., description="Cosine similarity score (0.0 to 1.0)")
+    lexical_overlap: float = Field(..., description="Keyword overlap fraction")
+    similarity_score: float = Field(..., description="Hybrid ranking score")
+
+
+class DocumentSearchResponse(BaseModel):
+    ticker: str = Field(..., description="Searched ticker symbol")
+    query: str = Field(..., description="Input search query string")
+    total_results: int = Field(..., description="Count of returned candidate matches")
+    results: list[DocumentSearchResultItem] = Field(..., description="Ranked list of chunk matches")
+    trace_id: str = Field(..., description="Distributed W3C trace ID")
 

@@ -283,7 +283,105 @@ export interface CorrelationMatrixResponse {
   trace_id: string;
 }
 
+export interface DocumentChunkItem {
+  chunk_id: string;
+  chunk_index: number;
+  ticker: string;
+  source_file: string;
+  doc_type: string;
+  page_number: number;
+  page_span: number[];
+  content: string;
+  token_count: number;
+  char_count: number;
+}
 
+export interface DocumentIngestResponse {
+  document_id: string;
+  ticker: string;
+  filename: string;
+  doc_type: string;
+  total_pages: number;
+  total_chunks: number;
+  total_tokens: number;
+  chunks_preview: DocumentChunkItem[];
+  trace_id: string;
+}
 
+export interface TickerDocumentMeta {
+  document_id: string;
+  ticker: string;
+  filename: string;
+  doc_type: string;
+  total_pages: number;
+  total_chunks: number;
+  total_tokens: number;
+  trace_id: string;
+}
+
+export interface TickerDocumentsResponse {
+  ticker: string;
+  total_documents: number;
+  documents: TickerDocumentMeta[];
+}
+export interface EmbeddingJobResponse {
+  document_id: string;
+  ticker: string;
+  chunks_embedded: number;
+  embedding_dim: number;
+  duration_ms: number;
+  status: string;
+}
+
+export interface EmbeddingProgressResponse {
+  document_id: string;
+  ticker: string;
+  total_chunks: number;
+  embedded_chunks: number;
+  percentage: number;
+  status: string;
+  embedding_dim: number;
+}
+
+export interface DocumentSearchResultItem {
+  chunk_id: string;
+  document_id: string;
+  ticker: string;
+  source_file: string;
+  doc_type: string;
+  chunk_index: number;
+  page_number: number;
+  content: string;
+  token_count: number;
+  vector_similarity: number;
+  lexical_overlap: number;
+  similarity_score: number;
+}
+
+export interface DocumentSearchResponse {
+  ticker: string;
+  query: string;
+  total_results: number;
+  results: DocumentSearchResultItem[];
+  trace_id: string;
+}
+
+export interface CitationItem {
+  citation_ref: string;
+  doc_type: string;
+  source_file: string;
+  page_number: number;
+  similarity_score: number;
+  excerpt: string;
+}
+
+export interface RAGContextResponse {
+  ticker: string;
+  rag_injected: boolean;
+  total_citations: number;
+  citations: CitationItem[];
+  rag_context: DocumentSearchResultItem[];
+  trace_id: string;
+}
 
 

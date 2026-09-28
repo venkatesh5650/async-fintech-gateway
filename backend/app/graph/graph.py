@@ -19,6 +19,9 @@ class AgentState(TypedDict):
     retry_count: int
     quant_context: dict
     quant_context_injected: bool
+    rag_context: list
+    citations: list
+    rag_context_injected: bool
 
 # Initialize Groq LLM with guaranteed model fallback chain
 PRIMARY_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-20b")
@@ -61,6 +64,33 @@ async def intelligence_node(state: AgentState):
     except Exception as q_err:
         logger.warning(f"⚠️ Could not compute quant context for {current_ticker}: {q_err}")
 
+    rag_context = []
+    citations = []
+    rag_injected = False
+    try:
+        from app.core.document_search import search_document_chunks
+        rag_hits = await search_document_chunks(
+            ticker=current_ticker,
+            query="Risk Factors revenues gross margins guidance financial position",
+            top_k=3,
+            min_similarity=0.0,
+        )
+        if rag_hits:
+            for hit in rag_hits:
+                citation_ref = f"[{hit['doc_type']} | {hit['source_file']} P.{hit['page_number']}]"
+                citations.append({
+                    "citation_ref": citation_ref,
+                    "doc_type": hit["doc_type"],
+                    "source_file": hit["source_file"],
+                    "page_number": hit["page_number"],
+                    "similarity_score": hit["similarity_score"],
+                    "excerpt": hit["content"][:240] + "..." if len(hit["content"]) > 240 else hit["content"],
+                })
+                rag_context.append(hit)
+            rag_injected = True
+    except Exception as r_err:
+        logger.warning(f"⚠️ Could not retrieve RAG context for {current_ticker}: {r_err}")
+
     quant_prompt_block = ""
     if quant_injected and quant_context:
         quant_prompt_block = f"""
@@ -72,10 +102,22 @@ async def intelligence_node(state: AgentState):
     Use these pre-computed indicators to validate or weigh your final alpha signal calculation.
 """
 
+    rag_prompt_block = ""
+    if rag_injected and citations:
+        rag_prompt_block = "\n    QUALITATIVE SEC FILING CONTEXT (GROUNDED RAG PASSAGES):\n"
+        for c in citations:
+            rag_prompt_block += f"    - {c['citation_ref']}: {c['excerpt']}\n"
+        rag_prompt_block += "    Incorporate relevant qualitative disclosures into your rationale, referencing the source citation.\n"
+
     system_prompt = SystemMessage(content=f"""You are an elite quantitative financial analyst evaluating {current_ticker}. 
 {quant_prompt_block}
+{rag_prompt_block}
     1. You MUST use your tools to fetch live market data from the PostgreSQL database for {current_ticker}.
-    2. PRIMARY STRATEGY: If current_price > fifty_day_sma, output "SIGNAL: BUY". Otherwise, output "SIGNAL: SELL".
+    2. PRIMARY STRATEGY: Synthesize both the pre-computed Quantitative Engine Analytics and live market data:
+       - When Composite Technical Score is Bullish (>= 60) AND current_price > fifty_day_sma, output "SIGNAL: BUY".
+       - When Composite Technical Score is Bearish (<= 40) OR current_price < fifty_day_sma with severe drawdown or high volatility (Sharpe < 0 or Drawdown > 40%), output "SIGNAL: SELL".
+       - If indicators conflict (e.g. oversold technical score but severe price breakdown below SMA and negative Sharpe), prioritize downside risk mitigation: output "SIGNAL: SELL" or "SIGNAL: HOLD", explaining the rationale in your report.
+       - Otherwise, output "SIGNAL: HOLD".
     3. FALLBACK STRATEGY: If price data is missing, check sentiment. If BULLISH, output "SIGNAL: BUY". If BEARISH, output "SIGNAL: SELL".
     4. REJECTION PROTOCOL: If the data is missing entirely, or you cannot make a mathematical decision, output "SIGNAL: INVALID".
     5. STRICT FORMATTING: You MUST end your report with exactly "SIGNAL: BUY", "SIGNAL: SELL", "SIGNAL: HOLD", or "SIGNAL: INVALID". DO NOT output conversational filler.""")
@@ -92,7 +134,10 @@ async def intelligence_node(state: AgentState):
     return {
         "messages": [response],
         "quant_context": quant_context,
-        "quant_context_injected": quant_injected
+        "quant_context_injected": quant_injected,
+        "rag_context": rag_context,
+        "citations": citations,
+        "rag_context_injected": rag_injected,
     }
 
 def reporting_node(state: AgentState):
@@ -102,7 +147,10 @@ def reporting_node(state: AgentState):
     return {
         "analysis_report": str(final_message),
         "quant_context": state.get("quant_context", {}),
-        "quant_context_injected": state.get("quant_context_injected", False)
+        "quant_context_injected": state.get("quant_context_injected", False),
+        "rag_context": state.get("rag_context", []),
+        "citations": state.get("citations", []),
+        "rag_context_injected": state.get("rag_context_injected", False),
     }
 
 def gatekeeper_node(state: AgentState):

@@ -40,15 +40,33 @@ export default function useWebSocket({
   }, [jobId]);
 
   useEffect(() => {
-    if (!jobId) return;
+    if (!jobId || jobId.startsWith("cache-")) return;
 
     let cancelled = false;
     let pingInterval: ReturnType<typeof setInterval> | null = null;
     let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
 
-    const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsHost = process.env.NEXT_PUBLIC_WS_HOST || "127.0.0.1:8000";
-    const wsUrl = `${wsProtocol}//${wsHost}/v1/ws/jobs/${jobId}`;
+    let rawHost = process.env.NEXT_PUBLIC_WS_HOST || "127.0.0.1:8000";
+    let isSecure = window.location.protocol === "https:";
+
+    if (rawHost.startsWith("wss://")) {
+      isSecure = true;
+      rawHost = rawHost.replace("wss://", "");
+    } else if (rawHost.startsWith("ws://")) {
+      isSecure = false;
+      rawHost = rawHost.replace("ws://", "");
+    } else if (
+      rawHost.includes("onrender.com") ||
+      rawHost.includes("render.com") ||
+      (process.env.NEXT_PUBLIC_API_URL && process.env.NEXT_PUBLIC_API_URL.startsWith("https://"))
+    ) {
+      // Production cloud deployments require secure WebSockets (WSS) even if UI runs on localhost:3000
+      isSecure = true;
+    }
+
+    const wsProtocol = isSecure ? "wss:" : "ws:";
+    const cleanHost = rawHost.replace(/\/+$/, "");
+    const wsUrl = `${wsProtocol}//${cleanHost}/v1/ws/jobs/${jobId}`;
 
     const ws = new WebSocket(wsUrl);
     socketRef.current = ws;
@@ -106,7 +124,9 @@ export default function useWebSocket({
     };
 
     ws.onerror = () => {
-      if (!cancelled) console.error("[WS] Transmission error detected.");
+      if (!cancelled) {
+        console.warn(`[WS] Transmission issue detected for ${wsUrl}. Fallback recovery engaged.`);
+      }
     };
 
     ws.onclose = (event) => {

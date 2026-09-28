@@ -1,8 +1,8 @@
 # ROADMAP STATE - 120-Day Automated Equity Research Engine
 
 ## 1. Project Context & Current Position
-* **Current Day:** Day 75 Complete (Phase 2 Milestone 3 - LOCKED & SEALED)
-* **Next Action:** Begin Day 76 — PDF Ingestion & Chunking (`document_parser.py` & `DocumentUploadPanel.tsx`)
+* **Current Day:** Day 80 Complete (Phase 2 Milestone 4: Document Ingestion & RAG - 100% COMPLETE & LOCKED)
+* **Next Action:** Begin Day 81 — Phase 2 Milestone 5: Stress Testing & Chaos Engineering (Locust)
 * **Target Role:** FinTech AI Automation Engineer / Systems Architect
 * **Core Philosophy:** We strictly follow the principles outlined in "The 1% Advantage: Engineering a Durable FinTech Career".
 * **AI Agent Directive:** Do not write black-box code or rewrite existing architecture. You are operating as a 1% Systems Architect. Read the completed days to understand the existing context, then execute strictly according to `canonical_roadmap.md` in `.agents/rules/`.
@@ -13,9 +13,9 @@
 Phase 1  (Days 1–60)   → Core Engine — LOCKED
 Phase 2  (Days 61–65)  → Redis Streams & Message Brokers — LOCKED
 Phase 2  (Days 66–70)  → Distributed Caching — LOCKED
-Phase 2  (Days 71–75)  → Quantitative Analytics (SMA, RSI, Bollinger) ← CURRENT
-Phase 2  (Days 76–80)  → Document Ingestion & RAG Pipelines (pgvector, 10-K/10-Q)
-Phase 2  (Days 81–85)  → Stress Testing & Chaos Engineering (Locust)
+Phase 2  (Days 71–75)  → Quantitative Analytics (SMA, RSI, Bollinger) — LOCKED
+Phase 2  (Days 76–80)  → Document Ingestion & RAG Pipelines (pgvector, 10-K/10-Q) — LOCKED
+Phase 2  (Days 81–85)  → Stress Testing & Chaos Engineering (Locust) ← CURRENT
 Phase 2  (Days 86–90)  → Production Dry Run & Capstone Polish
 Phase 3  (Days 91–100) → Live Cloud Orchestration (Render, Docker, Prometheus, Grafana)
 Phase 3  (Days 101–110)→ Build in Public (LangGraph Visualizer, Loom, Portfolio)
@@ -101,7 +101,54 @@ Phase 2 Milestone 1 certified and sealed. Zero regressions across all prior suit
 
 Phase 2 Milestone 3 (Days 71–75: Quantitative Analytics & Technical Indicators Engine) is 100% Complete, Certified, and Sealed.
 
-## 7. INVARIANT CONSTRAINTS — Never Violate
+## 7. Phase 2 Milestone 4 — Document Ingestion & RAG Pipelines (Days 76–80)
+
+* **Day 76:** PDF Document Ingestion, Recursive Sliding-Window Chunking & `DocumentUploadPanel`:
+  * Engineered `document_parser.py` (`app/core/document_parser.py`) implementing `pypdf` binary extraction, whitespace sanitization, and 512-token target sliding-window chunking with 50-token contiguous overlap.
+  * Extracted per-chunk structural metadata (`chunk_id`, `chunk_index`, `ticker`, `doc_type`, `source_file`, `page_number`, `page_span`, `token_count`, `char_count`).
+  * Mounted secured REST endpoint `POST /v1/documents/ingest` and catalog query `GET /v1/documents/{ticker}` in [`app/routers/documents.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/routers/documents.py) with W3C `trace_id` generation and Redis document caching (`doc:{id}:meta`, `doc:{id}:chunks`, `docs:ticker:{ticker}`).
+  * Added Pydantic schemas `DocumentChunkItem` and `DocumentIngestResponse` in [`app/database/schemas.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/database/schemas.py).
+  * Shipped Next.js 15 BFF proxy route [`frontend/app/api/documents/ingest/route.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/app/api/documents/ingest/route.ts) with zero-trust token propagation.
+  * Created [`DocumentUploadPanel.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/DocumentUploadPanel.tsx) with drag-and-drop dropzone, upload progress bar, chunk summary statistics, and interactive chunk preview accordion.
+  * Mounted `DocumentUploadPanel` as a dedicated operational tab in [`OperationsConsole.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/OperationsConsole.tsx).
+  * Executed automated audit suite (`audit_rag_engine.py`) with 100% pass rate (binary extraction fidelity, token bounds & overlap accuracy, metadata integrity, corrupt input error trapping, end-to-end HTTP multipart ingestion) with 0 regressions on Days 71–75 capstone analytics suite.
+* **Day 77:** pgvector Vector Storage Migration, Embeddings Engine & `EmbeddingProgressBar`:
+  * Created `DocumentChunk` ORM model mapped to `document_chunks` table with 1536-dimensional L2-normalized vector column and unique chunk index constraint (`uix_doc_chunk_index`).
+  * Engineered `embedder.py` (`app/core/embedder.py`) with batch vectorization (`generate_batch_embeddings`), L2 unit-norm normalization (`normalize_l2`), deterministic feature-hashed embeddings with semantic cosine sensitivity, and optional OpenAI `text-embedding-3-small` integration.
+  * Mounted secured endpoints `POST /v1/documents/{document_id}/embed` and `GET /v1/documents/{document_id}/progress` in [`app/routers/documents.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/routers/documents.py).
+  * Shipped Next.js 15 BFF proxy route [`frontend/app/api/documents/[documentId]/embed/route.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/app/api/documents/%5BdocumentId%5D/embed/route.ts) supporting both `POST` execution and `GET` progress polling with zero-trust token propagation.
+  * Created [`EmbeddingProgressBar.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/EmbeddingProgressBar.tsx) featuring a real-time vectorization meter, 1536-dim badge, interactive embed trigger, and latency telemetry, mounted into [`DocumentUploadPanel.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/DocumentUploadPanel.tsx).
+  * Executed automated audit suite (`audit_rag_engine.py`) with 100% pass rate (1536-dim L2 normalization, semantic cosine sensitivity, batch throughput, ORM schema compliance, HTTP vectorization & progress polling lifecycle).
+* **Day 78:** HNSW Index & Semantic Cosine Search Pipeline & `DocumentSearchPanel`:
+  * Engineered `document_search.py` (`app/core/document_search.py`) implementing hybrid semantic retrieval: 1536-dimensional L2 cosine similarity combined with lexical keyword overlap scoring (`0.85 * vector_sim + 0.15 * lexical_sim`).
+  * Enforced multi-tenant ticker scoping (`DocumentChunk.ticker == ticker`), top-k bounds (1–20), and minimum similarity threshold filtering.
+  * Mounted secured endpoint `GET /v1/documents/search` in [`app/routers/documents.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/routers/documents.py) with W3C `trace_id` generation.
+  * Added Pydantic schemas `DocumentSearchResultItem` and `DocumentSearchResponse` in [`app/database/schemas.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/database/schemas.py).
+  * Shipped Next.js 15 BFF proxy route [`frontend/app/api/documents/search/route.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/app/api/documents/search/route.ts).
+  * Created [`DocumentSearchPanel.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/DocumentSearchPanel.tsx) with preset query suggestions, Top-K slider, color-coded match badges, query term highlighting, and expandable passage drawer.
+  * Integrated `DocumentSearchPanel` into [`OperationsConsole.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/OperationsConsole.tsx) under the dedicated `🔎 Semantic Search` operational tab.
+  * Executed automated audit suite (`audit_rag_engine.py`) with 100% pass rate (query vectorization L2 invariance, target passage recall ranking, multi-tenant ticker isolation, top-k & min similarity thresholding, full HTTP endpoint contract validation).
+* **Day 79:** LangGraph Multi-Agent RAG Integration & Qualitative Signal Fusion:
+  * Extended `AgentState` with `rag_context`, `citations`, and `rag_context_injected` metadata containers.
+  * Injected dynamic semantic document retrieval into `intelligence_node` in [`app/graph/graph.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/graph/graph.py), automatically grounding reasoning on relevant 10-K/10-Q risk disclosures and operational metrics.
+  * Preserved strict quantitative determinism invariant (LLM never performs mathematical calculations; deterministic metrics remain calculated exclusively in PostgreSQL).
+  * Upgraded background consumer worker payload in [`app/routers/intelligence.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/routers/intelligence.py) to persist RAG context and canonical citations with 1-hour Redis TTL.
+  * Mounted secured inspection route `GET /v1/intelligence/rag-context/{ticker}` with W3C `trace_id` generation.
+  * Shipped Next.js 15 BFF proxy route [`frontend/app/api/intelligence/rag-context/[ticker]/route.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/app/api/intelligence/rag-context/%5Bticker%5D/route.ts).
+  * Created [`CitationPanel.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/CitationPanel.tsx) with canonical source references, match scores, and expandable passage readers.
+  * Created [`RAGContextViewer.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/RAGContextViewer.tsx) with state machine injection status indicator and mounted it into [`OperationsConsole.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/OperationsConsole.tsx) under the dedicated `🧬 RAG Citations` operational tab.
+  * Executed automated audit suite (`audit_rag_engine.py`) with 100% pass rate (AgentState contract schema verification, canonical citation formatting, degraded mode resilience for unseeded tickers, quantitative determinism invariant, full HTTP RAG context endpoint contract validation).
+* **Day 80:** Autonomous SEC EDGAR Ingestion Daemon & Phase 2 Milestone 4 Capstone Seal:
+  * Engineered `edgar_worker.py` (`app/workers/edgar_worker.py`) with autonomous polling loop, synthetic filing generation for tracked equities (AAPL, NVDA, TSLA, MSFT, GOOGL, AMD, META), automated sliding-window chunking, batch vectorization, and PostgreSQL `document_chunks` persistence.
+  * Mounted secured endpoint `POST /v1/documents/edgar/sync` in [`app/routers/documents.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/routers/documents.py) supporting selective single-ticker and full-fleet automated EDGAR synchronization.
+  * Shipped Next.js 15 BFF proxy route [`frontend/app/api/documents/edgar/sync/route.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/app/api/documents/edgar/sync/route.ts).
+  * Built [`DocumentLibraryPanel.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/DocumentLibraryPanel.tsx) with multi-ticker filter pills, autonomous daemon trigger button, indexed filing cards, and instant navigation to Semantic Search and RAG Citations.
+  * Integrated `DocumentLibraryPanel` into [`OperationsConsole.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/OperationsConsole.tsx) under the dedicated `📚 SEC EDGAR Library` operational tab.
+  * Executed Phase 2 Milestone 4 Capstone Audit suite (`audit_rag_engine.py`) with 100% pass rate (7/7 assertions: Day 76 PDF sliding-window chunker, Day 77 1536-dim L2 vector storage, Day 78 HNSW cosine semantic search, Day 79 LangGraph RAG context injection, Day 80 SEC EDGAR daemon ingestion, multi-tenant isolation, quantitative determinism invariant).
+
+Phase 2 Milestone 4 (Days 76–80: Document Ingestion & RAG Pipelines) is 100% Complete, Certified, and Locked.
+
+## 8. INVARIANT CONSTRAINTS — Never Violate
 
 * **Do not regress:** Zero-trust Pydantic perimeter, WebSocket sequence validation, adaptive concurrency control, distributed telemetry tracing.
 * **Protect the Event Loop:** Retain strict async I/O boundaries. No blocking calls in hot paths.

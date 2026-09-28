@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
-import AnalyticsSummaryCard from "@/components/AnalyticsSummaryCard";
-import VolatilityMetricsCard from "@/components/VolatilityMetricsCard";
-import CorrelationHeatmap from "@/components/CorrelationHeatmap";
+import { AnalyticsSummaryCard } from "@/components/AnalyticsSummaryCard";
+import { VolatilityMetricsCard } from "@/components/VolatilityMetricsCard";
+import { CorrelationHeatmap } from "@/components/CorrelationHeatmap";
 import BacktestResultsPanel from "@/components/BacktestResultsPanel";
 import SectorHeatmap from "@/components/SectorHeatmap";
 import SignalVersionDiff from "@/components/SignalVersionDiff";
@@ -109,13 +109,13 @@ export default function UnifiedAnalyticsWorkspacePage() {
       <div className="pt-2">
         {activeTab === "indicators" && (
           <div className="space-y-6">
-            <AnalyticsSummaryCard initialTicker={selectedTicker} />
+            <AnalyticsSummaryCard ticker={selectedTicker} />
           </div>
         )}
 
         {activeTab === "risk" && (
           <div className="space-y-6">
-            <VolatilityMetricsCard initialTicker={selectedTicker} />
+            <VolatilityMetricsCard ticker={selectedTicker} />
             <CorrelationHeatmap />
           </div>
         )}

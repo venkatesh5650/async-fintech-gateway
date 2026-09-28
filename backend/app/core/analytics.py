@@ -532,6 +532,14 @@ class QuantitativeAnalyticsEngine:
             0.20 * sharpe_score
         )
 
+        # Risk-adjustment guard: severe drawdown or extreme volatility with negative Sharpe
+        # penalizes false mean-reversion traps during an asset crash
+        max_dd = volatility_res.get("max_drawdown_pct")
+        if max_dd is not None and max_dd > 50.0 and (sharpe_ratio is None or sharpe_ratio < 0):
+            composite_score = min(composite_score, 45.0)  # Cap at NEUTRAL / CAUTION during freefall
+        elif max_dd is not None and max_dd > 35.0:
+            composite_score = max(0.0, composite_score - 15.0)
+
         composite_score = round(composite_score, 2)
 
         if composite_score >= 75.0:
