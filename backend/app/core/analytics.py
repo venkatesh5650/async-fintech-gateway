@@ -577,5 +577,169 @@ class QuantitativeAnalyticsEngine:
             }
         }
 
+    @staticmethod
+    async def run_backtest(
+        session: AsyncSession,
+        symbol: str,
+        initial_capital: float = 10000.0,
+        strategy: str = "SMA_CROSSOVER",
+        days: int = 90
+    ) -> Dict[str, Any]:
+        symbol_upper = symbol.upper()
+        query = text("""
+            WITH raw_pricing AS (
+                SELECT 
+                    mp.timestamp,
+                    mp.close_price,
+                    DATE(mp.timestamp) AS price_date
+                FROM market_pricing mp
+                JOIN tickers t ON mp.ticker_id = t.id
+                WHERE t.symbol = :symbol
+            ),
+            distinct_daily AS (
+                SELECT DISTINCT ON (price_date)
+                    price_date,
+                    timestamp,
+                    close_price
+                FROM raw_pricing
+                ORDER BY price_date DESC, timestamp DESC
+                LIMIT :days
+            )
+            SELECT timestamp, close_price FROM distinct_daily ORDER BY timestamp ASC;
+        """)
+        res = await session.execute(query, {"symbol": symbol_upper, "days": days})
+        rows = res.fetchall()
+
+        if not rows or len(rows) < 2:
+            return {
+                "symbol": symbol_upper,
+                "strategy": strategy,
+                "initial_capital": initial_capital,
+                "final_equity": initial_capital,
+                "strategy_return_pct": 0.0,
+                "benchmark_return_pct": 0.0,
+                "alpha_pct": 0.0,
+                "sharpe_ratio": 0.0,
+                "max_drawdown_pct": 0.0,
+                "total_trades": 0,
+                "winning_trades": 0,
+                "win_rate_pct": 0.0,
+                "equity_curve": []
+            }
+
+        prices = [safe_float(r[1]) or 0.0 for r in rows]
+        dates = [r[0].strftime("%Y-%m-%d") if hasattr(r[0], "strftime") else str(r[0])[:10] for r in rows]
+
+        sma10 = []
+        sma50 = []
+        for i in range(len(prices)):
+            sma10.append(sum(prices[max(0, i-9):i+1]) / min(i+1, 10))
+            sma50.append(sum(prices[max(0, i-49):i+1]) / min(i+1, 50))
+
+        cash = initial_capital
+        position = 0.0
+        trades = 0
+        winning_trades = 0
+        entry_price = 0.0
+
+        benchmark_shares = initial_capital / prices[0] if prices[0] > 0 else 0
+        equity_curve = []
+        peak_equity = initial_capital
+        max_drawdown = 0.0
+        daily_returns = []
+
+        for i in range(len(prices)):
+            price = prices[i]
+            date_str = dates[i]
+
+            signal_buy = False
+            signal_sell = False
+
+            if strategy == "SMA_CROSSOVER":
+                if sma10[i] > sma50[i]:
+                    signal_buy = True
+                elif sma10[i] < sma50[i]:
+                    signal_sell = True
+            elif strategy == "RSI_THRESHOLD":
+                if price > sma10[i]:
+                    signal_buy = True
+                else:
+                    signal_sell = True
+            else:
+                if sma10[i] >= sma50[i]:
+                    signal_buy = True
+                else:
+                    signal_sell = True
+
+            action = "HOLD"
+            if signal_buy and position == 0 and price > 0:
+                position = cash / price
+                cash = 0.0
+                entry_price = price
+                trades += 1
+                action = "BUY"
+            elif signal_sell and position > 0 and price > 0:
+                current_value = position * price
+                if price > entry_price:
+                    winning_trades += 1
+                cash = current_value
+                position = 0.0
+                trades += 1
+                action = "SELL"
+
+            current_equity = cash + (position * price)
+            benchmark_equity = benchmark_shares * price
+
+            if i > 0:
+                prev_eq = equity_curve[-1]["equity"]
+                if prev_eq > 0:
+                    ret = (current_equity - prev_eq) / prev_eq
+                    daily_returns.append(ret)
+
+            if current_equity > peak_equity:
+                peak_equity = current_equity
+            dd = ((peak_equity - current_equity) / peak_equity) * 100.0 if peak_equity > 0 else 0.0
+            if dd > max_drawdown:
+                max_drawdown = dd
+
+            equity_curve.append({
+                "date": date_str,
+                "price": round(price, 2),
+                "equity": round(current_equity, 2),
+                "benchmark_equity": round(benchmark_equity, 2),
+                "action": action
+            })
+
+        final_equity = equity_curve[-1]["equity"]
+        strategy_return_pct = round(((final_equity - initial_capital) / initial_capital) * 100.0, 2)
+        final_benchmark = equity_curve[-1]["benchmark_equity"]
+        benchmark_return_pct = round(((final_benchmark - initial_capital) / initial_capital) * 100.0, 2)
+        alpha_pct = round(strategy_return_pct - benchmark_return_pct, 2)
+        win_rate_pct = round((winning_trades / trades) * 100.0, 2) if trades > 0 else 0.0
+
+        sharpe_ratio = 0.0
+        if daily_returns and len(daily_returns) > 1:
+            import statistics
+            avg_r = sum(daily_returns) / len(daily_returns)
+            std_r = statistics.stdev(daily_returns)
+            if std_r > 0:
+                sharpe_ratio = round((avg_r * math.sqrt(252)) / (std_r * math.sqrt(252)), 2)
+
+        return {
+            "symbol": symbol_upper,
+            "strategy": strategy,
+            "initial_capital": initial_capital,
+            "final_equity": round(final_equity, 2),
+            "strategy_return_pct": strategy_return_pct,
+            "benchmark_return_pct": benchmark_return_pct,
+            "alpha_pct": alpha_pct,
+            "sharpe_ratio": sharpe_ratio,
+            "max_drawdown_pct": round(max_drawdown, 2),
+            "total_trades": trades,
+            "winning_trades": winning_trades,
+            "win_rate_pct": win_rate_pct,
+            "equity_curve": equity_curve
+        }
+
 
 

@@ -144,6 +144,34 @@ async def get_composite_signal(
     return composite_data
 
 
+class BacktestRequest(BaseModel):
+    ticker: str = Field(..., description="Target equity ticker symbol")
+    initial_capital: float = Field(10000.0, description="Initial portfolio cash")
+    strategy: str = Field("SMA_CROSSOVER", description="Strategy type: SMA_CROSSOVER, RSI_THRESHOLD, COMPOSITE_SCORE")
+    days: int = Field(90, description="Historical lookback window in days")
+
+
+@router.post("/backtest")
+async def run_strategy_backtest(
+    payload: BacktestRequest,
+    session: AsyncSession = Depends(get_db),
+    auth_verified: dict = Security(verify_m2m_or_user)
+):
+    """
+    Executes algorithmic strategy backtest against historical pricing data and compares against Buy & Hold benchmark.
+    """
+    trace_id = generate_trace_id()
+    result = await QuantitativeAnalyticsEngine.run_backtest(
+        session=session,
+        symbol=payload.ticker,
+        initial_capital=payload.initial_capital,
+        strategy=payload.strategy,
+        days=payload.days
+    )
+    result["trace_id"] = trace_id
+    return result
+
+
 
 @router.get("/{ticker}", response_model=TickerAnalyticsResponse)
 async def get_ticker_analytics(
