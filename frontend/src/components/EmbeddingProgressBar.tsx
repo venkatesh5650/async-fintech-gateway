@@ -34,8 +34,14 @@ export const EmbeddingProgressBar: React.FC<EmbeddingProgressBarProps> = ({
       const res = await fetch(`/api/documents/${encodeURIComponent(documentId)}/embed`);
       if (!res.ok) return;
       const data: EmbeddingProgressResponse = await res.json();
-      setEmbeddedCount(data.embedded_chunks);
-      setPercentage(data.percentage);
+      if (typeof data?.embedded_chunks === "number") {
+        setEmbeddedCount(data.embedded_chunks);
+      }
+      if (typeof data?.percentage === "number") {
+        setPercentage(data.percentage);
+      } else if (totalChunks > 0 && typeof data?.embedded_chunks === "number") {
+        setPercentage(Math.round((data.embedded_chunks / totalChunks) * 100));
+      }
       if (data.status === "COMPLETED") {
         setStatus("COMPLETED");
         setPolling(false);
@@ -168,7 +174,7 @@ export const EmbeddingProgressBar: React.FC<EmbeddingProgressBarProps> = ({
             </span>
           </span>
           <span className="font-mono font-medium text-indigo-400">
-            {percentage.toFixed(0)}%
+            {(Number(percentage) || 0).toFixed(0)}%
           </span>
         </div>
 
@@ -181,7 +187,7 @@ export const EmbeddingProgressBar: React.FC<EmbeddingProgressBarProps> = ({
                 ? "bg-rose-500"
                 : "bg-gradient-to-r from-indigo-500 to-cyan-400"
             }`}
-            style={{ width: `${Math.min(100, Math.max(0, percentage))}%` }}
+            style={{ width: `${Math.min(100, Math.max(0, Number(percentage) || 0))}%` }}
           />
         </div>
       </div>
