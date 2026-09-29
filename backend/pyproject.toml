@@ -25,4 +25,5 @@ dependencies = [
     "python-multipart>=0.0.6",
     "pypdf>=5.0.0",
     "pgvector>=0.3.0",
+    "locust>=2.20.0",
 ]

@@ -1,8 +1,8 @@
 # ROADMAP STATE - 120-Day Automated Equity Research Engine
 
 ## 1. Project Context & Current Position
-* **Current Day:** Day 80 Complete (Phase 2 Milestone 4: Document Ingestion & RAG - 100% COMPLETE & LOCKED)
-* **Next Action:** Begin Day 81 — Phase 2 Milestone 5: Stress Testing & Chaos Engineering (Locust)
+* **Current Day:** Day 81 Complete (Phase 2 Milestone 5: Stress Testing & Chaos Engineering — Day 81 Locked)
+* **Next Action:** Begin Day 82 — Connection Pool Chaos & Recovery Mechanics
 * **Target Role:** FinTech AI Automation Engineer / Systems Architect
 * **Core Philosophy:** We strictly follow the principles outlined in "The 1% Advantage: Engineering a Durable FinTech Career".
 * **AI Agent Directive:** Do not write black-box code or rewrite existing architecture. You are operating as a 1% Systems Architect. Read the completed days to understand the existing context, then execute strictly according to `canonical_roadmap.md` in `.agents/rules/`.
@@ -148,7 +148,20 @@ Phase 2 Milestone 3 (Days 71–75: Quantitative Analytics & Technical Indicators
 
 Phase 2 Milestone 4 (Days 76–80: Document Ingestion & RAG Pipelines) is 100% Complete, Certified, and Locked.
 
-## 8. INVARIANT CONSTRAINTS — Never Violate
+## 8. Phase 2 Milestone 5 — End-to-End Stress Testing & Chaos Engineering (Days 81–85)
+
+* **Day 81:** High-Throughput Load Testing, Percentile Telemetry & `LoadTestResultsPanel`:
+  * Configured native Locust harness in [`app/scripts/locustfile.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/scripts/locustfile.py) with weighted tasks: batch intelligence ingestion (`POST /v1/intelligence/batch`, weight 3), market data ingestion (`POST /v1/market-data/ingest`, weight 3), quantitative analytics reads (`GET /v1/analytics/{ticker}`, weight 2), and system telemetry inspection (`/health`, `/stream-health`, weight 1).
+  * Engineered `SyntheticLoadTester` (`app/core/load_tester.py`) computing exact percentile distributions ($P_{50}, P_{90}, P_{95}, P_{99}$), RPS, and per-endpoint latency metrics with automated Redis state persistence (`chaos:load_test:latest`, `chaos:load_test:history`).
+  * Mounted secured REST routes `GET /v1/chaos/load-test/latest`, `POST /v1/chaos/load-test/run`, `GET /v1/chaos/load-test/history`, and `GET /v1/chaos/status` in [`app/routers/chaos.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/routers/chaos.py) with W3C `trace_id` generation.
+  * Added Pydantic schemas `LoadTestRequest`, `LoadTestEndpointMetric`, and `LoadTestReport` in [`app/database/schemas.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/database/schemas.py).
+  * Shipped Next.js 15 BFF proxy route [`frontend/app/api/chaos/load-test/route.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/app/api/chaos/load-test/route.ts) supporting both telemetry retrieval and stress test execution.
+  * Created [`LoadTestResultsPanel.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/LoadTestResultsPanel.tsx) featuring RPS/Error-rate stat cards, percentile distribution visualizer ($P_{50} \to P_{99}$), target endpoint breakdown table, and interactive concurrency/duration execution controls.
+  * Integrated `LoadTestResultsPanel` into [`OperationsConsole.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/OperationsConsole.tsx) under the dedicated `⚡ Stress Testing` operational tab.
+  * Executed automated audit suite (`audit_day81_loadtest.py`) with 100% pass rate (5/5 assertions: Locust task ratio validation, monotonic percentile calculations, synthetic load test execution, REST contract validation, concurrency collision guard).
+  * Verified 0 regressions across all prior audit suites: `audit_system_core.py` (7/7 passed), `audit_event_stream.py` (7/7 passed), `audit_quant_analytics.py` (7/7 passed), and `audit_rag_engine.py` (7/7 passed).
+
+## 9. INVARIANT CONSTRAINTS — Never Violate
 
 * **Do not regress:** Zero-trust Pydantic perimeter, WebSocket sequence validation, adaptive concurrency control, distributed telemetry tracing.
 * **Protect the Event Loop:** Retain strict async I/O boundaries. No blocking calls in hot paths.

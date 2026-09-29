@@ -318,4 +318,49 @@ class DocumentSearchResponse(BaseModel):
     total_results: int = Field(..., description="Count of returned candidate matches")
     results: list[DocumentSearchResultItem] = Field(..., description="Ranked list of chunk matches")
     trace_id: str = Field(..., description="Distributed W3C trace ID")
+
+
+# ==================================================
+# STRESS TESTING & CHAOS OBSERVABILITY CONTRACTS
+# ==================================================
+
+class LoadTestRequest(BaseModel):
+    concurrency: int = Field(default=50, ge=1, le=100, description="Concurrent simulated users")
+    duration_seconds: int = Field(default=30, ge=1, le=300, description="Test execution duration in seconds")
+    target_endpoints: Optional[list[str]] = Field(default=None, description="Optional subset of endpoints to target")
+
+
+class LoadTestEndpointMetric(BaseModel):
+    endpoint: str = Field(..., description="Target URI path")
+    method: str = Field(..., description="HTTP Method")
+    request_count: int = Field(..., description="Total requests fired")
+    success_count: int = Field(..., description="Successful status responses")
+    failure_count: int = Field(..., description="Error responses")
+    p50_ms: float = Field(..., description="50th percentile latency")
+    p90_ms: float = Field(..., description="90th percentile latency")
+    p95_ms: float = Field(..., description="95th percentile latency")
+    p99_ms: float = Field(..., description="99th percentile latency")
+    avg_latency_ms: float = Field(..., description="Average latency in ms")
+
+
+class LoadTestReport(BaseModel):
+    run_id: str = Field(..., description="Unique load test execution identifier")
+    status: str = Field(default="COMPLETED", description="Execution status: RUNNING | COMPLETED | FAILED")
+    concurrency: int = Field(..., description="Concurrent virtual users")
+    duration_seconds: float = Field(..., description="Test duration in seconds")
+    total_requests: int = Field(..., description="Total requests processed")
+    total_success: int = Field(..., description="Total successful requests")
+    total_failures: int = Field(..., description="Total failed requests")
+    requests_per_second: float = Field(..., description="Overall requests per second")
+    failure_rate_pct: float = Field(..., description="Failure percentage (0.0 - 100.0)")
+    latency_p50_ms: float = Field(..., description="Median latency in milliseconds")
+    latency_p90_ms: float = Field(..., description="90th percentile latency")
+    latency_p95_ms: float = Field(..., description="95th percentile latency")
+    latency_p99_ms: float = Field(..., description="99th percentile latency")
+    latency_min_ms: float = Field(..., description="Minimum recorded latency")
+    latency_max_ms: float = Field(..., description="Maximum recorded latency")
+    endpoint_breakdown: list[LoadTestEndpointMetric] = Field(default_factory=list, description="Per-endpoint statistics")
+    timestamp_iso: str = Field(..., description="Timestamp of execution in ISO format")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
 

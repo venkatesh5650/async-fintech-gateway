@@ -12,9 +12,11 @@ import DocumentUploadPanel from "./DocumentUploadPanel";
 import { DocumentSearchPanel } from "./DocumentSearchPanel";
 import { RAGContextViewer } from "./RAGContextViewer";
 import { DocumentLibraryPanel } from "./DocumentLibraryPanel";
+import LoadTestResultsPanel from "./LoadTestResultsPanel";
 
 export type OpsTab =
   | "registry"
+  | "stress"
   | "dlq"
   | "health"
   | "circuit"
@@ -43,6 +45,7 @@ interface TabConfig {
 
 const OPS_TABS: TabConfig[] = [
   { id: "registry", label: "Live Job Registry", shortLabel: "Registry", icon: "📋" },
+  { id: "stress", label: "Stress Testing", shortLabel: "Stress", icon: "⚡" },
   { id: "documents", label: "PDF Ingestion", shortLabel: "Docs", icon: "📑" },
   { id: "library", label: "SEC EDGAR Library", shortLabel: "EDGAR", icon: "📚" },
   { id: "search", label: "Semantic Search", shortLabel: "Search", icon: "🔎" },
@@ -104,6 +107,8 @@ export default function OperationsConsole({
       {/* Active Operational Telemetry View */}
       {activeOpsTab === "registry" ? (
         <JobAuditPanel onSelectTrace={onSelectTrace} />
+      ) : activeOpsTab === "stress" ? (
+        <LoadTestResultsPanel />
       ) : activeOpsTab === "documents" ? (
         <DocumentUploadPanel initialTicker={ticker || "AAPL"} />
       ) : activeOpsTab === "library" ? (

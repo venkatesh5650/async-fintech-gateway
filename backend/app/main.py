@@ -13,7 +13,7 @@ from app.database.database import engine, Base, AsyncSessionLocal
 from app.database.models import Ticker, MarketPricing, User, ComputedSignal, DocumentChunk
 from app.core.limiter import RateLimiter
 from app.core.telemetry import StructuredLoggingMiddleware  
-from app.routers import auth, intelligence, market, websocket, analytics, documents
+from app.routers import auth, intelligence, market, websocket, analytics, documents, chaos
 
 import os
 import asyncio
@@ -206,6 +206,7 @@ app.include_router(market.router)
 app.include_router(websocket.router)
 app.include_router(analytics.router)
 app.include_router(documents.router)
+app.include_router(chaos.router)
 
 # Perimeter Defense: Rate Limiter Configuration
 limiter = RateLimiter(requests_per_minute=5)

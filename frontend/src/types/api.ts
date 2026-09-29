@@ -386,4 +386,44 @@ export interface RAGContextResponse {
   trace_id: string;
 }
 
+export interface LoadTestEndpointMetric {
+  endpoint: string;
+  method: string;
+  request_count: number;
+  success_count: number;
+  failure_count: number;
+  p50_ms: number;
+  p90_ms: number;
+  p95_ms: number;
+  p99_ms: number;
+  avg_latency_ms: number;
+}
+
+export interface LoadTestReport {
+  run_id: string;
+  status: "RUNNING" | "COMPLETED" | "FAILED" | string;
+  concurrency: number;
+  duration_seconds: number;
+  total_requests: number;
+  total_success: number;
+  total_failures: number;
+  requests_per_second: number;
+  failure_rate_pct: number;
+  latency_p50_ms: number;
+  latency_p90_ms: number;
+  latency_p95_ms: number;
+  latency_p99_ms: number;
+  latency_min_ms: number;
+  latency_max_ms: number;
+  endpoint_breakdown: LoadTestEndpointMetric[];
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+export interface LoadTestRequest {
+  concurrency?: number;
+  duration_seconds?: number;
+  target_endpoints?: string[];
+}
+
 
