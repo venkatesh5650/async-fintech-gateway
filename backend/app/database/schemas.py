@@ -363,4 +363,152 @@ class LoadTestReport(BaseModel):
     timestamp_iso: str = Field(..., description="Timestamp of execution in ISO format")
     trace_id: str = Field(..., description="W3C trace context identifier")
 
+
+# ==================================================
+# DATABASE CONNECTION POOL TELEMETRY CONTRACTS
+# ==================================================
+
+class ConnectionPoolStatus(BaseModel):
+    pool_size: int = Field(..., description="Base configured connection pool size")
+    max_overflow: int = Field(..., description="Maximum allowed overflow connections")
+    total_capacity: int = Field(..., description="Sum of pool size and max overflow")
+    checked_in: int = Field(..., description="Currently idle connections in pool")
+    checked_out: int = Field(..., description="Currently active connections in use")
+    overflow_active: int = Field(..., description="Active overflow connections")
+    saturation_pct: float = Field(..., description="Percentage of connection capacity in use")
+    is_exhausted: bool = Field(..., description="Whether pool capacity is fully consumed")
+    avg_checkout_latency_ms: float = Field(..., description="Observed round-trip ping/checkout latency")
+    timestamp_iso: str = Field(..., description="Timestamp of metric capture")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
+
+class ConnectionPoolStressRequest(BaseModel):
+    concurrency: int = Field(default=25, ge=1, le=50, description="Concurrent connections to check out")
+    hold_duration_seconds: float = Field(default=2.0, ge=0.5, le=10.0, description="Duration to hold checked-out connections")
+
+
+class ConnectionPoolStressReport(BaseModel):
+    run_id: str = Field(..., description="Unique stress run identifier")
+    status: str = Field(default="COMPLETED", description="Execution status: COMPLETED | FAILED")
+    requested_connections: int = Field(..., description="Requested connection count")
+    acquired_connections: int = Field(..., description="Successfully checked-out connections")
+    failed_connections: int = Field(..., description="Connections that timed out or errored")
+    peak_saturation_pct: float = Field(..., description="Peak observed saturation percentage")
+    avg_queue_wait_ms: float = Field(..., description="Average connection acquisition wait time")
+    max_queue_wait_ms: float = Field(..., description="Maximum connection acquisition wait time")
+    recovery_time_ms: float = Field(..., description="Elapsed milliseconds to return to idle baseline")
+    pool_exhausted: bool = Field(..., description="Whether pool reached full saturation")
+    timestamp_iso: str = Field(..., description="Timestamp of stress test completion")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
+
+# ==================================================
+# REDIS MEMORY PRESSURE & EVICTION CONTRACTS
+# ==================================================
+
+class RedisMemoryStatus(BaseModel):
+    used_memory_mb: float = Field(..., description="Current Redis memory consumption in megabytes")
+    peak_memory_mb: float = Field(..., description="Peak historical Redis memory footprint in MB")
+    allocated_limit_mb: float = Field(..., description="Configured or provisioned maxmemory boundary in MB")
+    memory_utilization_pct: float = Field(..., description="Current memory capacity utilization percentage")
+    evicted_keys_count: int = Field(..., description="Cumulative count of keys evicted by LRU/LFU policy")
+    expired_keys_count: int = Field(..., description="Cumulative count of keys expired by TTL")
+    fragmentation_ratio: float = Field(..., description="Redis memory fragmentation ratio")
+    total_tracked_keys: int = Field(..., description="Total active keys in database")
+    pressure_status: str = Field(..., description="Operational status: HEALTHY | ELEVATED | CRITICAL")
+    timestamp_iso: str = Field(..., description="Timestamp of metric capture")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
+
+class RedisMemoryPressureRequest(BaseModel):
+    target_fill_mb: float = Field(default=5.0, ge=0.5, le=50.0, description="Synthetic target memory fill in MB")
+    key_count: int = Field(default=200, ge=10, le=2000, description="Quantity of synthetic pressure keys to populate")
+    ttl_seconds: int = Field(default=60, ge=1, le=3600, description="TTL duration for pressure keys")
+
+
+class RedisMemoryPressureReport(BaseModel):
+    run_id: str = Field(..., description="Unique memory stress run identifier")
+    status: str = Field(default="COMPLETED", description="Execution status: COMPLETED | FAILED")
+    keys_generated: int = Field(..., description="Count of synthetic pressure keys injected")
+    memory_before_mb: float = Field(..., description="Memory footprint prior to injection")
+    memory_peak_mb: float = Field(..., description="Peak memory recorded during injection")
+    memory_after_mb: float = Field(..., description="Memory footprint after cleanup/eviction")
+    delta_bytes: int = Field(..., description="Net bytes introduced during test")
+    eviction_detected: bool = Field(..., description="Whether key eviction occurred")
+    graceful_degradation_verified: bool = Field(..., description="Confirmed cache misses safely resolved to database")
+    timestamp_iso: str = Field(..., description="Timestamp of execution in ISO format")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
+
+# ==================================================
+# EVENT LOOP LATENCY & STARVATION BENCHMARK CONTRACTS
+# ==================================================
+
+class EventLoopStatus(BaseModel):
+    current_lag_ms: float = Field(..., description="Current measured event loop scheduling drift in milliseconds")
+    avg_lag_ms: float = Field(..., description="Rolling average event loop lag in milliseconds")
+    p95_lag_ms: float = Field(..., description="95th percentile event loop lag in milliseconds")
+    max_lag_ms: float = Field(..., description="Maximum recorded event loop lag in current window")
+    blocking_events_count: int = Field(..., description="Count of detected scheduling delays exceeding threshold")
+    is_starved: bool = Field(..., description="Flag indicating if loop drift exceeds starvation threshold (>15ms)")
+    sample_count: int = Field(..., description="Number of rolling latency samples collected")
+    recent_samples_ms: list[float] = Field(default_factory=list, description="Recent rolling lag measurements for visualization")
+    status: str = Field(default="HEALTHY", description="Operational status: HEALTHY | ELEVATED | STARVED")
+    timestamp_iso: str = Field(..., description="Timestamp of metric capture")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
+
+class EventLoopLagSimulationRequest(BaseModel):
+    block_duration_ms: float = Field(default=50.0, ge=5.0, le=500.0, description="Target blocking delay in milliseconds")
+    simulation_type: str = Field(default="cpu_burn", description="Simulation mode: cpu_burn | sync_sleep")
+
+
+class EventLoopLagSimulationReport(BaseModel):
+    run_id: str = Field(..., description="Unique event loop stress run identifier")
+    status: str = Field(default="COMPLETED", description="Execution status: COMPLETED | FAILED")
+    target_block_ms: float = Field(..., description="Targeted blocking duration")
+    measured_lag_ms: float = Field(..., description="Actual observed event loop lag during blocking task")
+    recovery_time_ms: float = Field(..., description="Milliseconds required to return to sub-5ms scheduling latency")
+    detected_by_monitor: bool = Field(..., description="Whether loop monitor flagged this as a blocking event")
+    timestamp_iso: str = Field(..., description="Timestamp of stress completion")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
+
+# ==================================================
+# WORKER KILL & XAUTOCLAIM RECOVERY CHAOS CONTRACTS
+# ==================================================
+
+class WorkerChaosSimulationRequest(BaseModel):
+    orphaned_message_count: int = Field(default=1, ge=1, le=10, description="Quantity of messages to leave unacknowledged")
+    min_idle_time_ms: int = Field(default=200, ge=50, le=5000, description="Minimum idle time before triggering XAUTOCLAIM")
+    consumer_dead_name: str = Field(default="worker_chaos_victim", description="Name of terminated worker consumer")
+    consumer_recovery_name: str = Field(default="worker_chaos_rescuer", description="Name of claiming recovery consumer")
+
+
+class WorkerChaosRecoveryReport(BaseModel):
+    run_id: str = Field(..., description="Unique chaos recovery run identifier")
+    status: str = Field(default="COMPLETED", description="Execution status: COMPLETED | FAILED")
+    stream_name: str = Field(..., description="Target Redis stream identifier")
+    group_name: str = Field(..., description="Consumer group name")
+    orphaned_message_ids: list[str] = Field(default_factory=list, description="IDs of messages orphaned by dead worker")
+    claimed_message_ids: list[str] = Field(default_factory=list, description="IDs of messages successfully reclaimed via XAUTOCLAIM")
+    recovery_time_ms: float = Field(..., description="Elapsed milliseconds to detect orphan and reclaim ownership")
+    pel_cleared: bool = Field(..., description="Flag verifying that pending entries list count returned to zero")
+    sla_met: bool = Field(..., description="Whether recovery completed within 30-second target SLA")
+    timestamp_iso: str = Field(..., description="Timestamp of recovery completion")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
+
+class ChaosSystemOverview(BaseModel):
+    load_testing_status: str = Field(..., description="Operational status of high-throughput load testing engine")
+    connection_pool_status: str = Field(..., description="Operational status of database connection pool")
+    redis_memory_status: str = Field(..., description="Operational status of Redis memory and LRU eviction")
+    event_loop_status: str = Field(..., description="Operational status of ASGI event loop")
+    worker_recovery_status: str = Field(..., description="Operational status of Redis Streams worker recovery")
+    resilience_score_pct: float = Field(..., description="Overall resilience score across all chaos domains")
+    timestamp_iso: str = Field(..., description="Timestamp of telemetry compilation")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
+
+
 

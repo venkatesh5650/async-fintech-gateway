@@ -1,8 +1,8 @@
 # ROADMAP STATE - 120-Day Automated Equity Research Engine
 
 ## 1. Project Context & Current Position
-* **Current Day:** Day 81 Complete (Phase 2 Milestone 5: Stress Testing & Chaos Engineering — Day 81 Locked)
-* **Next Action:** Begin Day 82 — Connection Pool Chaos & Recovery Mechanics
+* **Current Day:** Day 85 Complete (Phase 2 Milestone 5: Stress Testing & Chaos Engineering — 100% Certified & Locked)
+* **Next Action:** Begin Day 86 — Full Regression Audit Suite & RegressionAuditDashboard (Phase 2 Milestone 6)
 * **Target Role:** FinTech AI Automation Engineer / Systems Architect
 * **Core Philosophy:** We strictly follow the principles outlined in "The 1% Advantage: Engineering a Durable FinTech Career".
 * **AI Agent Directive:** Do not write black-box code or rewrite existing architecture. You are operating as a 1% Systems Architect. Read the completed days to understand the existing context, then execute strictly according to `canonical_roadmap.md` in `.agents/rules/`.
@@ -15,8 +15,8 @@ Phase 2  (Days 61–65)  → Redis Streams & Message Brokers — LOCKED
 Phase 2  (Days 66–70)  → Distributed Caching — LOCKED
 Phase 2  (Days 71–75)  → Quantitative Analytics (SMA, RSI, Bollinger) — LOCKED
 Phase 2  (Days 76–80)  → Document Ingestion & RAG Pipelines (pgvector, 10-K/10-Q) — LOCKED
-Phase 2  (Days 81–85)  → Stress Testing & Chaos Engineering (Locust) ← CURRENT
-Phase 2  (Days 86–90)  → Production Dry Run & Capstone Polish
+Phase 2  (Days 81–85)  → Stress Testing & Chaos Engineering (Locust) — LOCKED
+Phase 2  (Days 86–90)  → Production Dry Run & Capstone Polish ← CURRENT
 Phase 3  (Days 91–100) → Live Cloud Orchestration (Render, Docker, Prometheus, Grafana)
 Phase 3  (Days 101–110)→ Build in Public (LangGraph Visualizer, Loom, Portfolio)
 Phase 3  (Days 111–120)→ US Founder Infiltration & Contract Seeding
@@ -158,8 +158,51 @@ Phase 2 Milestone 4 (Days 76–80: Document Ingestion & RAG Pipelines) is 100% C
   * Shipped Next.js 15 BFF proxy route [`frontend/app/api/chaos/load-test/route.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/app/api/chaos/load-test/route.ts) supporting both telemetry retrieval and stress test execution.
   * Created [`LoadTestResultsPanel.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/LoadTestResultsPanel.tsx) featuring RPS/Error-rate stat cards, percentile distribution visualizer ($P_{50} \to P_{99}$), target endpoint breakdown table, and interactive concurrency/duration execution controls.
   * Integrated `LoadTestResultsPanel` into [`OperationsConsole.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/OperationsConsole.tsx) under the dedicated `⚡ Stress Testing` operational tab.
-  * Executed automated audit suite (`audit_day81_loadtest.py`) with 100% pass rate (5/5 assertions: Locust task ratio validation, monotonic percentile calculations, synthetic load test execution, REST contract validation, concurrency collision guard).
+  * Integrated `LoadTestResultsPanel` into [`OperationsConsole.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/OperationsConsole.tsx) under the dedicated `⚡ Stress Testing` operational tab.
+  * Executed automated audit suite (`audit_load_testing.py`) with 100% pass rate (5/5 assertions: Locust task ratio validation, monotonic percentile calculations, synthetic load test execution, REST contract validation, concurrency collision guard).
   * Verified 0 regressions across all prior audit suites: `audit_system_core.py` (7/7 passed), `audit_event_stream.py` (7/7 passed), `audit_quant_analytics.py` (7/7 passed), and `audit_rag_engine.py` (7/7 passed).
+* **Day 82:** Database Connection Pool Chaos, Starvation Diagnostics & `ConnectionPoolMonitor`:
+  * Engineered `ConnectionPoolDiagnosticManager` in [`app/core/pool_chaos.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/core/pool_chaos.py) sampling real-time SQLAlchemy/asyncpg pool utilization (`size()`, `checkedin()`, `checkedout()`, `overflow()`, `saturation_pct`) and measuring round-trip checkout/ping latencies.
+  * Implemented controlled pool starvation engine simulating concurrent connection checkouts, measuring queue wait latencies, and benchmarking milliseconds to complete pool recovery back to zero checked-out connections.
+  * Mounted secured REST routes `GET /v1/chaos/pool/status`, `POST /v1/chaos/pool/stress`, and `GET /v1/chaos/pool/latest` in [`app/routers/chaos.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/routers/chaos.py) with W3C `trace_id` generation.
+  * Added Pydantic schemas `ConnectionPoolStatus`, `ConnectionPoolStressRequest`, and `ConnectionPoolStressReport` in [`app/database/schemas.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/database/schemas.py).
+  * Shipped Next.js 15 BFF proxy route [`frontend/app/api/chaos/pool/route.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/app/api/chaos/pool/route.ts) with zero-trust token propagation.
+  * Created [`ConnectionPoolMonitor.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/ConnectionPoolMonitor.tsx) featuring a circular SVG saturation dial, active/idle capacity stat tiles, live auto-refresh polling, interactive starvation simulation controls, and benchmark recovery metrics.
+  * Integrated `ConnectionPoolMonitor` into [`OperationsConsole.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/OperationsConsole.tsx) under the dedicated `🏊 Connection Pool` operational tab.
+  * Executed automated audit suite (`audit_connection_pool.py`) with 100% pass rate (5/5 assertions: pool telemetry validation, controlled starvation & zero-leak recovery, post-starvation transaction integrity, REST endpoint contract compliance, starvation collision guard).
+  * Confirmed 0 regressions on load testing audit suite (`audit_load_testing.py` 5/5 passed).
+* **Day 83:** Redis Memory Pressure, LRU Eviction Hardening & `RedisMemoryPressureCard`:
+  * Engineered `RedisMemoryPressureManager` in [`app/core/redis_memory.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/core/redis_memory.py) extracting live Redis memory metrics (`used_memory`, `used_memory_peak`, `maxmemory`, `mem_fragmentation_ratio`, `evicted_keys`, `expired_keys`, `total_tracked_keys`).
+  * Implemented controlled synthetic memory pressure generator injecting burst payloads with configurable TTLs, calculating memory deltas, and validating that cache-aside reads degrade gracefully to database lookups on missing or evicted keys.
+  * Mounted secured REST routes `GET /v1/chaos/redis-memory/status`, `POST /v1/chaos/redis-memory/pressure-test`, and `GET /v1/chaos/redis-memory/latest` in [`app/routers/chaos.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/routers/chaos.py) with W3C `trace_id` propagation.
+  * Added Pydantic schemas `RedisMemoryStatus`, `RedisMemoryPressureRequest`, and `RedisMemoryPressureReport` in [`app/database/schemas.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/database/schemas.py).
+  * Shipped Next.js 15 BFF proxy route [`frontend/app/api/chaos/redis-memory/route.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/app/api/chaos/redis-memory/route.ts) with zero-trust token propagation.
+  * Created [`RedisMemoryPressureCard.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/RedisMemoryPressureCard.tsx) featuring real-time memory usage progress meters, fragmentation and health badges, eviction/expiration telemetry tiles, interactive pressure injection controls, and graceful degradation indicators.
+  * Integrated `RedisMemoryPressureCard` into [`OperationsConsole.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/OperationsConsole.tsx) under the dedicated `💾 Memory Pressure` operational tab.
+  * Executed automated audit suite (`audit_redis_memory.py`) with 100% pass rate (5/5 assertions: memory diagnostics query, controlled pressure injection, LRU eviction & expiry detection, cache-aside graceful degradation, REST endpoint contract compliance).
+  * Confirmed 0 regressions on load testing (`audit_load_testing.py` 5/5 passed), connection pool (`audit_connection_pool.py` 5/5 passed), and 0 frontend TypeScript errors (`npx tsc --noEmit`).
+* **Day 84:** ASGI Event-Loop Latency Benchmark, Blocking Detection & `EventLoopLatencyChart`:
+  * Engineered `EventLoopLatencyMonitor` in [`app/core/loop_monitor.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/core/loop_monitor.py) continuously sampling coroutine scheduling drift, rolling average, 95th percentile worst-case lag, peak spike latencies, and tracking blocking stall events exceeding 15ms threshold.
+  * Implemented controlled event-loop stress generator supporting both CPU-intensive mathematical burns and thread-blocking synchronous sleep to test starvation detection, monitor alerting, and recovery time.
+  * Mounted secured REST routes `GET /v1/chaos/event-loop/status`, `POST /v1/chaos/event-loop/simulate`, and `GET /v1/chaos/event-loop/latest` in [`app/routers/chaos.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/routers/chaos.py) with W3C `trace_id` generation.
+  * Added Pydantic schemas `EventLoopStatus`, `EventLoopLagSimulationRequest`, and `EventLoopLagSimulationReport` in [`app/database/schemas.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/database/schemas.py).
+  * Shipped Next.js 15 BFF proxy route [`frontend/app/api/chaos/event-loop/route.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/app/api/chaos/event-loop/route.ts) with zero-trust token propagation.
+  * Created [`EventLoopLatencyChart.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/EventLoopLatencyChart.tsx) featuring real-time SVG sparkline timeline with 5ms and 15ms threshold overlays, operational health badges (HEALTHY/ELEVATED/STARVED), instantaneous and rolling metric tiles, interactive blocking duration range slider, and recovery SLA benchmark card.
+  * Integrated `EventLoopLatencyChart` into [`OperationsConsole.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/OperationsConsole.tsx) under the dedicated `⏱️ Event Loop Lag` operational tab.
+  * Executed automated audit suite (`audit_event_loop.py`) with 100% pass rate (5/5 assertions: baseline latency verification, controlled CPU blocking detection, sync sleep blocking verification, rapid recovery & starvation clearing, REST API contract validation).
+  * Confirmed 0 regressions across prior chaos suites (`audit_load_testing.py`, `audit_connection_pool.py`, `audit_redis_memory.py` all passed 5/5) and 0 frontend TypeScript errors.
+* **Day 85:** Worker Chaos Kill Test, Redis Streams `XAUTOCLAIM` Recovery, `ChaosRecoveryTimeline` & Phase 2 Milestone 5 Capstone:
+  * Engineered `WorkerChaosRecoveryManager` in [`app/core/worker_chaos.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/core/worker_chaos.py) simulating worker node crash scenarios: tasks enqueued via `XADD`, acquired into Pending Entries List (PEL) via `XREADGROUP` by a victim worker that abruptly crashes without acknowledgment, idle time exceeded, and automatic ownership transfer via `XAUTOCLAIM` to a recovery worker with subsequent `XACK` clearance and recovery latency benchmarking.
+  * Mounted secured REST routes `POST /v1/chaos/worker-kill/simulate`, `GET /v1/chaos/worker-kill/latest`, and `GET /v1/chaos/overview` in [`app/routers/chaos.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/routers/chaos.py) with W3C `trace_id` generation.
+  * Added Pydantic schemas `WorkerChaosSimulationRequest`, `WorkerChaosRecoveryReport`, and `ChaosSystemOverview` in [`app/database/schemas.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/database/schemas.py).
+  * Shipped Next.js 15 BFF proxy routes [`frontend/app/api/chaos/worker-kill/route.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/app/api/chaos/worker-kill/route.ts) and [`frontend/app/api/chaos/overview/route.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/app/api/chaos/overview/route.ts).
+  * Created [`ChaosRecoveryTimeline.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/ChaosRecoveryTimeline.tsx) featuring a 6-stage autonomous recovery stepper (`XADD` -> `XREADGROUP` -> Crash -> Idle -> `XAUTOCLAIM` -> `XACK`), real-time SLA compliance badges (<30s target), target stream/group stats, interactive message count and idle threshold controls, and the Phase 2 Milestone 5 Resilience Matrix (5/5 active domains).
+  * Integrated `ChaosRecoveryTimeline` into [`OperationsConsole.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/OperationsConsole.tsx) under the dedicated `💥 Chaos Recovery` operational tab.
+  * Executed Phase 2 Milestone 5 Capstone Audit suite ([`audit_chaos.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/scripts/audit_chaos.py)) with 100% pass rate (5/5 assertions: load testing & quantile monotonicity, connection pool starvation & recovery SLA, Redis memory pressure & graceful cache degradation, ASGI event-loop scheduling drift detection, worker kill `XAUTOCLAIM` recovery & system resilience overview).
+  * Verified 0 regressions across all capstone audit suites: `audit_system_core.py` (7/7 passed), `audit_event_stream.py` (5/5 passed), `audit_quant_analytics.py` (7/7 passed), `audit_rag_engine.py` (7/7 passed), `audit_chaos.py` (5/5 passed), and 0 frontend TypeScript errors (`npx tsc --noEmit`).
+
+Phase 2 Milestone 5 (Days 81–85: Stress Testing & Chaos Engineering) is 100% Complete, Certified, and Locked.
+
 
 ## 9. INVARIANT CONSTRAINTS — Never Violate
 

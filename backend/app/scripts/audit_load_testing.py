@@ -26,7 +26,7 @@ from app.main import app
 import subprocess
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger("audit.day81")
+logger = logging.getLogger("audit.load_testing")
 
 
 async def test_locustfile_structure():
@@ -146,14 +146,14 @@ async def test_concurrency_error_containment():
 
 
 async def main():
-    logger.info("Starting Day 81 Stress Testing & Locust Harness Audit...")
+    logger.info("Starting Load Testing & Locust Harness Audit Suite...")
     try:
         await test_locustfile_structure()
         await test_percentile_math()
         await test_synthetic_load_engine()
         await test_chaos_router_endpoints()
         await test_concurrency_error_containment()
-        logger.info("Day 81 Audit: 5/5 assertions passed (100% SUCCESS).")
+        logger.info("Load Testing Audit: 5/5 assertions passed (100% SUCCESS).")
     except AssertionError as err:
         logger.error(f"Audit failure assertion: {err}", exc_info=True)
         sys.exit(1)

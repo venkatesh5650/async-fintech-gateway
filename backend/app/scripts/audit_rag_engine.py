@@ -73,7 +73,7 @@ async def run_capstone_audit():
         await conn.run_sync(Base.metadata.create_all)
 
     # --------------------------------------------------------------------------
-    # Assertion 1: Day 76 PDF Ingestion & Sliding-Window Tokenization
+    # Assertion 1: PDF Ingestion & Sliding-Window Tokenization
     # --------------------------------------------------------------------------
     dummy_text = " ".join([f"financial_metric_token_{i}" for i in range(1200)])
     pdf_bytes = build_test_pdf(dummy_text)
@@ -91,10 +91,10 @@ async def run_capstone_audit():
         assert chunk["token_count"] <= 512
         assert "chunk_id" in chunk
         assert chunk["ticker"] == "GOOGL"
-    print(f"✅ Assertion 1 Passed: Day 76 PDF sliding-window chunker verified ({parsed['total_chunks']} chunks, {parsed['total_tokens']} tokens).")
+    print(f"✅ Assertion 1 Passed: PDF sliding-window chunker verified ({parsed['total_chunks']} chunks, {parsed['total_tokens']} tokens).")
 
     # --------------------------------------------------------------------------
-    # Assertion 2: Day 77 pgvector Vector Storage & Embedding Normalization
+    # Assertion 2: pgvector Vector Storage & Embedding Normalization
     # --------------------------------------------------------------------------
     sample_text = "Alphabet advertising and search revenue acceleration driven by Gemini infrastructure."
     vec = generate_deterministic_embedding(sample_text, dim=EMBEDDING_DIM)
@@ -107,10 +107,10 @@ async def run_capstone_audit():
     for b_v in batch_vecs:
         assert len(b_v) == EMBEDDING_DIM
         assert abs(math.sqrt(sum(x * x for x in b_v)) - 1.0) < 1e-4
-    print("✅ Assertion 2 Passed: Day 77 1536-dimensional L2-normalized vector storage verified.")
+    print("✅ Assertion 2 Passed: 1536-dimensional L2-normalized vector storage verified.")
 
     # --------------------------------------------------------------------------
-    # Assertion 3: Day 78 HNSW Cosine Semantic Search & Hybrid Ranking
+    # Assertion 3: HNSW Cosine Semantic Search & Hybrid Ranking
     # --------------------------------------------------------------------------
     async with AsyncSessionLocal() as session:
         seed_chunk = DocumentChunk(
@@ -136,10 +136,10 @@ async def run_capstone_audit():
     assert len(search_hits) >= 1
     assert search_hits[0]["chunk_id"] == "chunk_capstone_googl_1"
     assert search_hits[0]["similarity_score"] > 0.3
-    print(f"✅ Assertion 3 Passed: Day 78 Semantic search ranked target passage #1 (score: {search_hits[0]['similarity_score']:.4f}).")
+    print(f"✅ Assertion 3 Passed: Semantic search ranked target passage #1 (score: {search_hits[0]['similarity_score']:.4f}).")
 
     # --------------------------------------------------------------------------
-    # Assertion 4: Day 79 LangGraph RAG Multi-Agent State Context & Citations
+    # Assertion 4: LangGraph RAG Multi-Agent State Context & Citations
     # --------------------------------------------------------------------------
     assert "rag_context" in AgentState.__annotations__
     assert "citations" in AgentState.__annotations__
@@ -151,10 +151,10 @@ async def run_capstone_audit():
         assert payload["ticker"] == "GOOGL"
         assert payload["rag_injected"] is True
         assert payload["total_citations"] >= 1
-    print("✅ Assertion 4 Passed: Day 79 Multi-agent RAG context and citation injection confirmed.")
+    print("✅ Assertion 4 Passed: Multi-agent RAG context and citation injection confirmed.")
 
     # --------------------------------------------------------------------------
-    # Assertion 5: Day 80 Autonomous SEC EDGAR Ingestion Daemon
+    # Assertion 5: Autonomous SEC EDGAR Ingestion Daemon
     # --------------------------------------------------------------------------
     edgar_result = await sync_edgar_filings_for_ticker("NVDA", "10-K")
     assert edgar_result["ticker"] == "NVDA"
@@ -169,7 +169,7 @@ async def run_capstone_audit():
             )
         ).fetchall()
         assert len(db_chunks) >= 1, "NVDA EDGAR chunks must be persisted in database"
-    print(f"✅ Assertion 5 Passed: Day 80 SEC EDGAR daemon auto-ingestion verified ({edgar_result['chunks_generated']} chunks persisted).")
+    print(f"✅ Assertion 5 Passed: SEC EDGAR daemon auto-ingestion verified ({edgar_result['chunks_generated']} chunks persisted).")
 
     # --------------------------------------------------------------------------
     # Assertion 6: Multi-Tenant Ticker Scoping & Zero Contamination

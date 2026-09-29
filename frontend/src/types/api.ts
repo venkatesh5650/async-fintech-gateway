@@ -426,4 +426,136 @@ export interface LoadTestRequest {
   target_endpoints?: string[];
 }
 
+export interface ConnectionPoolStatus {
+  pool_size: number;
+  max_overflow: number;
+  total_capacity: number;
+  checked_in: number;
+  checked_out: number;
+  overflow_active: number;
+  saturation_pct: number;
+  is_exhausted: boolean;
+  avg_checkout_latency_ms: number;
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+export interface ConnectionPoolStressRequest {
+  concurrency?: number;
+  hold_duration_seconds?: number;
+}
+
+export interface ConnectionPoolStressReport {
+  run_id: string;
+  status: "COMPLETED" | "FAILED" | string;
+  requested_connections: number;
+  acquired_connections: number;
+  failed_connections: number;
+  peak_saturation_pct: number;
+  avg_queue_wait_ms: number;
+  max_queue_wait_ms: number;
+  recovery_time_ms: number;
+  pool_exhausted: boolean;
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+export interface RedisMemoryStatus {
+  used_memory_mb: number;
+  peak_memory_mb: number;
+  allocated_limit_mb: number;
+  memory_utilization_pct: number;
+  evicted_keys_count: number;
+  expired_keys_count: number;
+  fragmentation_ratio: number;
+  total_tracked_keys: number;
+  pressure_status: "HEALTHY" | "ELEVATED" | "CRITICAL" | string;
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+export interface RedisMemoryPressureRequest {
+  target_fill_mb?: number;
+  key_count?: number;
+  ttl_seconds?: number;
+}
+
+export interface RedisMemoryPressureReport {
+  run_id: string;
+  status: "COMPLETED" | "FAILED" | string;
+  keys_generated: number;
+  memory_before_mb: number;
+  memory_peak_mb: number;
+  memory_after_mb: number;
+  delta_bytes: number;
+  eviction_detected: boolean;
+  graceful_degradation_verified: boolean;
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+export interface EventLoopStatus {
+  current_lag_ms: number;
+  avg_lag_ms: number;
+  p95_lag_ms: number;
+  max_lag_ms: number;
+  blocking_events_count: number;
+  is_starved: boolean;
+  sample_count: number;
+  recent_samples_ms: number[];
+  status: "HEALTHY" | "ELEVATED" | "STARVED" | string;
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+export interface EventLoopLagSimulationRequest {
+  block_duration_ms?: number;
+  simulation_type?: "cpu_burn" | "sync_sleep" | string;
+}
+
+export interface EventLoopLagSimulationReport {
+  run_id: string;
+  status: "COMPLETED" | "FAILED" | string;
+  target_block_ms: number;
+  measured_lag_ms: number;
+  recovery_time_ms: number;
+  detected_by_monitor: boolean;
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+export interface WorkerChaosSimulationRequest {
+  orphaned_message_count?: number;
+  min_idle_time_ms?: number;
+  consumer_dead_name?: string;
+  consumer_recovery_name?: string;
+}
+
+export interface WorkerChaosRecoveryReport {
+  run_id: string;
+  status: "COMPLETED" | "FAILED" | string;
+  stream_name: string;
+  group_name: string;
+  orphaned_message_ids: string[];
+  claimed_message_ids: string[];
+  recovery_time_ms: number;
+  pel_cleared: boolean;
+  sla_met: boolean;
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+export interface ChaosSystemOverview {
+  load_testing_status: string;
+  connection_pool_status: string;
+  redis_memory_status: string;
+  event_loop_status: string;
+  worker_recovery_status: string;
+  resilience_score_pct: number;
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+
+
 

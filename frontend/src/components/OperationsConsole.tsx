@@ -13,10 +13,18 @@ import { DocumentSearchPanel } from "./DocumentSearchPanel";
 import { RAGContextViewer } from "./RAGContextViewer";
 import { DocumentLibraryPanel } from "./DocumentLibraryPanel";
 import LoadTestResultsPanel from "./LoadTestResultsPanel";
+import ConnectionPoolMonitor from "./ConnectionPoolMonitor";
+import RedisMemoryPressureCard from "./RedisMemoryPressureCard";
+import EventLoopLatencyChart from "./EventLoopLatencyChart";
+import ChaosRecoveryTimeline from "./ChaosRecoveryTimeline";
 
 export type OpsTab =
   | "registry"
   | "stress"
+  | "pool"
+  | "memory"
+  | "loop"
+  | "chaos"
   | "dlq"
   | "health"
   | "circuit"
@@ -46,6 +54,10 @@ interface TabConfig {
 const OPS_TABS: TabConfig[] = [
   { id: "registry", label: "Live Job Registry", shortLabel: "Registry", icon: "📋" },
   { id: "stress", label: "Stress Testing", shortLabel: "Stress", icon: "⚡" },
+  { id: "pool", label: "Connection Pool", shortLabel: "Pool", icon: "🏊" },
+  { id: "memory", label: "Memory Pressure", shortLabel: "Memory", icon: "💾" },
+  { id: "loop", label: "Event Loop Lag", shortLabel: "Loop", icon: "⏱️" },
+  { id: "chaos", label: "Chaos Recovery", shortLabel: "Chaos", icon: "💥" },
   { id: "documents", label: "PDF Ingestion", shortLabel: "Docs", icon: "📑" },
   { id: "library", label: "SEC EDGAR Library", shortLabel: "EDGAR", icon: "📚" },
   { id: "search", label: "Semantic Search", shortLabel: "Search", icon: "🔎" },
@@ -109,6 +121,14 @@ export default function OperationsConsole({
         <JobAuditPanel onSelectTrace={onSelectTrace} />
       ) : activeOpsTab === "stress" ? (
         <LoadTestResultsPanel />
+      ) : activeOpsTab === "pool" ? (
+        <ConnectionPoolMonitor />
+      ) : activeOpsTab === "memory" ? (
+        <RedisMemoryPressureCard />
+      ) : activeOpsTab === "loop" ? (
+        <EventLoopLatencyChart />
+      ) : activeOpsTab === "chaos" ? (
+        <ChaosRecoveryTimeline />
       ) : activeOpsTab === "documents" ? (
         <DocumentUploadPanel initialTicker={ticker || "AAPL"} />
       ) : activeOpsTab === "library" ? (
