@@ -99,7 +99,7 @@ export default function RedisMemoryPressureCard() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           target_fill_mb: targetFillMb,
-          key_count: targetFillMb * 50,
+          key_count: targetFillMb * 10,
           ttl_seconds: 60,
         }),
       });
@@ -214,7 +214,7 @@ export default function RedisMemoryPressureCard() {
 
           <div className="flex items-center gap-2 text-xs font-mono text-gray-400">
             <span>Keys Injected:</span>
-            <span className="text-white font-semibold">{targetFillMb * 50} keys</span>
+            <span className="text-white font-semibold">{targetFillMb * 10} keys</span>
           </div>
 
           <div className="text-right text-xs font-mono text-gray-400">

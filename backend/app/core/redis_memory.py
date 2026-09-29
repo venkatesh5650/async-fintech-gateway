@@ -133,22 +133,24 @@ class RedisMemoryPressureManager:
         Injects synthetic high-volume memory pressure keys to evaluate eviction behavior,
         and verifies that cache reads gracefully degrade on unpopulated or evicted keys.
         """
-        if self._pressure_in_progress:
-            raise RuntimeError("Memory pressure test is currently active.")
+        target_fill_mb = min(max(float(target_fill_mb), 0.5), 10.0)
+        key_count = min(max(int(key_count), 10), 80)
+        ttl_seconds = min(max(int(ttl_seconds), 1), 300)
 
         self._pressure_in_progress = True
         client = await self.get_client()
         run_id = f"mem_pressure_{uuid.uuid4().hex[:10]}"
         tid = trace_id or generate_trace_id()
+        created_keys: list[str] = []
 
         try:
             initial_info = await client.info("memory")
             initial_used_bytes = int(initial_info.get("used_memory", 0))
 
             bytes_per_key = max(int((target_fill_mb * 1024 * 1024) / max(key_count, 1)), 256)
+            bytes_per_key = min(bytes_per_key, 65536)  # Cap chunk size to 64KB for socket efficiency
             payload_chunk = "X" * bytes_per_key
 
-            created_keys: list[str] = []
             pipeline = client.pipeline()
             for i in range(key_count):
                 k = f"chaos:pressure:{run_id}:{i}"
@@ -164,11 +166,12 @@ class RedisMemoryPressureManager:
             degraded_val = await client.get(probe_key)
             graceful_degradation = degraded_val is None
 
-            # Clean up pressure test keys
-            del_pipeline = client.pipeline()
-            for k in created_keys:
-                del_pipeline.delete(k)
-            await del_pipeline.execute()
+            # Clean up pressure test keys swiftly using non-blocking UNLINK
+            if created_keys:
+                try:
+                    await client.unlink(*created_keys)
+                except Exception:
+                    await client.delete(*created_keys)
 
             after_info = await client.info("memory")
             after_used_bytes = int(after_info.get("used_memory", initial_used_bytes))
@@ -202,6 +205,11 @@ class RedisMemoryPressureManager:
             return report
 
         finally:
+            if created_keys:
+                try:
+                    await client.unlink(*created_keys)
+                except Exception:
+                    pass
             self._pressure_in_progress = False
 
     run_pressure_test = simulate_pressure

@@ -1,14 +1,21 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
+export const dynamic = "force-dynamic";
+export const maxDuration = 30;
+
+function getBackendBaseUrl(): string {
+  const raw =
+    process.env.BACKEND_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    "https://fintech-api-gateway-m2yl.onrender.com";
+  return raw.replace(/\/+$/, "");
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const mode = searchParams.get("mode");
-
-  const backendUrl =
-    process.env.BACKEND_URL ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    "http://127.0.0.1:8000";
+  const backendUrl = getBackendBaseUrl();
 
   try {
     const cookieStore = await cookies();
@@ -38,7 +45,8 @@ export async function GET(request: Request) {
 
     const data = await response.json();
     return NextResponse.json(data);
-  } catch {
+  } catch (err: unknown) {
+    console.error("Connection pool GET proxy failure:", err);
     return NextResponse.json(
       { error: "Connection pool diagnostic service unreachable." },
       { status: 503 }
@@ -47,10 +55,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const backendUrl =
-    process.env.BACKEND_URL ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    "http://127.0.0.1:8000";
+  const backendUrl = getBackendBaseUrl();
 
   try {
     const cookieStore = await cookies();
@@ -82,9 +87,10 @@ export async function POST(request: Request) {
 
     const data = await response.json();
     return NextResponse.json(data);
-  } catch {
+  } catch (err: unknown) {
+    console.error("Connection pool POST proxy failure:", err);
     return NextResponse.json(
-      { error: "Connection pool starvation trigger unreachable." },
+      { error: "Connection pool stress trigger unreachable." },
       { status: 503 }
     );
   }

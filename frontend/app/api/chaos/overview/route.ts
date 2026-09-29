@@ -1,11 +1,19 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-export async function GET(request: Request) {
-  const backendUrl =
+export const dynamic = "force-dynamic";
+export const maxDuration = 30;
+
+function getBackendBaseUrl(): string {
+  const raw =
     process.env.BACKEND_URL ||
     process.env.NEXT_PUBLIC_API_URL ||
-    "http://127.0.0.1:8000";
+    "https://fintech-api-gateway-m2yl.onrender.com";
+  return raw.replace(/\/+$/, "");
+}
+
+export async function GET() {
+  const backendUrl = getBackendBaseUrl();
 
   try {
     const cookieStore = await cookies();
@@ -32,7 +40,8 @@ export async function GET(request: Request) {
 
     const data = await response.json();
     return NextResponse.json(data);
-  } catch {
+  } catch (err: unknown) {
+    console.error("Chaos overview GET proxy failure:", err);
     return NextResponse.json(
       { error: "Chaos overview diagnostic service unreachable." },
       { status: 503 }

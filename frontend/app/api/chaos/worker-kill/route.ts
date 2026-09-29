@@ -1,11 +1,19 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-export async function GET(request: Request) {
-  const backendUrl =
+export const dynamic = "force-dynamic";
+export const maxDuration = 30;
+
+function getBackendBaseUrl(): string {
+  const raw =
     process.env.BACKEND_URL ||
     process.env.NEXT_PUBLIC_API_URL ||
-    "http://127.0.0.1:8000";
+    "https://fintech-api-gateway-m2yl.onrender.com";
+  return raw.replace(/\/+$/, "");
+}
+
+export async function GET(request: Request) {
+  const backendUrl = getBackendBaseUrl();
 
   try {
     const cookieStore = await cookies();
@@ -32,7 +40,8 @@ export async function GET(request: Request) {
 
     const data = await response.json();
     return NextResponse.json(data);
-  } catch {
+  } catch (err: unknown) {
+    console.error("Worker kill GET proxy failure:", err);
     return NextResponse.json(
       { error: "Worker chaos recovery service unreachable." },
       { status: 503 }
@@ -41,14 +50,13 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const backendUrl =
-    process.env.BACKEND_URL ||
-    process.env.NEXT_PUBLIC_API_URL ||
-    "http://127.0.0.1:8000";
+  const backendUrl = getBackendBaseUrl();
 
   try {
     const cookieStore = await cookies();
     const token = cookieStore.get("session_token")?.value;
+
+    const body = await request.json().catch(() => ({}));
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -57,33 +65,30 @@ export async function POST(request: Request) {
       headers["Authorization"] = `Bearer ${token}`;
     }
 
-    let body = {};
-    try {
-      body = await request.json();
-    } catch {
-      body = {};
-    }
-
-    const response = await fetch(`${backendUrl}/v1/chaos/worker-kill/simulate`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-      cache: "no-store",
-    });
+    const response = await fetch(
+      `${backendUrl}/v1/chaos/worker-kill/simulate`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        cache: "no-store",
+      }
+    );
 
     if (!response.ok) {
       const errText = await response.text();
       return NextResponse.json(
-        { error: `Worker chaos simulation failed (${response.status}): ${errText}` },
+        { error: `Backend returned ${response.status}: ${errText}` },
         { status: response.status }
       );
     }
 
     const data = await response.json();
     return NextResponse.json(data);
-  } catch {
+  } catch (err: unknown) {
+    console.error("Worker kill POST proxy failure:", err);
     return NextResponse.json(
-      { error: "Failed to dispatch worker chaos simulation." },
+      { error: "Worker chaos simulation trigger unreachable." },
       { status: 503 }
     );
   }
