@@ -329,8 +329,10 @@ export interface EmbeddingJobResponse {
   ticker: string;
   chunks_embedded: number;
   embedding_dim: number;
-  duration_ms: number;
+  latency_ms: number;
+  duration_ms?: number;
   status: string;
+  trace_id?: string;
 }
 
 export interface EmbeddingProgressResponse {

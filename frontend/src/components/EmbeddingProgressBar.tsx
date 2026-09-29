@@ -66,13 +66,20 @@ export const EmbeddingProgressBar: React.FC<EmbeddingProgressBarProps> = ({
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Embedding trigger failed");
+        let errMsg = `Embedding trigger failed (${res.status})`;
+        try {
+          const err = await res.json();
+          if (err?.error) errMsg = err.error;
+          else if (err?.detail) errMsg = err.detail;
+        } catch {
+          // Fall back to HTTP status message
+        }
+        throw new Error(errMsg);
       }
 
       const job: EmbeddingJobResponse = await res.json();
       setEmbeddedCount(job.chunks_embedded);
-      setDurationMs(job.duration_ms);
+      setDurationMs(job.latency_ms ?? job.duration_ms ?? null);
       setPercentage(100);
       setStatus("COMPLETED");
       setPolling(false);
@@ -179,10 +186,9 @@ export const EmbeddingProgressBar: React.FC<EmbeddingProgressBarProps> = ({
         </div>
       </div>
 
-      {/* Latency & Status Footer */}
-      {(durationMs !== null || errorMessage) && (
+      {((typeof durationMs === "number") || errorMessage) && (
         <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-800/60">
-          {durationMs !== null && (
+          {typeof durationMs === "number" && (
             <span className="text-slate-400">
               Embedding Latency: <span className="font-mono text-slate-300">{durationMs.toFixed(1)}ms</span>
             </span>
