@@ -1,0 +1,5573 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Automated Equity Research Engine \u2014 Intelligence Gateway API",
+    "summary": "Production-grade, high-throughput asynchronous fintech gateway providing deterministic equity research, real-time quantitative time-series analytics, qualitative SEC EDGAR RAG, and zero-trust microservice orchestration.",
+    "description": "\n# Automated Equity Research Engine API Specification\n\nWelcome to the enterprise API reference for the **Automated Equity Research Engine Intelligence Gateway**.\nThis high-performance async gateway is designed for institutional-grade financial intelligence, algorithmic signal generation, and quantitative risk modeling.\n\n---\n\n## \ud83c\udfdb\ufe0f Architectural Pillars\n\n1. **Deterministic Quantitative Analytics:**\n   - Pre-computed in PostgreSQL using pure mathematical window functions (`SMA`, `EMA`, `VWAP`, `RSI-14`, `Bollinger Bands`, `Sharpe Ratio`, `Correlation Matrix`).\n   - Strictly enforces the foundational rule: *LLM never does math*.\n2. **Asynchronous Stream Broker & Workers:**\n   - Powered by Redis Streams (`XADD`, `XREADGROUP`, `XAUTOCLAIM`) with dead-letter queue (DLQ) quarantine.\n   - Prevents ASGI thread pool starvation by offloading long-running multi-agent reasoning to background worker processes.\n3. **Qualitative SEC EDGAR RAG Engine:**\n   - Ingests 10-K and 10-Q corporate disclosures into 1536-dimensional L2-normalized vector embeddings.\n   - Cosine and lexical semantic search with HNSW indexes in `pgvector` for verifiable provenance and citations.\n4. **Multi-Agent State Machine:**\n   - Built on LangGraph to synthesize technical quantitative signals and qualitative filing excerpts into deterministic alpha recommendations (`BUY`, `SELL`, `HOLD`, `INVALID`).\n5. **Zero-Trust Perimeter Security & Observability:**\n   - Enforces HMAC-SHA256 JWT tokens and M2M orchestration headers (`X-N8N-API-KEY`).\n   - Distributed W3C `traceparent` context propagation across all HTTP, WebSocket, and Redis Stream interactions.\n\n---\n\n## \ud83d\udd10 Authentication & Access Control\n\nThe gateway supports two authorization mechanisms:\n\n| Scheme | Type | Header | Target Consumer |\n| :--- | :--- | :--- | :--- |\n| **BearerAuth** | HTTP Bearer (JWT) | `Authorization: Bearer <token>` | Web Dashboard Users & Interactive Clients |\n| **ApiKeyAuth** | API Key | `X-N8N-API-KEY: <internal_key>` | Internal Automation Daemons & n8n Workflows |\n\n---\n\n## \ud83d\udea6 Rate Limiting & Fault Tolerance\n\n- Perimeter rate limiting is enforced via a sliding-window counter (default: 5 requests/minute for protected endpoints).\n- When downstream LLM quotas are throttled, an autonomous AWS-style full-jitter backoff and circuit breaker clamps concurrency to protect system stability.\n",
+    "version": "0.9.0"
+  },
+  "paths": {
+    "/v1/auth/register": {
+      "post": {
+        "tags": [
+          "Authentication Engine"
+        ],
+        "summary": "Register User",
+        "description": "Registers a new user with secure bcrypt password hashing.",
+        "operationId": "register_user_v1_auth_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/auth/token": {
+      "post": {
+        "tags": [
+          "Authentication Engine"
+        ],
+        "summary": "Login For Access Token",
+        "description": "Authenticates credentials via OAuth2 form-encoded payload\nand issues a signed JWT access token.",
+        "operationId": "login_for_access_token_v1_auth_token_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_login_for_access_token_v1_auth_token_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intelligence/jobs/{ticker}": {
+      "post": {
+        "tags": [
+          "Intelligence Engine Index"
+        ],
+        "summary": "Submit Analysis Job",
+        "description": "Command Edge: Protected by rate-limiting, Regex boundary validation, and zero-trust JWT authentication.\nGenerates a unique tracking capability token, pre-warms Redis state with 'queued',\nand publishes the task event to Redis Streams (stream:intel_jobs) for decoupled worker execution.",
+        "operationId": "submit_analysis_job_v1_intelligence_jobs__ticker__post",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z]{1,5}$",
+              "description": "US Equity Ticker Symbol",
+              "title": "Ticker"
+            },
+            "description": "US Equity Ticker Symbol"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intelligence/batch": {
+      "post": {
+        "tags": [
+          "Intelligence Engine Index"
+        ],
+        "summary": "Submit Batch Analysis Jobs",
+        "description": "Batch Command Edge:\nZero-Trust Pydantic perimeter intercepts up to 50 target tickers in a single payload.\nMaps unique tracking UUIDs, pre-warms state in Redis, and enqueues high-throughput\npipelined stream events to Redis Streams (stream:intel_jobs).",
+        "operationId": "submit_batch_analysis_jobs_v1_intelligence_batch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchAnalysisRequest",
+                "description": "Batch payload containing 1-50 equity tickers"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchJobAcceptedResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/v1/intelligence/jobs/{job_id}": {
+      "get": {
+        "tags": [
+          "Intelligence Engine Index"
+        ],
+        "summary": "Get Job Status",
+        "description": "Stateless status-polling route. Bypasses app memory to query Redis directly\nfor optimal horizontal scalability under high concurrent polling loads.",
+        "operationId": "get_job_status_v1_intelligence_jobs__job_id__get",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Job Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobStatusResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intelligence/audit": {
+      "get": {
+        "tags": [
+          "Intelligence Engine Index"
+        ],
+        "summary": "Get Live Job Audit",
+        "description": "Live Job Audit Registry.\n\nPerforms a non-blocking Redis SCAN across active job keys and\nreconstructs runtime state in a single pipeline execution without querying PostgreSQL.\nPublic CQRS read endpoint for real-time dashboard telemetry.",
+        "operationId": "get_live_job_audit_v1_intelligence_audit_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemAuditResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intelligence/dlq": {
+      "get": {
+        "tags": [
+          "Intelligence Engine Index"
+        ],
+        "summary": "Get Dead Letter Registry",
+        "description": "CQRS Observability Route for Dead-Letter Queue (DLQ).\nReturns quarantined jobs that exceeded maximum retry thresholds,\ncomplete with root-cause diagnostic information and attempt counts.",
+        "operationId": "get_dead_letter_registry_v1_intelligence_dlq_get",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "count",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Count"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeadLetterRegistryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intelligence/stream-health": {
+      "get": {
+        "tags": [
+          "Intelligence Engine Index"
+        ],
+        "summary": "Get Stream Health",
+        "description": "CQRS Observability: Live stream lag and worker health telemetry.\n\nExposes real-time Redis Stream metrics used by the DynamicConcurrencyController\nto auto-tune worker concurrency. Public read route \u2014 non-sensitive operational data.\n\nResponse fields:\n  stream_name     \u2014 Redis Stream key name\n  consumer_group  \u2014 Consumer group name\n  stream_len      \u2014 Total entries currently in the stream (XLEN)\n  lag             \u2014 Messages NOT YET delivered to any consumer (unread backlog)\n  pel_count       \u2014 Messages delivered but NOT yet ACKed (in-flight processing)\n  consumer_count  \u2014 Number of registered consumers in the group\n  last_delivered_id \u2014 Stream ID of the last message dispatched to the group\n  health_status   \u2014 HEALTHY | ACTIVE | DEGRADED | CRITICAL\n  audit_timestamp_ms \u2014 Server wall-clock timestamp of this snapshot",
+        "operationId": "get_stream_health_v1_intelligence_stream_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intelligence/circuit-breaker": {
+      "get": {
+        "tags": [
+          "Intelligence Engine Index"
+        ],
+        "summary": "Get Circuit Breaker Telemetry",
+        "description": "CQRS Observability: Real-time LLM Circuit Breaker & Rate-Limit Telemetry.\n\nExposes the internal state of GroqLLMCircuitBreaker:\n  circuit_state           \u2014 CLOSED | OPEN | HALF_OPEN\n  consecutive_rate_limits \u2014 Current streak of HTTP 429 errors\n  failure_threshold       \u2014 Consecutive 429s required to trip breaker\n  total_trips             \u2014 Cumulative times the circuit has tripped\n  cooldown_period_sec     \u2014 Total cooldown window duration\n  cooldown_remaining_sec  \u2014 Seconds until canary test allowed\n  last_failure_reason     \u2014 Root-cause error message\n  server_timestamp_ms     \u2014 Server wall-clock timestamp",
+        "operationId": "get_circuit_breaker_telemetry_v1_intelligence_circuit_breaker_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intelligence/trace/{trace_id}": {
+      "get": {
+        "tags": [
+          "Intelligence Engine Index"
+        ],
+        "summary": "Get Distributed Trace Waterfall",
+        "description": "CQRS Observability: End-to-end Distributed Trace Waterfall.\nReconstructs the lifecycle spans across edge ingestion, queue buffering,\nworker compute execution, and broadcast persistence.",
+        "operationId": "get_distributed_trace_waterfall_v1_intelligence_trace__trace_id__get",
+        "parameters": [
+          {
+            "name": "trace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Trace Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceWaterfallResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intelligence/results/{ticker}": {
+      "get": {
+        "tags": [
+          "Intelligence Engine Index"
+        ],
+        "summary": "Get Intelligence Result",
+        "description": "CQRS Read Route: High-speed Cache-Aside intelligence retrieval.\nQueries the Redis cache first for sub-millisecond response times.\nFalls back to PostgreSQL time-series storage and auto-primes cache state on miss.",
+        "operationId": "get_intelligence_result_v1_intelligence_results__ticker__get",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z]{1,5}$",
+              "description": "US Equity Ticker Symbol",
+              "title": "Ticker"
+            },
+            "description": "US Equity Ticker Symbol"
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Refresh"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intelligence/cache/invalidate/{ticker}": {
+      "post": {
+        "tags": [
+          "Intelligence Engine Index"
+        ],
+        "summary": "Invalidate Intelligence Cache",
+        "description": "Admin & Operations Route: Explicitly purges the Redis cache key for a ticker.",
+        "operationId": "invalidate_intelligence_cache_v1_intelligence_cache_invalidate__ticker__post",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z]{1,5}$",
+              "description": "US Equity Ticker Symbol",
+              "title": "Ticker"
+            },
+            "description": "US Equity Ticker Symbol"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intelligence/cache-health": {
+      "get": {
+        "tags": [
+          "Intelligence Engine Index"
+        ],
+        "summary": "Get Cache Health",
+        "description": "CQRS Read Route: Real-time distributed cache operational health and memory efficiency.\nReturns hit/miss ratios, memory consumption in MB, and stampede contention statistics.",
+        "operationId": "get_cache_health_v1_intelligence_cache_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CacheHealthResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intelligence/cache-inspector/{ticker}": {
+      "get": {
+        "tags": [
+          "Intelligence Engine Index"
+        ],
+        "summary": "Inspect Cache Ticker",
+        "description": "CQRS Read Route: Granular inspection of an equity symbol's cached footprint in Redis.\nReturns remaining TTL, byte memory size, priming origin, trace lineage, and payload preview.",
+        "operationId": "inspect_cache_ticker_v1_intelligence_cache_inspector__ticker__get",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z]{1,5}$",
+              "description": "US Equity Ticker Symbol",
+              "title": "Ticker"
+            },
+            "description": "US Equity Ticker Symbol"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CacheInspectorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/intelligence/rag-context/{ticker}": {
+      "get": {
+        "tags": [
+          "Intelligence Engine Index"
+        ],
+        "summary": "Get Ticker Rag Context",
+        "operationId": "get_ticker_rag_context_v1_intelligence_rag_context__ticker__get",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z]{1,5}$",
+              "description": "US Equity Ticker Symbol",
+              "title": "Ticker"
+            },
+            "description": "US Equity Ticker Symbol"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/market-data/ingest": {
+      "post": {
+        "tags": [
+          "Market Ingestion"
+        ],
+        "summary": "Ingest Market Data",
+        "description": "Asynchronous webhook ingestion endpoint returning 202 Accepted.\nTriggers a background fetch of real OHLCV data from Yahoo Finance (yfinance)\nand persists it to the PostgreSQL time-series database.",
+        "operationId": "ingest_market_data_v1_market_data_ingest_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarketDataPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/market-data/history/{ticker}": {
+      "get": {
+        "tags": [
+          "Market Ingestion"
+        ],
+        "summary": "Get Market History",
+        "description": "CQRS Query Edge: Retrieve public time-series historical pricing data for a ticker symbol.\nFetches real OHLCV timeframe candles from Yahoo Finance (5m, 15m, 1h, 4h, 1d)\nand merges with local database records.",
+        "operationId": "get_market_history_v1_market_data_history__ticker__get",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ticker"
+            }
+          },
+          {
+            "name": "interval",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "5m",
+              "title": "Interval"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/analytics/correlation": {
+      "get": {
+        "tags": [
+          "Quantitative Analytics"
+        ],
+        "summary": "Get Correlation Matrix",
+        "description": "Computes cross-ticker correlation matrix using PostgreSQL CORR() statistical function.",
+        "operationId": "get_correlation_matrix_v1_analytics_correlation_get",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "symbols",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Symbols"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 30,
+              "title": "Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CorrelationMatrixResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/analytics/sectors": {
+      "get": {
+        "tags": [
+          "Quantitative Analytics"
+        ],
+        "summary": "Get Sector Rotation Analytics",
+        "description": "Computes cross-asset sector performance averages, technical composite momentum, and rotation signals.",
+        "operationId": "get_sector_rotation_analytics_v1_analytics_sectors_get",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 30,
+              "title": "Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/analytics/snapshots/diff/{ticker}": {
+      "get": {
+        "tags": [
+          "Quantitative Analytics"
+        ],
+        "summary": "Get Signal Snapshot Diff",
+        "description": "Compares the latest two quantitative signal snapshots for a ticker and returns exact metric deltas.",
+        "operationId": "get_signal_snapshot_diff_v1_analytics_snapshots_diff__ticker__get",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ticker"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/analytics/snapshots/{ticker}": {
+      "get": {
+        "tags": [
+          "Quantitative Analytics"
+        ],
+        "summary": "Get Signal Snapshots History",
+        "description": "Returns historical versioned signal snapshots recorded for a specified equity ticker.",
+        "operationId": "get_signal_snapshots_history_v1_analytics_snapshots__ticker__get",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ticker"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/analytics/volatility/{ticker}": {
+      "get": {
+        "tags": [
+          "Quantitative Analytics"
+        ],
+        "summary": "Get Ticker Volatility",
+        "description": "Computes 30-day rolling annualized volatility, Sharpe ratio, and peak-to-trough Max Drawdown.",
+        "operationId": "get_ticker_volatility_v1_analytics_volatility__ticker__get",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ticker"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VolatilityMetricsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/analytics/composite/{ticker}": {
+      "get": {
+        "tags": [
+          "Quantitative Analytics"
+        ],
+        "summary": "Get Composite Signal",
+        "description": "Computes weighted multi-factor composite quantitative score (0-100) and recommendation signal.",
+        "operationId": "get_composite_signal_v1_analytics_composite__ticker__get",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ticker"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompositeSignalResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/analytics/backtest": {
+      "post": {
+        "tags": [
+          "Quantitative Analytics"
+        ],
+        "summary": "Run Strategy Backtest",
+        "description": "Executes algorithmic strategy backtest against historical pricing data and compares against Buy & Hold benchmark.",
+        "operationId": "run_strategy_backtest_v1_analytics_backtest_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BacktestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/v1/analytics/{ticker}": {
+      "get": {
+        "tags": [
+          "Quantitative Analytics"
+        ],
+        "summary": "Get Ticker Analytics",
+        "description": "Computes time-series quantitative technical indicators (SMA, EMA, VWAP, RSI, Bollinger Bands)\nand SMA crossover signals for a specified equity ticker.",
+        "operationId": "get_ticker_analytics_v1_analytics__ticker__get",
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ticker"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TickerAnalyticsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/ingest": {
+      "post": {
+        "tags": [
+          "Document Ingestion & RAG"
+        ],
+        "summary": "Ingest Document",
+        "operationId": "ingest_document_v1_documents_ingest_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_ingest_document_v1_documents_ingest_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentIngestResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/edgar/sync": {
+      "post": {
+        "tags": [
+          "Document Ingestion & RAG"
+        ],
+        "summary": "Sync Edgar Documents",
+        "operationId": "sync_edgar_documents_v1_documents_edgar_sync_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_sync_edgar_documents_v1_documents_edgar_sync_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/search": {
+      "get": {
+        "tags": [
+          "Document Ingestion & RAG"
+        ],
+        "summary": "Search Documents",
+        "operationId": "search_documents_v1_documents_search_get",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ticker"
+            }
+          },
+          {
+            "name": "query",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Query"
+            }
+          },
+          {
+            "name": "top_k",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 5,
+              "title": "Top K"
+            }
+          },
+          {
+            "name": "min_similarity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "default": 0.0,
+              "title": "Min Similarity"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentSearchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{ticker}": {
+      "get": {
+        "tags": [
+          "Document Ingestion & RAG"
+        ],
+        "summary": "List Ticker Documents",
+        "operationId": "list_ticker_documents_v1_documents__ticker__get",
+        "parameters": [
+          {
+            "name": "ticker",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Ticker"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{document_id}/embed": {
+      "post": {
+        "tags": [
+          "Document Ingestion & RAG"
+        ],
+        "summary": "Embed Document Chunks",
+        "operationId": "embed_document_chunks_v1_documents__document_id__embed_post",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Document Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingJobResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/documents/{document_id}/progress": {
+      "get": {
+        "tags": [
+          "Document Ingestion & RAG"
+        ],
+        "summary": "Get Embedding Progress",
+        "operationId": "get_embedding_progress_v1_documents__document_id__progress_get",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Document Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingProgressResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chaos/load-test/latest": {
+      "get": {
+        "tags": [
+          "Chaos & Stress Testing"
+        ],
+        "summary": "Get Latest Load Test Report",
+        "description": "Returns the most recent high-concurrency stress testing telemetry and quantile metrics.",
+        "operationId": "get_latest_load_test_report_v1_chaos_load_test_latest_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadTestReport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chaos/load-test/run": {
+      "post": {
+        "tags": [
+          "Chaos & Stress Testing"
+        ],
+        "summary": "Trigger Load Test",
+        "description": "Initiates an automated concurrent stress test against the ASGI application gateway.\nCaptures RPS, failure rate, and P50/P90/P95/P99 latency profiles.",
+        "operationId": "trigger_load_test_v1_chaos_load_test_run_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoadTestRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadTestReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chaos/load-test/history": {
+      "get": {
+        "tags": [
+          "Chaos & Stress Testing"
+        ],
+        "summary": "Get Load Test History",
+        "description": "Retrieves historical load test runs from the Redis cache buffer.",
+        "operationId": "get_load_test_history_v1_chaos_load_test_history_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LoadTestReport"
+                  },
+                  "type": "array",
+                  "title": "Response Get Load Test History V1 Chaos Load Test History Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chaos/status": {
+      "get": {
+        "tags": [
+          "Chaos & Stress Testing"
+        ],
+        "summary": "Get Chaos Suite Status",
+        "description": "Returns general operational status of the chaos engineering harness.",
+        "operationId": "get_chaos_suite_status_v1_chaos_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chaos/pool/status": {
+      "get": {
+        "tags": [
+          "Chaos & Stress Testing"
+        ],
+        "summary": "Get Connection Pool Status",
+        "description": "Returns live connection pool telemetry: active in-use, idle, overflow, and saturation percentage.",
+        "operationId": "get_connection_pool_status_v1_chaos_pool_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionPoolStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chaos/pool/stress": {
+      "post": {
+        "tags": [
+          "Chaos & Stress Testing"
+        ],
+        "summary": "Trigger Connection Pool Stress",
+        "description": "Simulates database connection pool starvation under controlled concurrent hold load,\nmeasuring queue delays and time to complete pool recovery.",
+        "operationId": "trigger_connection_pool_stress_v1_chaos_pool_stress_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectionPoolStressRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionPoolStressReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chaos/pool/latest": {
+      "get": {
+        "tags": [
+          "Chaos & Stress Testing"
+        ],
+        "summary": "Get Latest Pool Stress Report",
+        "description": "Retrieves the most recent connection pool stress benchmark report.",
+        "operationId": "get_latest_pool_stress_report_v1_chaos_pool_latest_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionPoolStressReport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chaos/redis-memory/status": {
+      "get": {
+        "tags": [
+          "Chaos & Stress Testing"
+        ],
+        "summary": "Get Redis Memory Status",
+        "description": "Returns real-time Redis memory footprint, capacity utilization, and eviction counts.",
+        "operationId": "get_redis_memory_status_v1_chaos_redis_memory_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RedisMemoryStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chaos/redis-memory/pressure-test": {
+      "post": {
+        "tags": [
+          "Chaos & Stress Testing"
+        ],
+        "summary": "Trigger Redis Memory Pressure",
+        "description": "Injects synthetic high-throughput pressure keys to benchmark memory footprint,\nand validates graceful cache-aside fallback to persistent storage.",
+        "operationId": "trigger_redis_memory_pressure_v1_chaos_redis_memory_pressure_test_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedisMemoryPressureRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RedisMemoryPressureReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chaos/redis-memory/latest": {
+      "get": {
+        "tags": [
+          "Chaos & Stress Testing"
+        ],
+        "summary": "Get Latest Redis Memory Report",
+        "description": "Retrieves the most recent Redis memory pressure and eviction benchmark report.",
+        "operationId": "get_latest_redis_memory_report_v1_chaos_redis_memory_latest_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RedisMemoryPressureReport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chaos/event-loop/status": {
+      "get": {
+        "tags": [
+          "Chaos & Stress Testing"
+        ],
+        "summary": "Get Event Loop Status",
+        "description": "Returns real-time ASGI event loop scheduling latency, rolling percentiles, and starvation status.",
+        "operationId": "get_event_loop_status_v1_chaos_event_loop_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventLoopStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chaos/event-loop/simulate": {
+      "post": {
+        "tags": [
+          "Chaos & Stress Testing"
+        ],
+        "summary": "Trigger Event Loop Lag Simulation",
+        "description": "Induces a controlled blocking cycle on the asyncio event loop to test latency detection,\nstarvation alerts, and system recovery time.",
+        "operationId": "trigger_event_loop_lag_simulation_v1_chaos_event_loop_simulate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventLoopLagSimulationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventLoopLagSimulationReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chaos/event-loop/latest": {
+      "get": {
+        "tags": [
+          "Chaos & Stress Testing"
+        ],
+        "summary": "Get Latest Event Loop Report",
+        "description": "Retrieves the most recent event loop blocking and starvation benchmark report.",
+        "operationId": "get_latest_event_loop_report_v1_chaos_event_loop_latest_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventLoopLagSimulationReport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chaos/worker-kill/simulate": {
+      "post": {
+        "tags": [
+          "Chaos & Stress Testing"
+        ],
+        "summary": "Trigger Worker Chaos Simulation",
+        "description": "Simulates abrupt worker node failure while processing Redis Streams messages,\nand tests XAUTOCLAIM orphaned message recovery under SLA boundaries (<30s).",
+        "operationId": "trigger_worker_chaos_simulation_v1_chaos_worker_kill_simulate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkerChaosSimulationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkerChaosRecoveryReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chaos/worker-kill/latest": {
+      "get": {
+        "tags": [
+          "Chaos & Stress Testing"
+        ],
+        "summary": "Get Latest Worker Chaos Report",
+        "description": "Retrieves the most recent worker chaos kill and XAUTOCLAIM recovery report.",
+        "operationId": "get_latest_worker_chaos_report_v1_chaos_worker_kill_latest_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkerChaosRecoveryReport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chaos/overview": {
+      "get": {
+        "tags": [
+          "Chaos & Stress Testing"
+        ],
+        "summary": "Get Chaos System Overview",
+        "description": "Aggregates operational readiness and resilience status across all 5 chaos engineering domains:\nLoad Testing, Connection Pool, Redis Memory, ASGI Event Loop, and Worker Crash Recovery.",
+        "operationId": "get_chaos_system_overview_v1_chaos_overview_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChaosSystemOverview"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/audit/regression/latest": {
+      "get": {
+        "tags": [
+          "System Regression Audit"
+        ],
+        "summary": "Get Latest Regression Report",
+        "operationId": "get_latest_regression_report_v1_audit_regression_latest_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasterRegressionReport"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/v1/audit/regression/run": {
+      "post": {
+        "tags": [
+          "System Regression Audit"
+        ],
+        "summary": "Trigger Full Regression",
+        "operationId": "trigger_full_regression_v1_audit_regression_run_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MasterRegressionReport"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/v1/system/architecture/": {
+      "get": {
+        "tags": [
+          "System Architecture Topology"
+        ],
+        "summary": "Get System Architecture Topology",
+        "operationId": "get_system_architecture_topology_v1_system_architecture__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemArchitectureTopology"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/v1/system/architecture": {
+      "get": {
+        "tags": [
+          "System Architecture Topology"
+        ],
+        "summary": "Get System Architecture Topology",
+        "operationId": "get_system_architecture_topology_v1_system_architecture_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemArchitectureTopology"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/v1/system/architecture/mermaid": {
+      "get": {
+        "tags": [
+          "System Architecture Topology"
+        ],
+        "summary": "Get Mermaid Architecture Diagram",
+        "operationId": "get_mermaid_architecture_diagram_v1_system_architecture_mermaid_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/v1/system/code-quality/": {
+      "get": {
+        "tags": [
+          "Code Quality & Static Analysis"
+        ],
+        "summary": "Get Code Quality Report",
+        "operationId": "get_code_quality_report_v1_system_code_quality__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeQualityReport"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/v1/system/code-quality": {
+      "get": {
+        "tags": [
+          "Code Quality & Static Analysis"
+        ],
+        "summary": "Get Code Quality Report",
+        "operationId": "get_code_quality_report_v1_system_code_quality_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeQualityReport"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/v1/system/code-quality/scan": {
+      "post": {
+        "tags": [
+          "Code Quality & Static Analysis"
+        ],
+        "summary": "Run Code Quality Scan",
+        "operationId": "run_code_quality_scan_v1_system_code_quality_scan_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeQualityReport"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/v1/system/capstone-report/": {
+      "get": {
+        "tags": [
+          "System Telemetry & Health Probes"
+        ],
+        "summary": "Get Phase2 Capstone Report",
+        "operationId": "get_phase2_capstone_report_v1_system_capstone_report__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Phase2CapstoneReport"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/v1/system/capstone-report": {
+      "get": {
+        "tags": [
+          "System Telemetry & Health Probes"
+        ],
+        "summary": "Get Phase2 Capstone Report",
+        "operationId": "get_phase2_capstone_report_v1_system_capstone_report_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Phase2CapstoneReport"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/healthz": {
+      "get": {
+        "tags": [
+          "System Telemetry"
+        ],
+        "summary": "Liveness Probe",
+        "description": "Cloud Load Balancer Liveness Probe.\nReturns 200 OK if the ASGI event loop and runtime container are operational.",
+        "operationId": "liveness_probe_healthz_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "System Telemetry"
+        ],
+        "summary": "Liveness Probe",
+        "description": "Cloud Load Balancer Liveness Probe.\nReturns 200 OK if the ASGI event loop and runtime container are operational.",
+        "operationId": "liveness_probe_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/seed-data": {
+      "post": {
+        "tags": [
+          "System Telemetry"
+        ],
+        "summary": "Manual Seed Data",
+        "description": "Admin endpoint: manually triggers 100-day historical OHLCV seed.\nSafe to call multiple times \u2014 always wipes and re-seeds.",
+        "operationId": "manual_seed_data_admin_seed_data_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/system/openapi.json": {
+      "get": {
+        "tags": [
+          "System Telemetry & Health Probes"
+        ],
+        "summary": "Get System Openapi Spec",
+        "operationId": "get_system_openapi_spec_v1_system_openapi_json_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ArchitectureEdge": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "description": "Source node id"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target",
+            "description": "Target node id"
+          },
+          "protocol": {
+            "type": "string",
+            "title": "Protocol",
+            "description": "Transport protocol: HTTP, WS, REDIS_STREAM, SQL, IPC"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "Description of message or payload transfer"
+          },
+          "is_async": {
+            "type": "boolean",
+            "title": "Is Async",
+            "description": "Whether transition is asynchronous",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "target",
+          "protocol",
+          "description"
+        ],
+        "title": "ArchitectureEdge"
+      },
+      "ArchitectureNode": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Unique node identifier"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Display title of the component"
+          },
+          "subsystem": {
+            "type": "string",
+            "title": "Subsystem",
+            "description": "Parent subsystem or architectural tier"
+          },
+          "tech_stack": {
+            "type": "string",
+            "title": "Tech Stack",
+            "description": "Technologies and libraries used"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "description": "System responsibility"
+          },
+          "protocol": {
+            "type": "string",
+            "title": "Protocol",
+            "description": "Inbound / outbound communication protocol"
+          },
+          "latency_sla_ms": {
+            "type": "number",
+            "title": "Latency Sla Ms",
+            "description": "Expected target latency in milliseconds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "subsystem",
+          "tech_stack",
+          "role",
+          "protocol",
+          "latency_sla_ms"
+        ],
+        "title": "ArchitectureNode"
+      },
+      "ArchitectureSubsystem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id",
+            "description": "Subsystem identifier"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Subsystem display title"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "Core architectural tier description"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/ArchitectureNode"
+            },
+            "type": "array",
+            "title": "Nodes",
+            "description": "Constituent architecture nodes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "description"
+        ],
+        "title": "ArchitectureSubsystem"
+      },
+      "BacktestRequest": {
+        "properties": {
+          "ticker": {
+            "type": "string",
+            "title": "Ticker",
+            "description": "Target equity ticker symbol"
+          },
+          "initial_capital": {
+            "type": "number",
+            "title": "Initial Capital",
+            "description": "Initial portfolio cash",
+            "default": 10000.0
+          },
+          "strategy": {
+            "type": "string",
+            "title": "Strategy",
+            "description": "Strategy type: SMA_CROSSOVER, RSI_THRESHOLD, COMPOSITE_SCORE",
+            "default": "SMA_CROSSOVER"
+          },
+          "days": {
+            "type": "integer",
+            "title": "Days",
+            "description": "Historical lookback window in days",
+            "default": 90
+          }
+        },
+        "type": "object",
+        "required": [
+          "ticker"
+        ],
+        "title": "BacktestRequest"
+      },
+      "BatchAnalysisRequest": {
+        "properties": {
+          "tickers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Tickers",
+            "description": "List of 1-50 US equity ticker symbols to analyze simultaneously"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tickers"
+        ],
+        "title": "BatchAnalysisRequest",
+        "description": "Zero-Trust Pydantic Perimeter for multi-asset batch dispatch.\nLimits batch size to 50 tickers, sanitizes inputs, deduplicates symbols,\nand filters out malformed items with high-availability resilience."
+      },
+      "BatchJobAcceptedResponse": {
+        "properties": {
+          "batch_id": {
+            "type": "string",
+            "title": "Batch Id",
+            "description": "Parent batch identifier for multi-asset tracking"
+          },
+          "total_assets": {
+            "type": "integer",
+            "title": "Total Assets",
+            "description": "Total sanitized assets queued for analysis"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Initial queue state",
+            "default": "queued"
+          },
+          "jobs": {
+            "items": {
+              "$ref": "#/components/schemas/BatchJobItem"
+            },
+            "type": "array",
+            "title": "Jobs",
+            "description": "Asset-to-Job mapping for real-time telemetry"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "default": "Multi-asset batch accepted and dispatched to async worker fan-out."
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id",
+            "description": "Distributed W3C trace identifier"
+          }
+        },
+        "type": "object",
+        "required": [
+          "batch_id",
+          "total_assets",
+          "jobs"
+        ],
+        "title": "BatchJobAcceptedResponse",
+        "description": "HTTP 202 Response schema returned immediately upon batch task acceptance."
+      },
+      "BatchJobItem": {
+        "properties": {
+          "ticker": {
+            "type": "string",
+            "title": "Ticker",
+            "description": "Target equity ticker symbol"
+          },
+          "job_id": {
+            "type": "string",
+            "title": "Job Id",
+            "description": "Unique UUID for real-time WebSocket stream binding"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ticker",
+          "job_id"
+        ],
+        "title": "BatchJobItem",
+        "description": "Individual asset tracking unit inside a distributed batch dispatch."
+      },
+      "Body_ingest_document_v1_documents_ingest_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "ticker": {
+            "type": "string",
+            "title": "Ticker",
+            "description": "Target equity ticker symbol"
+          },
+          "doc_type": {
+            "type": "string",
+            "title": "Doc Type",
+            "description": "Document type: 10-K, 10-Q, 8-K, RESEARCH",
+            "default": "10-K"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file",
+          "ticker"
+        ],
+        "title": "Body_ingest_document_v1_documents_ingest_post"
+      },
+      "Body_login_for_access_token_v1_auth_token_post": {
+        "properties": {
+          "grant_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^password$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grant Type"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "title": "Password"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope",
+            "default": ""
+          },
+          "client_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Id"
+          },
+          "client_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "format": "password",
+            "title": "Client Secret"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "Body_login_for_access_token_v1_auth_token_post"
+      },
+      "Body_sync_edgar_documents_v1_documents_edgar_sync_post": {
+        "properties": {
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticker",
+            "description": "Optional equity ticker to sync (defaults to all)"
+          },
+          "doc_type": {
+            "type": "string",
+            "title": "Doc Type",
+            "description": "Filing type: 10-K or 10-Q",
+            "default": "10-K"
+          }
+        },
+        "type": "object",
+        "title": "Body_sync_edgar_documents_v1_documents_edgar_sync_post"
+      },
+      "BollingerBandsSchema": {
+        "properties": {
+          "upper": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upper",
+            "description": "Upper Bollinger Band (20-day, +2\u03c3)"
+          },
+          "middle": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Middle",
+            "description": "Middle Bollinger Band (20-day SMA)"
+          },
+          "lower": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lower",
+            "description": "Lower Bollinger Band (20-day, -2\u03c3)"
+          },
+          "bandwidth_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bandwidth Pct",
+            "description": "Bandwidth percentage"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Price relative to bands",
+            "default": "WITHIN_BANDS"
+          }
+        },
+        "type": "object",
+        "title": "BollingerBandsSchema"
+      },
+      "CacheHealthResponse": {
+        "properties": {
+          "hit_count": {
+            "type": "integer",
+            "title": "Hit Count",
+            "description": "Total cumulative cache hits"
+          },
+          "miss_count": {
+            "type": "integer",
+            "title": "Miss Count",
+            "description": "Total cumulative cache misses"
+          },
+          "total_requests": {
+            "type": "integer",
+            "title": "Total Requests",
+            "description": "Total cache inquiries processed"
+          },
+          "hit_ratio_pct": {
+            "type": "number",
+            "title": "Hit Ratio Pct",
+            "description": "Percentage of requests satisfied by in-memory cache"
+          },
+          "contention_count": {
+            "type": "integer",
+            "title": "Contention Count",
+            "description": "Total concurrent stampede contention events absorbed by mutex"
+          },
+          "total_cached_keys": {
+            "type": "integer",
+            "title": "Total Cached Keys",
+            "description": "Active cache:intel:* keys in Redis"
+          },
+          "memory_used_mb": {
+            "type": "number",
+            "title": "Memory Used Mb",
+            "description": "Current Redis memory footprint in MB"
+          },
+          "memory_peak_mb": {
+            "type": "number",
+            "title": "Memory Peak Mb",
+            "description": "Historical peak Redis memory consumption in MB"
+          },
+          "server_timestamp_ms": {
+            "type": "integer",
+            "title": "Server Timestamp Ms",
+            "description": "Unix timestamp of metrics calculation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "hit_count",
+          "miss_count",
+          "total_requests",
+          "hit_ratio_pct",
+          "contention_count",
+          "total_cached_keys",
+          "memory_used_mb",
+          "memory_peak_mb",
+          "server_timestamp_ms"
+        ],
+        "title": "CacheHealthResponse",
+        "description": "Real-time operational health and memory efficiency metrics for the distributed cache."
+      },
+      "CacheInspectorResponse": {
+        "properties": {
+          "ticker": {
+            "type": "string",
+            "title": "Ticker",
+            "description": "Target equity ticker symbol"
+          },
+          "is_cached": {
+            "type": "boolean",
+            "title": "Is Cached",
+            "description": "Whether a hot cache entry currently exists in Redis"
+          },
+          "ttl_remaining_seconds": {
+            "type": "integer",
+            "title": "Ttl Remaining Seconds",
+            "description": "Remaining seconds before key expiration"
+          },
+          "ttl_total_seconds": {
+            "type": "integer",
+            "title": "Ttl Total Seconds",
+            "description": "Baseline maximum TTL duration",
+            "default": 300
+          },
+          "payload_size_bytes": {
+            "type": "integer",
+            "title": "Payload Size Bytes",
+            "description": "Memory footprint of the cached payload in bytes"
+          },
+          "prime_origin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prime Origin",
+            "description": "Priming source: WRITE_THROUGH | CACHE_ASIDE | MUTEX_WAIT"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id",
+            "description": "Associated W3C trace ID from pipeline execution"
+          },
+          "primed_at_iso": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primed At Iso",
+            "description": "ISO timestamp when key was primed in Redis"
+          },
+          "raw_payload_preview": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Payload Preview",
+            "description": "Structured preview of cached intelligence data"
+          },
+          "server_timestamp_ms": {
+            "type": "integer",
+            "title": "Server Timestamp Ms",
+            "description": "Server wall-clock timestamp of inspection"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ticker",
+          "is_cached",
+          "ttl_remaining_seconds",
+          "payload_size_bytes",
+          "server_timestamp_ms"
+        ],
+        "title": "CacheInspectorResponse",
+        "description": "Per-ticker granular cache state, TTL progression, and memory inspection."
+      },
+      "ChaosSystemOverview": {
+        "properties": {
+          "load_testing_status": {
+            "type": "string",
+            "title": "Load Testing Status",
+            "description": "Operational status of high-throughput load testing engine"
+          },
+          "connection_pool_status": {
+            "type": "string",
+            "title": "Connection Pool Status",
+            "description": "Operational status of database connection pool"
+          },
+          "redis_memory_status": {
+            "type": "string",
+            "title": "Redis Memory Status",
+            "description": "Operational status of Redis memory and LRU eviction"
+          },
+          "event_loop_status": {
+            "type": "string",
+            "title": "Event Loop Status",
+            "description": "Operational status of ASGI event loop"
+          },
+          "worker_recovery_status": {
+            "type": "string",
+            "title": "Worker Recovery Status",
+            "description": "Operational status of Redis Streams worker recovery"
+          },
+          "resilience_score_pct": {
+            "type": "number",
+            "title": "Resilience Score Pct",
+            "description": "Overall resilience score across all chaos domains"
+          },
+          "timestamp_iso": {
+            "type": "string",
+            "title": "Timestamp Iso",
+            "description": "Timestamp of telemetry compilation"
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id",
+            "description": "W3C trace context identifier"
+          }
+        },
+        "type": "object",
+        "required": [
+          "load_testing_status",
+          "connection_pool_status",
+          "redis_memory_status",
+          "event_loop_status",
+          "worker_recovery_status",
+          "resilience_score_pct",
+          "timestamp_iso",
+          "trace_id"
+        ],
+        "title": "ChaosSystemOverview"
+      },
+      "CodeQualityCheckItem": {
+        "properties": {
+          "check_name": {
+            "type": "string",
+            "title": "Check Name",
+            "description": "Name of the automated quality check"
+          },
+          "tool": {
+            "type": "string",
+            "title": "Tool",
+            "description": "Linter or validation engine: ruff | ast | file_scanner"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "PASSED | WARNING | FAILED",
+            "default": "PASSED"
+          },
+          "issues_found": {
+            "type": "integer",
+            "title": "Issues Found",
+            "description": "Count of issues detected",
+            "default": 0
+          },
+          "details": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Details",
+            "description": "Diagnostic details or rule violation messages"
+          },
+          "duration_ms": {
+            "type": "number",
+            "title": "Duration Ms",
+            "description": "Elapsed milliseconds for check execution"
+          }
+        },
+        "type": "object",
+        "required": [
+          "check_name",
+          "tool",
+          "duration_ms"
+        ],
+        "title": "CodeQualityCheckItem"
+      },
+      "CodeQualityReport": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id",
+            "description": "Unique quality scan identifier"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "PASSED | FAILED",
+            "default": "PASSED"
+          },
+          "total_checks": {
+            "type": "integer",
+            "title": "Total Checks",
+            "description": "Number of quality audits executed"
+          },
+          "passed_checks": {
+            "type": "integer",
+            "title": "Passed Checks",
+            "description": "Number of audits passed"
+          },
+          "total_files_scanned": {
+            "type": "integer",
+            "title": "Total Files Scanned",
+            "description": "Total Python source files inspected"
+          },
+          "total_lines_of_code": {
+            "type": "integer",
+            "title": "Total Lines Of Code",
+            "description": "Aggregate lines of code in app codebase"
+          },
+          "total_issues": {
+            "type": "integer",
+            "title": "Total Issues",
+            "description": "Aggregate lint/formatting/quality issues"
+          },
+          "linter_clean": {
+            "type": "boolean",
+            "title": "Linter Clean",
+            "description": "Whether ruff linter check passes with 0 errors"
+          },
+          "formatter_clean": {
+            "type": "boolean",
+            "title": "Formatter Clean",
+            "description": "Whether ruff formatting check passes"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/CodeQualityCheckItem"
+            },
+            "type": "array",
+            "title": "Checks",
+            "description": "Granular check items"
+          },
+          "timestamp_iso": {
+            "type": "string",
+            "title": "Timestamp Iso",
+            "description": "Timestamp of quality scan completion"
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id",
+            "description": "W3C trace context identifier"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "total_checks",
+          "passed_checks",
+          "total_files_scanned",
+          "total_lines_of_code",
+          "total_issues",
+          "linter_clean",
+          "formatter_clean",
+          "timestamp_iso",
+          "trace_id"
+        ],
+        "title": "CodeQualityReport"
+      },
+      "CompositeComponentsSchema": {
+        "properties": {
+          "sma_crossover": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Sma Crossover"
+          },
+          "rsi_14": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Rsi 14"
+          },
+          "bollinger_bands": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Bollinger Bands"
+          },
+          "sharpe_ratio": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Sharpe Ratio"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sma_crossover",
+          "rsi_14",
+          "bollinger_bands",
+          "sharpe_ratio"
+        ],
+        "title": "CompositeComponentsSchema"
+      },
+      "CompositeSignalResponse": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "calculated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculated At"
+          },
+          "data_points_analyzed": {
+            "type": "integer",
+            "title": "Data Points Analyzed"
+          },
+          "composite_score": {
+            "type": "number",
+            "title": "Composite Score",
+            "description": "Weighted composite technical score (0 to 100)"
+          },
+          "recommendation": {
+            "type": "string",
+            "title": "Recommendation",
+            "description": "Classification: STRONG_BUY, BUY, NEUTRAL, SELL, STRONG_SELL"
+          },
+          "components": {
+            "$ref": "#/components/schemas/CompositeComponentsSchema",
+            "description": "Component scores and weights"
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbol",
+          "data_points_analyzed",
+          "composite_score",
+          "recommendation",
+          "components",
+          "trace_id"
+        ],
+        "title": "CompositeSignalResponse"
+      },
+      "ConnectionPoolStatus": {
+        "properties": {
+          "pool_size": {
+            "type": "integer",
+            "title": "Pool Size",
+            "description": "Base configured connection pool size"
+          },
+          "max_overflow": {
+            "type": "integer",
+            "title": "Max Overflow",
+            "description": "Maximum allowed overflow connections"
+          },
+          "total_capacity": {
+            "type": "integer",
+            "title": "Total Capacity",
+            "description": "Sum of pool size and max overflow"
+          },
+          "checked_in": {
+            "type": "integer",
+            "title": "Checked In",
+            "description": "Currently idle connections in pool"
+          },
+          "checked_out": {
+            "type": "integer",
+            "title": "Checked Out",
+            "description": "Currently active connections in use"
+          },
+          "overflow_active": {
+            "type": "integer",
+            "title": "Overflow Active",
+            "description": "Active overflow connections"
+          },
+          "saturation_pct": {
+            "type": "number",
+            "title": "Saturation Pct",
+            "description": "Percentage of connection capacity in use"
+          },
+          "is_exhausted": {
+            "type": "boolean",
+            "title": "Is Exhausted",
+            "description": "Whether pool capacity is fully consumed"
+          },
+          "avg_checkout_latency_ms": {
+            "type": "number",
+            "title": "Avg Checkout Latency Ms",
+            "description": "Observed round-trip ping/checkout latency"
+          },
+          "timestamp_iso": {
+            "type": "string",
+            "title": "Timestamp Iso",
+            "description": "Timestamp of metric capture"
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id",
+            "description": "W3C trace context identifier"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pool_size",
+          "max_overflow",
+          "total_capacity",
+          "checked_in",
+          "checked_out",
+          "overflow_active",
+          "saturation_pct",
+          "is_exhausted",
+          "avg_checkout_latency_ms",
+          "timestamp_iso",
+          "trace_id"
+        ],
+        "title": "ConnectionPoolStatus"
+      },
+      "ConnectionPoolStressReport": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id",
+            "description": "Unique stress run identifier"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Execution status: COMPLETED | FAILED",
+            "default": "COMPLETED"
+          },
+          "requested_connections": {
+            "type": "integer",
+            "title": "Requested Connections",
+            "description": "Requested connection count"
+          },
+          "acquired_connections": {
+            "type": "integer",
+            "title": "Acquired Connections",
+            "description": "Successfully checked-out connections"
+          },
+          "failed_connections": {
+            "type": "integer",
+            "title": "Failed Connections",
+            "description": "Connections that timed out or errored"
+          },
+          "peak_saturation_pct": {
+            "type": "number",
+            "title": "Peak Saturation Pct",
+            "description": "Peak observed saturation percentage"
+          },
+          "avg_queue_wait_ms": {
+            "type": "number",
+            "title": "Avg Queue Wait Ms",
+            "description": "Average connection acquisition wait time"
+          },
+          "max_queue_wait_ms": {
+            "type": "number",
+            "title": "Max Queue Wait Ms",
+            "description": "Maximum connection acquisition wait time"
+          },
+          "recovery_time_ms": {
+            "type": "number",
+            "title": "Recovery Time Ms",
+            "description": "Elapsed milliseconds to return to idle baseline"
+          },
+          "pool_exhausted": {
+            "type": "boolean",
+            "title": "Pool Exhausted",
+            "description": "Whether pool reached full saturation"
+          },
+          "timestamp_iso": {
+            "type": "string",
+            "title": "Timestamp Iso",
+            "description": "Timestamp of stress test completion"
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id",
+            "description": "W3C trace context identifier"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "requested_connections",
+          "acquired_connections",
+          "failed_connections",
+          "peak_saturation_pct",
+          "avg_queue_wait_ms",
+          "max_queue_wait_ms",
+          "recovery_time_ms",
+          "pool_exhausted",
+          "timestamp_iso",
+          "trace_id"
+        ],
+        "title": "ConnectionPoolStressReport"
+      },
+      "ConnectionPoolStressRequest": {
+        "properties": {
+          "concurrency": {
+            "type": "integer",
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Concurrency",
+            "description": "Concurrent connections to check out",
+            "default": 25
+          },
+          "hold_duration_seconds": {
+            "type": "number",
+            "maximum": 10.0,
+            "minimum": 0.5,
+            "title": "Hold Duration Seconds",
+            "description": "Duration to hold checked-out connections",
+            "default": 2.0
+          }
+        },
+        "type": "object",
+        "title": "ConnectionPoolStressRequest"
+      },
+      "CorrelationMatrixResponse": {
+        "properties": {
+          "symbols": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Symbols",
+            "description": "List of equity tickers analyzed"
+          },
+          "matrix": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            "type": "object",
+            "title": "Matrix",
+            "description": "Pairwise correlation matrix values (-1.0 to +1.0)"
+          },
+          "days_analyzed": {
+            "type": "integer",
+            "title": "Days Analyzed",
+            "description": "Lookback window in days",
+            "default": 30
+          },
+          "data_points_analyzed": {
+            "type": "integer",
+            "title": "Data Points Analyzed",
+            "description": "Total price pairs analyzed"
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbols",
+          "matrix",
+          "data_points_analyzed",
+          "trace_id"
+        ],
+        "title": "CorrelationMatrixResponse"
+      },
+      "DeadLetterJobEntry": {
+        "properties": {
+          "dlq_id": {
+            "type": "string",
+            "title": "Dlq Id",
+            "description": "Monotonic stream entry ID in the DLQ"
+          },
+          "original_message_id": {
+            "type": "string",
+            "title": "Original Message Id",
+            "description": "Original stream ID before quarantine"
+          },
+          "job_id": {
+            "type": "string",
+            "title": "Job Id",
+            "description": "UUID tracking token"
+          },
+          "ticker": {
+            "type": "string",
+            "title": "Ticker",
+            "description": "Target equity symbol"
+          },
+          "batch_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Id",
+            "description": "Parent batch ID if applicable"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id",
+            "description": "Telemetry trace correlation ID"
+          },
+          "delivery_count": {
+            "type": "integer",
+            "title": "Delivery Count",
+            "description": "Total failed delivery attempts before quarantine"
+          },
+          "error_reason": {
+            "type": "string",
+            "title": "Error Reason",
+            "description": "Root cause diagnostics"
+          },
+          "quarantined_at": {
+            "type": "number",
+            "title": "Quarantined At",
+            "description": "Unix timestamp when message was quarantined"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dlq_id",
+          "original_message_id",
+          "job_id",
+          "ticker",
+          "delivery_count",
+          "error_reason",
+          "quarantined_at"
+        ],
+        "title": "DeadLetterJobEntry",
+        "description": "Diagnostic schema for a quarantined Dead-Letter Queue (DLQ) entry."
+      },
+      "DeadLetterRegistryResponse": {
+        "properties": {
+          "total_quarantined": {
+            "type": "integer",
+            "title": "Total Quarantined",
+            "description": "Total messages currently in the DLQ"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/DeadLetterJobEntry"
+            },
+            "type": "array",
+            "title": "Entries",
+            "description": "List of quarantined jobs"
+          },
+          "audit_timestamp_ms": {
+            "type": "integer",
+            "title": "Audit Timestamp Ms",
+            "description": "Timestamp of the query"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_quarantined",
+          "entries",
+          "audit_timestamp_ms"
+        ],
+        "title": "DeadLetterRegistryResponse",
+        "description": "Aggregated response payload for GET /v1/intelligence/dlq."
+      },
+      "DocumentChunkItem": {
+        "properties": {
+          "chunk_id": {
+            "type": "string",
+            "title": "Chunk Id",
+            "description": "Unique deterministic identifier for the chunk"
+          },
+          "chunk_index": {
+            "type": "integer",
+            "title": "Chunk Index",
+            "description": "Sequential position index within the document"
+          },
+          "ticker": {
+            "type": "string",
+            "title": "Ticker",
+            "description": "Target equity ticker symbol"
+          },
+          "source_file": {
+            "type": "string",
+            "title": "Source File",
+            "description": "Original PDF file name"
+          },
+          "doc_type": {
+            "type": "string",
+            "title": "Doc Type",
+            "description": "Filing type: 10-K, 10-Q, 8-K, RESEARCH"
+          },
+          "page_number": {
+            "type": "integer",
+            "title": "Page Number",
+            "description": "Primary page number in source document"
+          },
+          "page_span": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Page Span",
+            "description": "List of source pages covered by this chunk"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content",
+            "description": "Extracted textual content of the chunk"
+          },
+          "token_count": {
+            "type": "integer",
+            "title": "Token Count",
+            "description": "Calculated token length"
+          },
+          "char_count": {
+            "type": "integer",
+            "title": "Char Count",
+            "description": "Character count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "chunk_id",
+          "chunk_index",
+          "ticker",
+          "source_file",
+          "doc_type",
+          "page_number",
+          "content",
+          "token_count",
+          "char_count"
+        ],
+        "title": "DocumentChunkItem"
+      },
+      "DocumentIngestResponse": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "title": "Document Id",
+            "description": "Unique generated document identifier"
+          },
+          "ticker": {
+            "type": "string",
+            "title": "Ticker",
+            "description": "Target equity ticker symbol"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename",
+            "description": "Uploaded document file name"
+          },
+          "doc_type": {
+            "type": "string",
+            "title": "Doc Type",
+            "description": "Classification of filing"
+          },
+          "total_pages": {
+            "type": "integer",
+            "title": "Total Pages",
+            "description": "Total pages parsed from the PDF"
+          },
+          "total_chunks": {
+            "type": "integer",
+            "title": "Total Chunks",
+            "description": "Total sliding-window chunks generated"
+          },
+          "total_tokens": {
+            "type": "integer",
+            "title": "Total Tokens",
+            "description": "Sum of tokens across all chunks"
+          },
+          "chunks_preview": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentChunkItem"
+            },
+            "type": "array",
+            "title": "Chunks Preview",
+            "description": "Preview list of the first parsed chunks"
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id",
+            "description": "W3C trace context identifier"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "ticker",
+          "filename",
+          "doc_type",
+          "total_pages",
+          "total_chunks",
+          "total_tokens",
+          "chunks_preview",
+          "trace_id"
+        ],
+        "title": "DocumentIngestResponse"
+      },
+      "DocumentSearchResponse": {
+        "properties": {
+          "ticker": {
+            "type": "string",
+            "title": "Ticker",
+            "description": "Searched ticker symbol"
+          },
+          "query": {
+            "type": "string",
+            "title": "Query",
+            "description": "Input search query string"
+          },
+          "total_results": {
+            "type": "integer",
+            "title": "Total Results",
+            "description": "Count of returned candidate matches"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentSearchResultItem"
+            },
+            "type": "array",
+            "title": "Results",
+            "description": "Ranked list of chunk matches"
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id",
+            "description": "Distributed W3C trace ID"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ticker",
+          "query",
+          "total_results",
+          "results",
+          "trace_id"
+        ],
+        "title": "DocumentSearchResponse"
+      },
+      "DocumentSearchResultItem": {
+        "properties": {
+          "chunk_id": {
+            "type": "string",
+            "title": "Chunk Id",
+            "description": "Unique chunk primary key"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id",
+            "description": "Parent document identifier"
+          },
+          "ticker": {
+            "type": "string",
+            "title": "Ticker",
+            "description": "Target equity ticker symbol"
+          },
+          "source_file": {
+            "type": "string",
+            "title": "Source File",
+            "description": "Source PDF filename"
+          },
+          "doc_type": {
+            "type": "string",
+            "title": "Doc Type",
+            "description": "Document type classification"
+          },
+          "chunk_index": {
+            "type": "integer",
+            "title": "Chunk Index",
+            "description": "Ordinal index of the chunk"
+          },
+          "page_number": {
+            "type": "integer",
+            "title": "Page Number",
+            "description": "Source page number"
+          },
+          "content": {
+            "type": "string",
+            "title": "Content",
+            "description": "Textual passage content"
+          },
+          "token_count": {
+            "type": "integer",
+            "title": "Token Count",
+            "description": "Token count of chunk"
+          },
+          "vector_similarity": {
+            "type": "number",
+            "title": "Vector Similarity",
+            "description": "Cosine similarity score (0.0 to 1.0)"
+          },
+          "lexical_overlap": {
+            "type": "number",
+            "title": "Lexical Overlap",
+            "description": "Keyword overlap fraction"
+          },
+          "similarity_score": {
+            "type": "number",
+            "title": "Similarity Score",
+            "description": "Hybrid ranking score"
+          }
+        },
+        "type": "object",
+        "required": [
+          "chunk_id",
+          "document_id",
+          "ticker",
+          "source_file",
+          "doc_type",
+          "chunk_index",
+          "page_number",
+          "content",
+          "token_count",
+          "vector_similarity",
+          "lexical_overlap",
+          "similarity_score"
+        ],
+        "title": "DocumentSearchResultItem"
+      },
+      "EmbeddingJobResponse": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "title": "Document Id",
+            "description": "Target document identifier"
+          },
+          "ticker": {
+            "type": "string",
+            "title": "Ticker",
+            "description": "Target equity symbol"
+          },
+          "chunks_embedded": {
+            "type": "integer",
+            "title": "Chunks Embedded",
+            "description": "Count of successfully embedded chunks"
+          },
+          "embedding_dim": {
+            "type": "integer",
+            "title": "Embedding Dim",
+            "description": "Vector dimensions (e.g., 1536)"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Vectorization pipeline status",
+            "default": "COMPLETED"
+          },
+          "latency_ms": {
+            "type": "number",
+            "title": "Latency Ms",
+            "description": "Time elapsed during vector embedding generation"
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id",
+            "description": "Associated W3C trace ID"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "ticker",
+          "chunks_embedded",
+          "embedding_dim",
+          "latency_ms",
+          "trace_id"
+        ],
+        "title": "EmbeddingJobResponse"
+      },
+      "EmbeddingProgressResponse": {
+        "properties": {
+          "document_id": {
+            "type": "string",
+            "title": "Document Id",
+            "description": "Target document identifier"
+          },
+          "ticker": {
+            "type": "string",
+            "title": "Ticker",
+            "description": "Target equity ticker"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Current status: PARSED | EMBEDDING | COMPLETED | FAILED"
+          },
+          "total_chunks": {
+            "type": "integer",
+            "title": "Total Chunks",
+            "description": "Total chunks in document"
+          },
+          "embedded_chunks": {
+            "type": "integer",
+            "title": "Embedded Chunks",
+            "description": "Number of embedded chunks stored in vector database"
+          },
+          "percentage": {
+            "type": "number",
+            "title": "Percentage",
+            "description": "Completion percentage (0.0 - 100.0)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document_id",
+          "ticker",
+          "status",
+          "total_chunks",
+          "embedded_chunks",
+          "percentage"
+        ],
+        "title": "EmbeddingProgressResponse"
+      },
+      "EventLoopLagSimulationReport": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id",
+            "description": "Unique event loop stress run identifier"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Execution status: COMPLETED | FAILED",
+            "default": "COMPLETED"
+          },
+          "target_block_ms": {
+            "type": "number",
+            "title": "Target Block Ms",
+            "description": "Targeted blocking duration"
+          },
+          "measured_lag_ms": {
+            "type": "number",
+            "title": "Measured Lag Ms",
+            "description": "Actual observed event loop lag during blocking task"
+          },
+          "recovery_time_ms": {
+            "type": "number",
+            "title": "Recovery Time Ms",
+            "description": "Milliseconds required to return to sub-5ms scheduling latency"
+          },
+          "detected_by_monitor": {
+            "type": "boolean",
+            "title": "Detected By Monitor",
+            "description": "Whether loop monitor flagged this as a blocking event"
+          },
+          "timestamp_iso": {
+            "type": "string",
+            "title": "Timestamp Iso",
+            "description": "Timestamp of stress completion"
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id",
+            "description": "W3C trace context identifier"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "target_block_ms",
+          "measured_lag_ms",
+          "recovery_time_ms",
+          "detected_by_monitor",
+          "timestamp_iso",
+          "trace_id"
+        ],
+        "title": "EventLoopLagSimulationReport"
+      },
+      "EventLoopLagSimulationRequest": {
+        "properties": {
+          "block_duration_ms": {
+            "type": "number",
+            "maximum": 500.0,
+            "minimum": 5.0,
+            "title": "Block Duration Ms",
+            "description": "Target blocking delay in milliseconds",
+            "default": 50.0
+          },
+          "simulation_type": {
+            "type": "string",
+            "title": "Simulation Type",
+            "description": "Simulation mode: cpu_burn | sync_sleep",
+            "default": "cpu_burn"
+          }
+        },
+        "type": "object",
+        "title": "EventLoopLagSimulationRequest"
+      },
+      "EventLoopStatus": {
+        "properties": {
+          "current_lag_ms": {
+            "type": "number",
+            "title": "Current Lag Ms",
+            "description": "Current measured event loop scheduling drift in milliseconds"
+          },
+          "avg_lag_ms": {
+            "type": "number",
+            "title": "Avg Lag Ms",
+            "description": "Rolling average event loop lag in milliseconds"
+          },
+          "p95_lag_ms": {
+            "type": "number",
+            "title": "P95 Lag Ms",
+            "description": "95th percentile event loop lag in milliseconds"
+          },
+          "max_lag_ms": {
+            "type": "number",
+            "title": "Max Lag Ms",
+            "description": "Maximum recorded event loop lag in current window"
+          },
+          "blocking_events_count": {
+            "type": "integer",
+            "title": "Blocking Events Count",
+            "description": "Count of detected scheduling delays exceeding threshold"
+          },
+          "is_starved": {
+            "type": "boolean",
+            "title": "Is Starved",
+            "description": "Flag indicating if loop drift exceeds starvation threshold (>15ms)"
+          },
+          "sample_count": {
+            "type": "integer",
+            "title": "Sample Count",
+            "description": "Number of rolling latency samples collected"
+          },
+          "recent_samples_ms": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Recent Samples Ms",
+            "description": "Recent rolling lag measurements for visualization"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Operational status: HEALTHY | ELEVATED | STARVED",
+            "default": "HEALTHY"
+          },
+          "timestamp_iso": {
+            "type": "string",
+            "title": "Timestamp Iso",
+            "description": "Timestamp of metric capture"
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id",
+            "description": "W3C trace context identifier"
+          }
+        },
+        "type": "object",
+        "required": [
+          "current_lag_ms",
+          "avg_lag_ms",
+          "p95_lag_ms",
+          "max_lag_ms",
+          "blocking_events_count",
+          "is_starved",
+          "sample_count",
+          "timestamp_iso",
+          "trace_id"
+        ],
+        "title": "EventLoopStatus"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "IndicatorsSchema": {
+        "properties": {
+          "sma_10": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sma 10",
+            "description": "10-period Simple Moving Average"
+          },
+          "sma_50": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sma 50",
+            "description": "50-period Simple Moving Average"
+          },
+          "sma_200": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sma 200",
+            "description": "200-period Simple Moving Average"
+          },
+          "ema_14": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ema 14",
+            "description": "14-period Exponential Moving Average"
+          },
+          "vwap": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vwap",
+            "description": "Volume-Weighted Average Price"
+          },
+          "rsi_14": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rsi 14",
+            "description": "14-period Relative Strength Index"
+          },
+          "rsi_status": {
+            "type": "string",
+            "title": "Rsi Status",
+            "description": "RSI classification code",
+            "default": "NEUTRAL"
+          },
+          "bollinger_bands": {
+            "$ref": "#/components/schemas/BollingerBandsSchema",
+            "description": "20-period Bollinger Bands metrics"
+          }
+        },
+        "type": "object",
+        "required": [
+          "bollinger_bands"
+        ],
+        "title": "IndicatorsSchema"
+      },
+      "IntelligenceResponse": {
+        "properties": {
+          "ticker": {
+            "type": "string",
+            "title": "Ticker",
+            "description": "The target asset symbol (e.g., AAPL)"
+          },
+          "signal": {
+            "type": "string",
+            "title": "Signal",
+            "description": "The final alpha signal: BUY, SELL, HOLD, or INVALID"
+          },
+          "analysis_report": {
+            "type": "string",
+            "title": "Analysis Report",
+            "description": "The structured reasoning generated by the AI agent"
+          },
+          "execution_time_ms": {
+            "type": "number",
+            "title": "Execution Time Ms",
+            "description": "Latency tracking for observability and SLA monitoring"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ticker",
+          "signal",
+          "analysis_report",
+          "execution_time_ms"
+        ],
+        "title": "IntelligenceResponse",
+        "description": "Core output schema for multi-agent intelligence analysis results.\nDefines the immutable JSON contract served by the CQRS query edge."
+      },
+      "JobAuditEntry": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id",
+            "description": "UUID tracking token for this job"
+          },
+          "ticker": {
+            "type": "string",
+            "title": "Ticker",
+            "description": "Target equity ticker symbol"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "'processing' | 'completed' | 'failed'"
+          },
+          "batch_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Id",
+            "description": "Parent batch ID if dispatched via batch endpoint"
+          },
+          "age_seconds": {
+            "type": "integer",
+            "title": "Age Seconds",
+            "description": "Estimated seconds since job was dispatched (3600 - TTL)"
+          },
+          "signal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signal",
+            "description": "BUY/SELL/HOLD/INVALID \u2014 populated on completion only"
+          },
+          "execution_time_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution Time Ms",
+            "description": "Agent execution latency \u2014 populated on completion only"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id",
+            "description": "Distributed W3C trace identifier for correlation"
+          },
+          "cache_primed": {
+            "type": "boolean",
+            "title": "Cache Primed",
+            "description": "Whether the intelligence result is primed in write-through/CQRS cache",
+            "default": false
+          },
+          "primed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primed At",
+            "description": "ISO timestamp when result was primed into cache"
+          },
+          "cache_ttl_remaining": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cache Ttl Remaining",
+            "description": "Remaining TTL in seconds for the primed cache entry"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "ticker",
+          "status",
+          "age_seconds"
+        ],
+        "title": "JobAuditEntry",
+        "description": "Snapshot of a single active or recently completed intelligence job.\nReconstructed from a Redis SCAN \u2014 requires zero PostgreSQL queries.\nAge is estimated from the job's remaining TTL against the fixed 3600s expiry."
+      },
+      "JobStatusResponse": {
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "'processing', 'completed', or 'failed'"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IntelligenceResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The final payload if completed"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error",
+            "description": "Error detail if failed"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id",
+            "description": "Distributed W3C trace identifier"
+          }
+        },
+        "type": "object",
+        "required": [
+          "job_id",
+          "status"
+        ],
+        "title": "JobStatusResponse",
+        "description": "Response schema for polling the runtime state of asynchronous intelligence tasks from Redis."
+      },
+      "LoadTestEndpointMetric": {
+        "properties": {
+          "endpoint": {
+            "type": "string",
+            "title": "Endpoint",
+            "description": "Target URI path"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method",
+            "description": "HTTP Method"
+          },
+          "request_count": {
+            "type": "integer",
+            "title": "Request Count",
+            "description": "Total requests fired"
+          },
+          "success_count": {
+            "type": "integer",
+            "title": "Success Count",
+            "description": "Successful status responses"
+          },
+          "failure_count": {
+            "type": "integer",
+            "title": "Failure Count",
+            "description": "Error responses"
+          },
+          "p50_ms": {
+            "type": "number",
+            "title": "P50 Ms",
+            "description": "50th percentile latency"
+          },
+          "p90_ms": {
+            "type": "number",
+            "title": "P90 Ms",
+            "description": "90th percentile latency"
+          },
+          "p95_ms": {
+            "type": "number",
+            "title": "P95 Ms",
+            "description": "95th percentile latency"
+          },
+          "p99_ms": {
+            "type": "number",
+            "title": "P99 Ms",
+            "description": "99th percentile latency"
+          },
+          "avg_latency_ms": {
+            "type": "number",
+            "title": "Avg Latency Ms",
+            "description": "Average latency in ms"
+          }
+        },
+        "type": "object",
+        "required": [
+          "endpoint",
+          "method",
+          "request_count",
+          "success_count",
+          "failure_count",
+          "p50_ms",
+          "p90_ms",
+          "p95_ms",
+          "p99_ms",
+          "avg_latency_ms"
+        ],
+        "title": "LoadTestEndpointMetric"
+      },
+      "LoadTestReport": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id",
+            "description": "Unique load test execution identifier"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Execution status: RUNNING | COMPLETED | FAILED",
+            "default": "COMPLETED"
+          },
+          "concurrency": {
+            "type": "integer",
+            "title": "Concurrency",
+            "description": "Concurrent virtual users"
+          },
+          "duration_seconds": {
+            "type": "number",
+            "title": "Duration Seconds",
+            "description": "Test duration in seconds"
+          },
+          "total_requests": {
+            "type": "integer",
+            "title": "Total Requests",
+            "description": "Total requests processed"
+          },
+          "total_success": {
+            "type": "integer",
+            "title": "Total Success",
+            "description": "Total successful requests"
+          },
+          "total_failures": {
+            "type": "integer",
+            "title": "Total Failures",
+            "description": "Total failed requests"
+          },
+          "requests_per_second": {
+            "type": "number",
+            "title": "Requests Per Second",
+            "description": "Overall requests per second"
+          },
+          "failure_rate_pct": {
+            "type": "number",
+            "title": "Failure Rate Pct",
+            "description": "Failure percentage (0.0 - 100.0)"
+          },
+          "latency_p50_ms": {
+            "type": "number",
+            "title": "Latency P50 Ms",
+            "description": "Median latency in milliseconds"
+          },
+          "latency_p90_ms": {
+            "type": "number",
+            "title": "Latency P90 Ms",
+            "description": "90th percentile latency"
+          },
+          "latency_p95_ms": {
+            "type": "number",
+            "title": "Latency P95 Ms",
+            "description": "95th percentile latency"
+          },
+          "latency_p99_ms": {
+            "type": "number",
+            "title": "Latency P99 Ms",
+            "description": "99th percentile latency"
+          },
+          "latency_min_ms": {
+            "type": "number",
+            "title": "Latency Min Ms",
+            "description": "Minimum recorded latency"
+          },
+          "latency_max_ms": {
+            "type": "number",
+            "title": "Latency Max Ms",
+            "description": "Maximum recorded latency"
+          },
+          "endpoint_breakdown": {
+            "items": {
+              "$ref": "#/components/schemas/LoadTestEndpointMetric"
+            },
+            "type": "array",
+            "title": "Endpoint Breakdown",
+            "description": "Per-endpoint statistics"
+          },
+          "timestamp_iso": {
+            "type": "string",
+            "title": "Timestamp Iso",
+            "description": "Timestamp of execution in ISO format"
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id",
+            "description": "W3C trace context identifier"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "concurrency",
+          "duration_seconds",
+          "total_requests",
+          "total_success",
+          "total_failures",
+          "requests_per_second",
+          "failure_rate_pct",
+          "latency_p50_ms",
+          "latency_p90_ms",
+          "latency_p95_ms",
+          "latency_p99_ms",
+          "latency_min_ms",
+          "latency_max_ms",
+          "timestamp_iso",
+          "trace_id"
+        ],
+        "title": "LoadTestReport"
+      },
+      "LoadTestRequest": {
+        "properties": {
+          "concurrency": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Concurrency",
+            "description": "Concurrent simulated users",
+            "default": 50
+          },
+          "duration_seconds": {
+            "type": "integer",
+            "maximum": 300.0,
+            "minimum": 1.0,
+            "title": "Duration Seconds",
+            "description": "Test execution duration in seconds",
+            "default": 30
+          },
+          "target_endpoints": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Endpoints",
+            "description": "Optional subset of endpoints to target"
+          }
+        },
+        "type": "object",
+        "title": "LoadTestRequest"
+      },
+      "MarketDataPayload": {
+        "properties": {
+          "ticker": {
+            "type": "string",
+            "title": "Ticker",
+            "description": "Equity ticker symbol (e.g., AAPL, TSLA)"
+          },
+          "asset_class": {
+            "type": "string",
+            "title": "Asset Class",
+            "description": "Asset type classification"
+          },
+          "current_price": {
+            "type": "number",
+            "exclusiveMinimum": 0.0,
+            "title": "Current Price",
+            "description": "Current spot price, must be strictly positive"
+          },
+          "volume": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Volume",
+            "description": "24-hour trading volume"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ticker",
+          "asset_class",
+          "current_price",
+          "volume"
+        ],
+        "title": "MarketDataPayload",
+        "description": "Data transfer contract and edge firewall schema for raw market data payloads.\nEnforces strict structural validation before database persistence or queue dispatch."
+      },
+      "MasterRegressionReport": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id",
+            "description": "Unique regression execution identifier"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "PASSED | FAILED",
+            "default": "PASSED"
+          },
+          "total_suites": {
+            "type": "integer",
+            "title": "Total Suites",
+            "description": "Total audit suites executed"
+          },
+          "suites_passed": {
+            "type": "integer",
+            "title": "Suites Passed",
+            "description": "Number of suites that passed 100%"
+          },
+          "total_assertions": {
+            "type": "integer",
+            "title": "Total Assertions",
+            "description": "Total assertions evaluated"
+          },
+          "assertions_passed": {
+            "type": "integer",
+            "title": "Assertions Passed",
+            "description": "Total assertions passed"
+          },
+          "pass_rate_pct": {
+            "type": "number",
+            "title": "Pass Rate Pct",
+            "description": "Aggregate assertion pass percentage"
+          },
+          "total_duration_ms": {
+            "type": "number",
+            "title": "Total Duration Ms",
+            "description": "Total elapsed milliseconds for complete regression"
+          },
+          "timestamp_iso": {
+            "type": "string",
+            "title": "Timestamp Iso",
+            "description": "Timestamp of regression execution"
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id",
+            "description": "W3C trace context identifier"
+          },
+          "suites": {
+            "items": {
+              "$ref": "#/components/schemas/RegressionSuiteReport"
+            },
+            "type": "array",
+            "title": "Suites",
+            "description": "Per-suite breakdown reports"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "total_suites",
+          "suites_passed",
+          "total_assertions",
+          "assertions_passed",
+          "pass_rate_pct",
+          "total_duration_ms",
+          "timestamp_iso",
+          "trace_id"
+        ],
+        "title": "MasterRegressionReport"
+      },
+      "Phase2CapstoneReport": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "description": "Phase 2 Release Version Tag",
+            "default": "v0.9.0"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Certification Status: SEALED",
+            "default": "SEALED"
+          },
+          "system_name": {
+            "type": "string",
+            "title": "System Name",
+            "description": "Application Name",
+            "default": "Automated Equity Research Engine"
+          },
+          "total_milestones": {
+            "type": "integer",
+            "title": "Total Milestones",
+            "description": "Total Phase 2 milestones",
+            "default": 6
+          },
+          "milestones_sealed": {
+            "type": "integer",
+            "title": "Milestones Sealed",
+            "description": "Number of sealed milestones",
+            "default": 6
+          },
+          "total_assertions": {
+            "type": "integer",
+            "title": "Total Assertions",
+            "description": "Cumulative audit assertions",
+            "default": 48
+          },
+          "assertions_passed": {
+            "type": "integer",
+            "title": "Assertions Passed",
+            "description": "Cumulative passed assertions",
+            "default": 48
+          },
+          "pass_rate_pct": {
+            "type": "number",
+            "title": "Pass Rate Pct",
+            "description": "Assertion pass rate percentage",
+            "default": 100.0
+          },
+          "stream_health_status": {
+            "type": "string",
+            "title": "Stream Health Status",
+            "description": "Redis Streams cluster state",
+            "default": "ACTIVE"
+          },
+          "circuit_breaker_state": {
+            "type": "string",
+            "title": "Circuit Breaker State",
+            "description": "Groq LLM circuit state",
+            "default": "CLOSED"
+          },
+          "cache_layer_status": {
+            "type": "string",
+            "title": "Cache Layer Status",
+            "description": "Cache-aside layer state",
+            "default": "OPERATIONAL"
+          },
+          "rag_embeddings_status": {
+            "type": "string",
+            "title": "Rag Embeddings Status",
+            "description": "pgvector RAG state",
+            "default": "OPERATIONAL"
+          },
+          "lines_of_code": {
+            "type": "integer",
+            "title": "Lines Of Code",
+            "description": "Total repository Python lines of code"
+          },
+          "python_modules_count": {
+            "type": "integer",
+            "title": "Python Modules Count",
+            "description": "Total Python source files inspected"
+          },
+          "milestones": {
+            "items": {
+              "$ref": "#/components/schemas/Phase2MilestoneSummary"
+            },
+            "type": "array",
+            "title": "Milestones",
+            "description": "Constituent milestone summaries"
+          },
+          "timestamp_iso": {
+            "type": "string",
+            "title": "Timestamp Iso",
+            "description": "Timestamp of capstone certification"
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id",
+            "description": "W3C trace context identifier"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lines_of_code",
+          "python_modules_count",
+          "timestamp_iso",
+          "trace_id"
+        ],
+        "title": "Phase2CapstoneReport"
+      },
+      "Phase2MilestoneSummary": {
+        "properties": {
+          "milestone_id": {
+            "type": "string",
+            "title": "Milestone Id",
+            "description": "Milestone code: M1 | M2 | M3 | M4 | M5 | CAPSTONE"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Milestone designation"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Status: SEALED | CERTIFIED",
+            "default": "SEALED"
+          },
+          "days_covered": {
+            "type": "string",
+            "title": "Days Covered",
+            "description": "Roadmap days range"
+          },
+          "assertions_count": {
+            "type": "integer",
+            "title": "Assertions Count",
+            "description": "Number of verified audit assertions"
+          },
+          "audit_suite": {
+            "type": "string",
+            "title": "Audit Suite",
+            "description": "Associated audit script"
+          },
+          "key_features": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Key Features",
+            "description": "Core architectural deliverables"
+          }
+        },
+        "type": "object",
+        "required": [
+          "milestone_id",
+          "title",
+          "days_covered",
+          "assertions_count",
+          "audit_suite"
+        ],
+        "title": "Phase2MilestoneSummary"
+      },
+      "RedisMemoryPressureReport": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id",
+            "description": "Unique memory stress run identifier"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Execution status: COMPLETED | FAILED",
+            "default": "COMPLETED"
+          },
+          "keys_generated": {
+            "type": "integer",
+            "title": "Keys Generated",
+            "description": "Count of synthetic pressure keys injected"
+          },
+          "memory_before_mb": {
+            "type": "number",
+            "title": "Memory Before Mb",
+            "description": "Memory footprint prior to injection"
+          },
+          "memory_peak_mb": {
+            "type": "number",
+            "title": "Memory Peak Mb",
+            "description": "Peak memory recorded during injection"
+          },
+          "memory_after_mb": {
+            "type": "number",
+            "title": "Memory After Mb",
+            "description": "Memory footprint after cleanup/eviction"
+          },
+          "delta_bytes": {
+            "type": "integer",
+            "title": "Delta Bytes",
+            "description": "Net bytes introduced during test"
+          },
+          "eviction_detected": {
+            "type": "boolean",
+            "title": "Eviction Detected",
+            "description": "Whether key eviction occurred"
+          },
+          "graceful_degradation_verified": {
+            "type": "boolean",
+            "title": "Graceful Degradation Verified",
+            "description": "Confirmed cache misses safely resolved to database"
+          },
+          "timestamp_iso": {
+            "type": "string",
+            "title": "Timestamp Iso",
+            "description": "Timestamp of execution in ISO format"
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id",
+            "description": "W3C trace context identifier"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "keys_generated",
+          "memory_before_mb",
+          "memory_peak_mb",
+          "memory_after_mb",
+          "delta_bytes",
+          "eviction_detected",
+          "graceful_degradation_verified",
+          "timestamp_iso",
+          "trace_id"
+        ],
+        "title": "RedisMemoryPressureReport"
+      },
+      "RedisMemoryPressureRequest": {
+        "properties": {
+          "target_fill_mb": {
+            "type": "number",
+            "maximum": 50.0,
+            "minimum": 0.5,
+            "title": "Target Fill Mb",
+            "description": "Synthetic target memory fill in MB",
+            "default": 5.0
+          },
+          "key_count": {
+            "type": "integer",
+            "maximum": 2000.0,
+            "minimum": 10.0,
+            "title": "Key Count",
+            "description": "Quantity of synthetic pressure keys to populate",
+            "default": 200
+          },
+          "ttl_seconds": {
+            "type": "integer",
+            "maximum": 3600.0,
+            "minimum": 1.0,
+            "title": "Ttl Seconds",
+            "description": "TTL duration for pressure keys",
+            "default": 60
+          }
+        },
+        "type": "object",
+        "title": "RedisMemoryPressureRequest"
+      },
+      "RedisMemoryStatus": {
+        "properties": {
+          "used_memory_mb": {
+            "type": "number",
+            "title": "Used Memory Mb",
+            "description": "Current Redis memory consumption in megabytes"
+          },
+          "peak_memory_mb": {
+            "type": "number",
+            "title": "Peak Memory Mb",
+            "description": "Peak historical Redis memory footprint in MB"
+          },
+          "allocated_limit_mb": {
+            "type": "number",
+            "title": "Allocated Limit Mb",
+            "description": "Configured or provisioned maxmemory boundary in MB"
+          },
+          "memory_utilization_pct": {
+            "type": "number",
+            "title": "Memory Utilization Pct",
+            "description": "Current memory capacity utilization percentage"
+          },
+          "evicted_keys_count": {
+            "type": "integer",
+            "title": "Evicted Keys Count",
+            "description": "Cumulative count of keys evicted by LRU/LFU policy"
+          },
+          "expired_keys_count": {
+            "type": "integer",
+            "title": "Expired Keys Count",
+            "description": "Cumulative count of keys expired by TTL"
+          },
+          "fragmentation_ratio": {
+            "type": "number",
+            "title": "Fragmentation Ratio",
+            "description": "Redis memory fragmentation ratio"
+          },
+          "total_tracked_keys": {
+            "type": "integer",
+            "title": "Total Tracked Keys",
+            "description": "Total active keys in database"
+          },
+          "pressure_status": {
+            "type": "string",
+            "title": "Pressure Status",
+            "description": "Operational status: HEALTHY | ELEVATED | CRITICAL"
+          },
+          "timestamp_iso": {
+            "type": "string",
+            "title": "Timestamp Iso",
+            "description": "Timestamp of metric capture"
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id",
+            "description": "W3C trace context identifier"
+          }
+        },
+        "type": "object",
+        "required": [
+          "used_memory_mb",
+          "peak_memory_mb",
+          "allocated_limit_mb",
+          "memory_utilization_pct",
+          "evicted_keys_count",
+          "expired_keys_count",
+          "fragmentation_ratio",
+          "total_tracked_keys",
+          "pressure_status",
+          "timestamp_iso",
+          "trace_id"
+        ],
+        "title": "RedisMemoryStatus"
+      },
+      "RegressionAssertionDetail": {
+        "properties": {
+          "assertion_number": {
+            "type": "integer",
+            "title": "Assertion Number",
+            "description": "Assertion index within suite"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "Human-readable assertion title"
+          },
+          "passed": {
+            "type": "boolean",
+            "title": "Passed",
+            "description": "Whether assertion succeeded"
+          },
+          "details": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details",
+            "description": "Assertion execution telemetry or error description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "assertion_number",
+          "title",
+          "passed"
+        ],
+        "title": "RegressionAssertionDetail"
+      },
+      "RegressionSuiteReport": {
+        "properties": {
+          "suite_id": {
+            "type": "string",
+            "title": "Suite Id",
+            "description": "Unique suite identifier"
+          },
+          "suite_name": {
+            "type": "string",
+            "title": "Suite Name",
+            "description": "Display name of the regression suite"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "PASSED | FAILED",
+            "default": "PASSED"
+          },
+          "assertions_passed": {
+            "type": "integer",
+            "title": "Assertions Passed",
+            "description": "Number of passed assertions"
+          },
+          "total_assertions": {
+            "type": "integer",
+            "title": "Total Assertions",
+            "description": "Total assertion count"
+          },
+          "duration_ms": {
+            "type": "number",
+            "title": "Duration Ms",
+            "description": "Elapsed milliseconds to execute suite"
+          },
+          "assertions": {
+            "items": {
+              "$ref": "#/components/schemas/RegressionAssertionDetail"
+            },
+            "type": "array",
+            "title": "Assertions",
+            "description": "List of granular assertion details"
+          }
+        },
+        "type": "object",
+        "required": [
+          "suite_id",
+          "suite_name",
+          "assertions_passed",
+          "total_assertions",
+          "duration_ms"
+        ],
+        "title": "RegressionSuiteReport"
+      },
+      "SignalSchema": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Signal classification code"
+          },
+          "strength": {
+            "type": "string",
+            "title": "Strength",
+            "description": "Signal confidence strength"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "Deterministic human-readable explanation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "strength",
+          "description"
+        ],
+        "title": "SignalSchema"
+      },
+      "SystemArchitectureTopology": {
+        "properties": {
+          "system_name": {
+            "type": "string",
+            "title": "System Name",
+            "description": "Application name"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "description": "Architecture specification version"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "System operational state",
+            "default": "OPERATIONAL"
+          },
+          "subsystems": {
+            "items": {
+              "$ref": "#/components/schemas/ArchitectureSubsystem"
+            },
+            "type": "array",
+            "title": "Subsystems",
+            "description": "Tiered subsystems"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/ArchitectureEdge"
+            },
+            "type": "array",
+            "title": "Edges",
+            "description": "Directed data flow edges"
+          },
+          "mermaid_diagram": {
+            "type": "string",
+            "title": "Mermaid Diagram",
+            "description": "Canonical Mermaid syntax string for rendering"
+          },
+          "timestamp_iso": {
+            "type": "string",
+            "title": "Timestamp Iso",
+            "description": "Timestamp of topology generation"
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id",
+            "description": "W3C trace context identifier"
+          }
+        },
+        "type": "object",
+        "required": [
+          "system_name",
+          "version",
+          "mermaid_diagram",
+          "timestamp_iso",
+          "trace_id"
+        ],
+        "title": "SystemArchitectureTopology"
+      },
+      "SystemAuditResponse": {
+        "properties": {
+          "total_active_jobs": {
+            "type": "integer",
+            "title": "Total Active Jobs",
+            "description": "Total jobs present in Redis at time of scan"
+          },
+          "processing": {
+            "type": "integer",
+            "title": "Processing",
+            "description": "Jobs currently executing in background workers"
+          },
+          "completed": {
+            "type": "integer",
+            "title": "Completed",
+            "description": "Jobs that have finished and cached their result"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed",
+            "description": "Jobs that crashed with an exception"
+          },
+          "jobs": {
+            "items": {
+              "$ref": "#/components/schemas/JobAuditEntry"
+            },
+            "type": "array",
+            "title": "Jobs",
+            "description": "Individual job snapshots, sorted processing-first"
+          },
+          "audit_timestamp_ms": {
+            "type": "integer",
+            "title": "Audit Timestamp Ms",
+            "description": "Unix epoch milliseconds when the scan was performed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_active_jobs",
+          "processing",
+          "completed",
+          "failed",
+          "jobs",
+          "audit_timestamp_ms"
+        ],
+        "title": "SystemAuditResponse",
+        "description": "Aggregated live job registry payload returned by GET /v1/intelligence/audit.\nProvides an instant operational snapshot of all active Redis job states\nwith summary counters for dashboard consumption."
+      },
+      "TickerAnalyticsResponse": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "calculated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculated At"
+          },
+          "data_points_analyzed": {
+            "type": "integer",
+            "title": "Data Points Analyzed"
+          },
+          "current_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Price"
+          },
+          "indicators": {
+            "$ref": "#/components/schemas/IndicatorsSchema"
+          },
+          "crossover_signal": {
+            "$ref": "#/components/schemas/SignalSchema"
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbol",
+          "data_points_analyzed",
+          "indicators",
+          "crossover_signal",
+          "trace_id"
+        ],
+        "title": "TickerAnalyticsResponse"
+      },
+      "TokenResponse": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "token_type"
+        ],
+        "title": "TokenResponse"
+      },
+      "TraceSpanEntry": {
+        "properties": {
+          "stage": {
+            "type": "string",
+            "title": "Stage",
+            "description": "Lifecycle stage: INGEST_AND_STREAM_ENQUEUE | STREAM_QUEUE_WAIT | WORKER_MULTI_AGENT_EXECUTION | BROADCAST_AND_PERSIST"
+          },
+          "span_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Span Id",
+            "description": "Span identifier"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms",
+            "description": "Stage latency in milliseconds"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Stage execution status: COMPLETED | FAILED | QUARANTINED",
+            "default": "COMPLETED"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stage"
+        ],
+        "title": "TraceSpanEntry",
+        "description": "Represents an individual stage span within the distributed processing waterfall."
+      },
+      "TraceWaterfallResponse": {
+        "properties": {
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id",
+            "description": "W3C 32-character hexadecimal trace identifier"
+          },
+          "job_id": {
+            "type": "string",
+            "title": "Job Id",
+            "description": "Associated job tracking UUID"
+          },
+          "ticker": {
+            "type": "string",
+            "title": "Ticker",
+            "description": "Target equity ticker symbol"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Final job status: completed | failed | dead_lettered"
+          },
+          "total_journey_ms": {
+            "type": "number",
+            "title": "Total Journey Ms",
+            "description": "End-to-end journey latency from edge ingest to client delivery"
+          },
+          "spans": {
+            "items": {
+              "$ref": "#/components/schemas/TraceSpanEntry"
+            },
+            "type": "array",
+            "title": "Spans",
+            "description": "Ordered list of execution spans across microservice boundaries"
+          },
+          "server_timestamp_ms": {
+            "type": "integer",
+            "title": "Server Timestamp Ms",
+            "description": "Server wall-clock timestamp of the trace query"
+          }
+        },
+        "type": "object",
+        "required": [
+          "trace_id",
+          "job_id",
+          "ticker",
+          "status",
+          "total_journey_ms",
+          "spans",
+          "server_timestamp_ms"
+        ],
+        "title": "TraceWaterfallResponse",
+        "description": "End-to-end distributed trace waterfall for a single transaction lifecycle."
+      },
+      "UserCreate": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "UserCreate"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "VolatilityMetricsResponse": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "calculated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculated At"
+          },
+          "data_points_analyzed": {
+            "type": "integer",
+            "title": "Data Points Analyzed"
+          },
+          "volatility_30d_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Volatility 30D Pct",
+            "description": "Annualized 30-day volatility %"
+          },
+          "sharpe_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sharpe Ratio",
+            "description": "Sharpe ratio (risk-adjusted return)"
+          },
+          "max_drawdown_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Drawdown Pct",
+            "description": "Maximum peak-to-trough drawdown %"
+          },
+          "risk_level": {
+            "type": "string",
+            "title": "Risk Level",
+            "description": "Risk level classification",
+            "default": "MODERATE_RISK"
+          },
+          "sharpe_rating": {
+            "type": "string",
+            "title": "Sharpe Rating",
+            "description": "Sharpe ratio rating",
+            "default": "SUBPAR"
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbol",
+          "data_points_analyzed",
+          "trace_id"
+        ],
+        "title": "VolatilityMetricsResponse"
+      },
+      "WorkerChaosRecoveryReport": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "title": "Run Id",
+            "description": "Unique chaos recovery run identifier"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Execution status: COMPLETED | FAILED",
+            "default": "COMPLETED"
+          },
+          "stream_name": {
+            "type": "string",
+            "title": "Stream Name",
+            "description": "Target Redis stream identifier"
+          },
+          "group_name": {
+            "type": "string",
+            "title": "Group Name",
+            "description": "Consumer group name"
+          },
+          "orphaned_message_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Orphaned Message Ids",
+            "description": "IDs of messages orphaned by dead worker"
+          },
+          "claimed_message_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Claimed Message Ids",
+            "description": "IDs of messages successfully reclaimed via XAUTOCLAIM"
+          },
+          "recovery_time_ms": {
+            "type": "number",
+            "title": "Recovery Time Ms",
+            "description": "Elapsed milliseconds to detect orphan and reclaim ownership"
+          },
+          "pel_cleared": {
+            "type": "boolean",
+            "title": "Pel Cleared",
+            "description": "Flag verifying that pending entries list count returned to zero"
+          },
+          "sla_met": {
+            "type": "boolean",
+            "title": "Sla Met",
+            "description": "Whether recovery completed within 30-second target SLA"
+          },
+          "timestamp_iso": {
+            "type": "string",
+            "title": "Timestamp Iso",
+            "description": "Timestamp of recovery completion"
+          },
+          "trace_id": {
+            "type": "string",
+            "title": "Trace Id",
+            "description": "W3C trace context identifier"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "stream_name",
+          "group_name",
+          "recovery_time_ms",
+          "pel_cleared",
+          "sla_met",
+          "timestamp_iso",
+          "trace_id"
+        ],
+        "title": "WorkerChaosRecoveryReport"
+      },
+      "WorkerChaosSimulationRequest": {
+        "properties": {
+          "orphaned_message_count": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 1.0,
+            "title": "Orphaned Message Count",
+            "description": "Quantity of messages to leave unacknowledged",
+            "default": 1
+          },
+          "min_idle_time_ms": {
+            "type": "integer",
+            "maximum": 5000.0,
+            "minimum": 50.0,
+            "title": "Min Idle Time Ms",
+            "description": "Minimum idle time before triggering XAUTOCLAIM",
+            "default": 200
+          },
+          "consumer_dead_name": {
+            "type": "string",
+            "title": "Consumer Dead Name",
+            "description": "Name of terminated worker consumer",
+            "default": "worker_chaos_victim"
+          },
+          "consumer_recovery_name": {
+            "type": "string",
+            "title": "Consumer Recovery Name",
+            "description": "Name of claiming recovery consumer",
+            "default": "worker_chaos_rescuer"
+          }
+        },
+        "type": "object",
+        "title": "WorkerChaosSimulationRequest"
+      }
+    },
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Provide JWT session token obtained via POST /v1/auth/login"
+      },
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-N8N-API-KEY",
+        "description": "Internal orchestration API key for machine-to-machine pipelines"
+      }
+    },
+    "responses": {
+      "BadRequestError": {
+        "description": "Invalid payload format, schema constraint violation, or perimeter firewall rejection.",
+        "content": {
+          "application/json": {
+            "example": {
+              "status": "blocked",
+              "error_type": "DataFirewallViolation",
+              "details": [
+                {
+                  "field": "ticker",
+                  "issue": "Field required"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "UnauthorizedError": {
+        "description": "Missing, expired, or invalid authorization credentials.",
+        "content": {
+          "application/json": {
+            "example": {
+              "detail": "Missing or invalid authorization credentials"
+            }
+          }
+        }
+      },
+      "RateLimitError": {
+        "description": "Request volume exceeds sliding-window rate limit threshold.",
+        "content": {
+          "application/json": {
+            "example": {
+              "status": "blocked",
+              "error": "Rate limit exceeded. Maximum 5 requests per minute allowed.",
+              "retry_after_seconds": 60
+            }
+          }
+        }
+      },
+      "InternalServerError": {
+        "description": "Internal service execution error with W3C trace tracking context.",
+        "content": {
+          "application/json": {
+            "example": {
+              "status": "error",
+              "message": "Internal worker error",
+              "trace_id": "9b1deb4d3b7d4bad9bdd2b0d7b3dcb6d"
+            }
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Authentication & Perimeter Security",
+      "description": "Zero-trust session authorization, JWT verification, and user management."
+    },
+    {
+      "name": "Intelligence & Agentic Orchestration",
+      "description": "LangGraph multi-agent financial research, single-asset and multi-asset batch analysis jobs."
+    },
+    {
+      "name": "Quantitative Time-Series Analytics",
+      "description": "PostgreSQL window-function calculations: SMA, RSI, Bollinger Bands, Volatility, Sharpe Ratio, and Composite Technical Signal Fusion."
+    },
+    {
+      "name": "Market Data Ingestion & Streaming",
+      "description": "Historical and live OHLCV price ingestion via yfinance with WebSocket broadcasting."
+    },
+    {
+      "name": "Document Ingestion & Qualitative RAG",
+      "description": "PDF recursive chunking, SEC EDGAR filing ingestion, pgvector semantic search, and citation retrieval."
+    },
+    {
+      "name": "Chaos Engineering & Resilience",
+      "description": "High-throughput Locust load testing, connection pool stress, Redis memory pressure, and event-loop latency benchmarking."
+    },
+    {
+      "name": "Regression Auditing & Verification",
+      "description": "Continuous verification runner evaluating 33 institutional assertions across all 5 milestones."
+    },
+    {
+      "name": "System Architecture & Topology",
+      "description": "Inspect 7-tier microservice architecture nodes, directed data flow graph, and Mermaid blueprints."
+    },
+    {
+      "name": "Code Quality & Static Analysis",
+      "description": "Ruff linter compliance, AST syntax parsing verification, and codebase metric governance."
+    },
+    {
+      "name": "System Telemetry & Health Probes",
+      "description": "Cloud load balancer liveness probes, readiness checks, and administration seeds."
+    }
+  ]
+}
