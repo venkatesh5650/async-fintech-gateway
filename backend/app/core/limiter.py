@@ -8,6 +8,7 @@ if "redis://redis:" in REDIS_URL and not os.path.exists("/.dockerenv"):
     REDIS_URL = REDIS_URL.replace("redis://redis:", "redis://localhost:")
 limiter_redis = redis.from_url(REDIS_URL, decode_responses=True)
 
+
 class RateLimiter:
     def __init__(self, requests_per_minute: int = 5):
         self.rpm = requests_per_minute
@@ -17,7 +18,7 @@ class RateLimiter:
         client_ip = request.client.host if request.client else "unknown_client"
         current_time = time.time()
         redis_key = f"rate_limit:{client_ip}"
-        
+
         async with limiter_redis.pipeline() as pipe:
             try:
                 # 1. Clean up old entries outside the sliding window
@@ -26,9 +27,9 @@ class RateLimiter:
                 pipe.zcard(redis_key)
                 # 3. Refresh TTL
                 pipe.expire(redis_key, self.window)
-                
+
                 _, current_count, _ = await pipe.execute()
-                
+
                 # 4. If limit is already reached, block immediately WITHOUT adding the new timestamp
                 if current_count >= self.rpm:
                     raise HTTPException(
@@ -36,11 +37,11 @@ class RateLimiter:
                         detail={
                             "status": "blocked",
                             "error_type": "RateLimitExceeded",
-                            "message": f"Security Threshold Breached. Maximum {self.rpm} requests per minute allowed."
+                            "message": f"Security Threshold Breached. Maximum {self.rpm} requests per minute allowed.",
                         },
-                        headers={"Retry-After": str(self.window)}
+                        headers={"Retry-After": str(self.window)},
                     )
-                
+
                 # 5. If allowed, add the current request timestamp
                 await limiter_redis.zadd(redis_key, {str(current_time): current_time})
 

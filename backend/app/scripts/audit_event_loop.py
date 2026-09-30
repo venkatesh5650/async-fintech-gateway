@@ -106,9 +106,7 @@ async def test_event_loop_recovery_and_starvation_clearing():
 
     # Validate post-burst recovery
     status = await monitor.get_status()
-    assert status.current_lag_ms < 15.0, (
-        f"Expected post-burst lag to clear below 15ms, got {status.current_lag_ms}ms"
-    )
+    assert status.current_lag_ms < 15.0, f"Expected post-burst lag to clear below 15ms, got {status.current_lag_ms}ms"
     assert status.blocking_events_count >= 1, "Blocking event counter must be incremented"
 
     logger.info(

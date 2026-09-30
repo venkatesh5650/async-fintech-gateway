@@ -83,7 +83,6 @@ async def test_redis_pressure_injection():
 async def test_lru_eviction_and_expiry_detection():
     logger.info("Running assertion 3: Validating LRU eviction and key expiry detection...")
     redis_client = await get_test_redis()
-    manager = RedisMemoryPressureManager(redis_client=redis_client)
 
     try:
         # Write temporary volatile keys and verify TTL / expiration mechanism

@@ -25,11 +25,11 @@ async def audit_redis_streams_group():
     logger.info("🧪 [1/7] Auditing Redis Streams broker & consumer group initialization...")
     r = get_redis_client()
     await ensure_consumer_group(client=r)
-    
+
     trace_id = generate_trace_id()
     msg_id = await enqueue_intelligence_job("job_audit_evt", "AUD_EVT", trace_id=trace_id, client=r)
     assert msg_id is not None, "Failed to publish job to Redis Stream"
-    
+
     lag = await get_stream_lag(client=r)
     assert isinstance(lag, dict), "Stream lag must return a dict"
     logger.info(f"   ├─ Published Message ID: {msg_id}")
@@ -60,6 +60,7 @@ async def audit_concurrency_lag():
 async def audit_circuit_breaker():
     logger.info("🧪 [4/7] Auditing sliding-window RateLimiter & Redis pipeline security...")
     from app.core.limiter import RateLimiter
+
     limiter = RateLimiter(requests_per_minute=5)
     assert limiter.rpm == 5
     assert limiter.window == 60
@@ -82,10 +83,10 @@ async def audit_distributed_tracing():
 async def audit_cache_aside():
     logger.info("🧪 [6/7] Auditing Cache-Aside read optimization & TTL manager...")
     cache = CacheAsideManager()
-    
+
     test_data = {"ticker": "AUD_EVT", "result": "BUY", "timestamp": datetime.now(timezone.utc).isoformat()}
     await cache.set_cached_result("AUD_EVT", test_data, ttl=60)
-    
+
     cached = await cache.get_cached_result("AUD_EVT")
     assert cached is not None
     assert cached["ticker"] == "AUD_EVT"
@@ -96,14 +97,14 @@ async def audit_cache_aside():
 async def audit_stampede_prevention():
     logger.info("🧪 [7/7] Auditing Write-Through priming & mutex stampede prevention...")
     cache = CacheAsideManager()
-    
+
     lock_acquired, token = await cache.acquire_mutex("AUD_EVT")
     assert lock_acquired is True
     assert token is not None
-    
+
     lock_again, token2 = await cache.acquire_mutex("AUD_EVT")
     assert lock_again is False
-    
+
     await cache.release_mutex("AUD_EVT", token)
     await cache.close()
     logger.info("✅ [7/7 PASSED] Distributed mutex stampede prevention verified.")

@@ -92,7 +92,7 @@ class WorkerChaosRecoveryManager:
                 injected_ids.append(msg_id)
 
             # 2. Worker victim consumes messages without acknowledging (simulating in-flight crash)
-            read_entries = await client.xreadgroup(
+            _ = await client.xreadgroup(
                 groupname=group,
                 consumername=consumer_dead_name,
                 streams={stream: ">"},
@@ -100,8 +100,7 @@ class WorkerChaosRecoveryManager:
             )
 
             # Validate victim checkout into PEL
-            pending_before = await client.xpending(stream, group)
-            initial_pel_count = pending_before.get("pending", 0) if isinstance(pending_before, dict) else 0
+            _pending_before = await client.xpending(stream, group)
 
             # 3. Simulate worker downtime: wait past the min_idle_time threshold
             idle_wait_sec = (min_idle_time_ms / 1000.0) + 0.05

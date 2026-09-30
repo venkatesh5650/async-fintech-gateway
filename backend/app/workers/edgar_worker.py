@@ -1,13 +1,11 @@
 import asyncio
-import io
 import json
 import logging
 import os
 import time
 import uuid
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 import redis.asyncio as redis
-from sqlalchemy import select
 
 from app.core.document_parser import parse_and_chunk_pdf
 from app.core.embedder import generate_batch_embeddings, EMBEDDING_DIM
@@ -20,7 +18,9 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 if "redis://redis:" in REDIS_URL and not os.path.exists("/.dockerenv"):
     REDIS_URL = REDIS_URL.replace("redis://redis:", "redis://localhost:")
 elif "redis://fintech_redis:" in REDIS_URL:
-    REDIS_URL = REDIS_URL.replace("redis://fintech_redis:", "redis://localhost:" if not os.path.exists("/.dockerenv") else "redis://redis:")
+    REDIS_URL = REDIS_URL.replace(
+        "redis://fintech_redis:", "redis://localhost:" if not os.path.exists("/.dockerenv") else "redis://redis:"
+    )
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 
 TRACKED_TICKERS = ["AAPL", "NVDA", "TSLA", "MSFT", "GOOGL", "AMD", "META"]
@@ -389,9 +389,10 @@ FILING_TEMPLATES = {
     },
 }
 
+
 def build_synthetic_pdf(pages: list[str]) -> bytes:
     objects = []
-    
+
     font_obj_id = 1
     catalog_id = 2
     pages_dict_id = 3
@@ -402,7 +403,7 @@ def build_synthetic_pdf(pages: list[str]) -> bytes:
     page_ids = []
     for i, page_text in enumerate(pages):
         safe_text = page_text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)").replace("\n", " ")
-        lines = [safe_text[j:j+80] for j in range(0, len(safe_text), 80)]
+        lines = [safe_text[j : j + 80] for j in range(0, len(safe_text), 80)]
         stream_parts = ["BT /F1 9 Tf 36 750 Td 14 TL"]
         y = 750
         for line in lines:
@@ -420,9 +421,14 @@ def build_synthetic_pdf(pages: list[str]) -> bytes:
         page_ids.append(page_id)
 
         objects.append((content_id, f"<< /Length {len(stream_bytes)} >>\nstream\n{stream_content}\nendstream"))
-        objects.append((page_id, f"<< /Type /Page /Parent {pages_dict_id} 0 R /MediaBox [0 0 612 792] "
-                                  f"/Resources << /Font << /F1 {font_obj_id} 0 R >> >> "
-                                  f"/Contents {content_id} 0 R >>"))
+        objects.append(
+            (
+                page_id,
+                f"<< /Type /Page /Parent {pages_dict_id} 0 R /MediaBox [0 0 612 792] "
+                f"/Resources << /Font << /F1 {font_obj_id} 0 R >> >> "
+                f"/Contents {content_id} 0 R >>",
+            )
+        )
 
     kids_ref = " ".join(f"{pid} 0 R" for pid in page_ids)
     objects.append((pages_dict_id, f"<< /Type /Pages /Kids [{kids_ref}] /Count {len(pages)} >>"))
@@ -447,6 +453,7 @@ def build_synthetic_pdf(pages: list[str]) -> bytes:
     body += xref.encode("latin1", errors="replace")
     return body
 
+
 async def sync_edgar_filings_for_ticker(ticker: str, doc_type: str = "10-K") -> Dict[str, Any]:
     t0 = time.perf_counter()
     clean_ticker = ticker.upper().strip()
@@ -455,7 +462,9 @@ async def sync_edgar_filings_for_ticker(ticker: str, doc_type: str = "10-K") -> 
         clean_ticker,
         {
             "title": f"{clean_ticker} Form {doc_type} Annual Report",
-            "pages": [f"{clean_ticker} financial statements, risk factors, gross margin breakdown, and management disclosures for fiscal period."],
+            "pages": [
+                f"{clean_ticker} financial statements, risk factors, gross margin breakdown, and management disclosures for fiscal period."
+            ],
         },
     )
 

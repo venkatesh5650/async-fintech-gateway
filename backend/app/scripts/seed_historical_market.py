@@ -13,6 +13,7 @@ from app.database.models import Ticker, MarketPricing
 
 TICKERS = ["AAPL", "MSFT", "NVDA", "TSLA", "GOOGL"]
 
+
 async def seed_historical_data():
     async with AsyncSessionLocal() as session:
         for symbol in TICKERS:
@@ -23,9 +24,7 @@ async def seed_historical_data():
                 continue
 
             # Ensure ticker exists
-            res = await session.execute(
-                Ticker.__table__.select().where(Ticker.symbol == symbol)
-            )
+            res = await session.execute(Ticker.__table__.select().where(Ticker.symbol == symbol))
             row = res.fetchone()
             if not row:
                 res_ins = await session.execute(
@@ -43,31 +42,38 @@ async def seed_historical_data():
                 else:
                     dt = dt.astimezone(timezone.utc)
 
-                pricing_rows.append({
-                    "ticker_id": ticker_id,
-                    "timestamp": dt,
-                    "open_price": Decimal(str(round(float(r["Open"]), 4))),
-                    "high_price": Decimal(str(round(float(r["High"]), 4))),
-                    "low_price": Decimal(str(round(float(r["Low"]), 4))),
-                    "close_price": Decimal(str(round(float(r["Close"]), 4))),
-                    "volume": int(r["Volume"])
-                })
-
-            for p in pricing_rows:
-                stmt = pg_insert(MarketPricing).values(**p).on_conflict_do_update(
-                    constraint="uix_ticker_timestamp",
-                    set_={
-                        "open_price": p["open_price"],
-                        "high_price": p["high_price"],
-                        "low_price": p["low_price"],
-                        "close_price": p["close_price"],
-                        "volume": p["volume"]
+                pricing_rows.append(
+                    {
+                        "ticker_id": ticker_id,
+                        "timestamp": dt,
+                        "open_price": Decimal(str(round(float(r["Open"]), 4))),
+                        "high_price": Decimal(str(round(float(r["High"]), 4))),
+                        "low_price": Decimal(str(round(float(r["Low"]), 4))),
+                        "close_price": Decimal(str(round(float(r["Close"]), 4))),
+                        "volume": int(r["Volume"]),
                     }
                 )
+
+            for p in pricing_rows:
+                stmt = (
+                    pg_insert(MarketPricing)
+                    .values(**p)
+                    .on_conflict_do_update(
+                        constraint="uix_ticker_timestamp",
+                        set_={
+                            "open_price": p["open_price"],
+                            "high_price": p["high_price"],
+                            "low_price": p["low_price"],
+                            "close_price": p["close_price"],
+                            "volume": p["volume"],
+                        },
+                    )
+                )
                 await session.execute(stmt)
-            
+
             print(f"✅ [SEED] Seeded {len(pricing_rows)} daily historical bars for {symbol}")
         await session.commit()
+
 
 if __name__ == "__main__":
     asyncio.run(seed_historical_data())

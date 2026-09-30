@@ -13,6 +13,7 @@ redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 
 router = APIRouter(prefix="/v1/ws", tags=["WebSockets"])
 
+
 class ConnectionManager:
     def __init__(self):
         # Maps active TCP sockets directly to unique job_ids for O(1) routing
@@ -37,7 +38,7 @@ class ConnectionManager:
         # Increment sequence number for this specific connection
         seq = self.connection_sequences.get(job_id, 0) + 1
         self.connection_sequences[job_id] = seq
-        
+
         # Inject sequence number into payload
         payload = {**message, "sequence_number": seq}
         await websocket.send_text(json.dumps(payload))
@@ -67,7 +68,9 @@ class ConnectionManager:
         for dead_id in dead_connections:
             self.disconnect(dead_id)
 
+
 manager = ConnectionManager()
+
 
 @router.websocket("/jobs/{job_id}")
 async def websocket_job_endpoint(websocket: WebSocket, job_id: str):

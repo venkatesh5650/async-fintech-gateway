@@ -28,9 +28,7 @@ async def audit_database_pipeline():
         res = await session.execute(text("SELECT 1;"))
         assert res.scalar() == 1, "Database health query failed"
 
-        res_ticker = await session.execute(
-            Ticker.__table__.select().where(Ticker.symbol == "AUD_SYS")
-        )
+        res_ticker = await session.execute(Ticker.__table__.select().where(Ticker.symbol == "AUD_SYS"))
         row = res_ticker.fetchone()
         if not row:
             stmt = Ticker.__table__.insert().values(symbol="AUD_SYS", company_name="System Audit Corp")
@@ -47,7 +45,7 @@ async def audit_database_pipeline():
             high_price=Decimal("155.00"),
             low_price=Decimal("149.00"),
             close_price=Decimal("154.50"),
-            volume=1000000
+            volume=1000000,
         )
         await session.execute(stmt_p)
         await session.commit()
@@ -58,6 +56,7 @@ async def audit_database_pipeline():
 async def audit_redis_handshake():
     logger.info("🧪 [2/7] Auditing Redis connection & pub/sub infrastructure...")
     import redis.asyncio as aioredis
+
     redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     r = aioredis.from_url(redis_url)
     ping = await r.ping()
@@ -69,6 +68,7 @@ async def audit_redis_handshake():
 async def audit_perimeter_security():
     logger.info("🧪 [3/7] Auditing zero-trust authentication perimeter...")
     from app.routers.intelligence import verify_m2m_or_user
+
     assert verify_m2m_or_user is not None
     logger.info("✅ [3/7 PASSED] Zero-trust security perimeter verified.")
 
@@ -82,6 +82,7 @@ async def audit_langgraph_engine():
 async def audit_m2m_bridge():
     logger.info("🧪 [5/7] Auditing M2M security bridge...")
     from app.routers.intelligence import verify_m2m_or_user
+
     assert callable(verify_m2m_or_user)
     logger.info("✅ [5/7 PASSED] M2M bridge interface verified.")
 
@@ -89,6 +90,7 @@ async def audit_m2m_bridge():
 async def audit_websocket_telemetry():
     logger.info("🧪 [6/7] Auditing WebSocket manager & packet schemas...")
     from app.routers.intelligence import manager
+
     assert manager is not None
     assert hasattr(manager, "broadcast")
     logger.info("✅ [6/7 PASSED] WebSocket broadcast manager verified.")
@@ -97,6 +99,7 @@ async def audit_websocket_telemetry():
 async def audit_batch_orchestration():
     logger.info("🧪 [7/7] Auditing multi-asset batch orchestration request models...")
     from app.database.schemas import BatchAnalysisRequest
+
     req = BatchAnalysisRequest(tickers=["AAPL", "MSFT", "NVDA"])
     assert len(req.tickers) == 3
     logger.info("✅ [7/7 PASSED] Multi-asset batch orchestration model verified.")

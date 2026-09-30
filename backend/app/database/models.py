@@ -6,6 +6,7 @@ from sqlalchemy.sql import func
 import json
 from sqlalchemy.types import TypeDecorator, JSON
 
+
 class Vector(TypeDecorator):
     impl = JSON
     cache_ok = True
@@ -26,11 +27,13 @@ class Vector(TypeDecorator):
             return json.loads(value)
         return list(value)
 
+
 from app.database.database import Base
+
 
 class Ticker(Base):
     __tablename__ = "tickers"
-    
+
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     symbol: Mapped[str] = mapped_column(String(10), unique=True, index=True, nullable=False)
     company_name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -41,12 +44,12 @@ class MarketPricing(Base):
     __tablename__ = "market_pricing"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    ticker_id: Mapped[int] = mapped_column(ForeignKey("tickers.id", ondelete="CASCADE"), nullable=False) 
-    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)   
+    ticker_id: Mapped[int] = mapped_column(ForeignKey("tickers.id", ondelete="CASCADE"), nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     open_price: Mapped[Decimal] = mapped_column(DECIMAL(10, 4), nullable=False)
     high_price: Mapped[Decimal] = mapped_column(DECIMAL(10, 4), nullable=False)
     low_price: Mapped[Decimal] = mapped_column(DECIMAL(10, 4), nullable=False)
-    close_price: Mapped[Decimal] = mapped_column(DECIMAL(10, 4), nullable=False)  
+    close_price: Mapped[Decimal] = mapped_column(DECIMAL(10, 4), nullable=False)
     volume: Mapped[int] = mapped_column(BigInteger, nullable=False)
 
     __table_args__ = (
@@ -54,6 +57,7 @@ class MarketPricing(Base):
         # Optimized composite index for high-throughput time-series equity range queries
         Index("idx_ticker_timestamp_desc", "ticker_id", timestamp.desc()),
     )
+
 
 class User(Base):
     __tablename__ = "users"
@@ -105,4 +109,3 @@ class DocumentChunk(Base):
         UniqueConstraint("document_id", "chunk_index", name="uix_doc_chunk_index"),
         Index("idx_doc_chunks_ticker", "ticker"),
     )
-

@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 import math
 import os
@@ -17,8 +16,10 @@ from app.database.schemas import LoadTestEndpointMetric, LoadTestReport
 
 logger = logging.getLogger("fintech.chaos.load_tester")
 
+
 def get_m2m_key() -> str:
     return os.getenv("N8N_API_KEY") or "super_secure_internal_orchestration_secret_key_2026"
+
 
 TICKERS = ["AAPL", "MSFT", "GOOGL", "TSLA", "NVDA", "AMD", "META"]
 REDIS_LATEST_KEY = "chaos:load_test:latest"

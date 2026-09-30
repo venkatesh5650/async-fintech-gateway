@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Security
+from fastapi import APIRouter, Depends, Security
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any, List
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -60,7 +60,9 @@ class VolatilityMetricsResponse(BaseModel):
 
 class CorrelationMatrixResponse(BaseModel):
     symbols: List[str] = Field(..., description="List of equity tickers analyzed")
-    matrix: Dict[str, Dict[str, Optional[float]]] = Field(..., description="Pairwise correlation matrix values (-1.0 to +1.0)")
+    matrix: Dict[str, Dict[str, Optional[float]]] = Field(
+        ..., description="Pairwise correlation matrix values (-1.0 to +1.0)"
+    )
     days_analyzed: int = Field(30, description="Lookback window in days")
     data_points_analyzed: int = Field(..., description="Total price pairs analyzed")
     trace_id: str
@@ -70,12 +72,13 @@ class CorrelationMatrixResponse(BaseModel):
 # SPECIFIC / STATIC PATH ROUTES MUST COME FIRST
 # ==================================================
 
+
 @router.get("/correlation", response_model=CorrelationMatrixResponse)
 async def get_correlation_matrix(
     symbols: Optional[str] = None,
     days: int = 30,
     session: AsyncSession = Depends(get_db),
-    auth_verified: dict = Security(verify_m2m_or_user)
+    auth_verified: dict = Security(verify_m2m_or_user),
 ):
     """
     Computes cross-ticker correlation matrix using PostgreSQL CORR() statistical function.
@@ -84,9 +87,7 @@ async def get_correlation_matrix(
     symbol_list = [s.strip() for s in symbols.split(",")] if symbols and symbols.strip() else None
 
     correlation_data = await QuantitativeAnalyticsEngine.compute_correlation_matrix(
-        session=session,
-        symbols=symbol_list,
-        days=days
+        session=session, symbols=symbol_list, days=days
     )
     correlation_data["trace_id"] = trace_id
 
@@ -95,9 +96,7 @@ async def get_correlation_matrix(
 
 @router.get("/sectors")
 async def get_sector_rotation_analytics(
-    days: int = 30,
-    session: AsyncSession = Depends(get_db),
-    auth_verified: dict = Security(verify_m2m_or_user)
+    days: int = 30, session: AsyncSession = Depends(get_db), auth_verified: dict = Security(verify_m2m_or_user)
 ):
     """
     Computes cross-asset sector performance averages, technical composite momentum, and rotation signals.
@@ -110,9 +109,7 @@ async def get_sector_rotation_analytics(
 
 @router.get("/snapshots/diff/{ticker}")
 async def get_signal_snapshot_diff(
-    ticker: str,
-    session: AsyncSession = Depends(get_db),
-    auth_verified: dict = Security(verify_m2m_or_user)
+    ticker: str, session: AsyncSession = Depends(get_db), auth_verified: dict = Security(verify_m2m_or_user)
 ):
     """
     Compares the latest two quantitative signal snapshots for a ticker and returns exact metric deltas.
@@ -128,7 +125,7 @@ async def get_signal_snapshots_history(
     ticker: str,
     limit: int = 10,
     session: AsyncSession = Depends(get_db),
-    auth_verified: dict = Security(verify_m2m_or_user)
+    auth_verified: dict = Security(verify_m2m_or_user),
 ):
     """
     Returns historical versioned signal snapshots recorded for a specified equity ticker.
@@ -141,9 +138,7 @@ async def get_signal_snapshots_history(
 
 @router.get("/volatility/{ticker}", response_model=VolatilityMetricsResponse)
 async def get_ticker_volatility(
-    ticker: str,
-    session: AsyncSession = Depends(get_db),
-    auth_verified: dict = Security(verify_m2m_or_user)
+    ticker: str, session: AsyncSession = Depends(get_db), auth_verified: dict = Security(verify_m2m_or_user)
 ):
     """
     Computes 30-day rolling annualized volatility, Sharpe ratio, and peak-to-trough Max Drawdown.
@@ -175,9 +170,7 @@ class CompositeSignalResponse(BaseModel):
 
 @router.get("/composite/{ticker}", response_model=CompositeSignalResponse)
 async def get_composite_signal(
-    ticker: str,
-    session: AsyncSession = Depends(get_db),
-    auth_verified: dict = Security(verify_m2m_or_user)
+    ticker: str, session: AsyncSession = Depends(get_db), auth_verified: dict = Security(verify_m2m_or_user)
 ):
     """
     Computes weighted multi-factor composite quantitative score (0-100) and recommendation signal.
@@ -201,7 +194,7 @@ class BacktestRequest(BaseModel):
 async def run_strategy_backtest(
     payload: BacktestRequest,
     session: AsyncSession = Depends(get_db),
-    auth_verified: dict = Security(verify_m2m_or_user)
+    auth_verified: dict = Security(verify_m2m_or_user),
 ):
     """
     Executes algorithmic strategy backtest against historical pricing data and compares against Buy & Hold benchmark.
@@ -212,21 +205,18 @@ async def run_strategy_backtest(
         symbol=payload.ticker,
         initial_capital=payload.initial_capital,
         strategy=payload.strategy,
-        days=payload.days
+        days=payload.days,
     )
     result["trace_id"] = trace_id
     return result
 
 
-
 @router.get("/{ticker}", response_model=TickerAnalyticsResponse)
 async def get_ticker_analytics(
-    ticker: str,
-    session: AsyncSession = Depends(get_db),
-    auth_verified: dict = Security(verify_m2m_or_user)
+    ticker: str, session: AsyncSession = Depends(get_db), auth_verified: dict = Security(verify_m2m_or_user)
 ):
     """
-    Computes time-series quantitative technical indicators (SMA, EMA, VWAP, RSI, Bollinger Bands) 
+    Computes time-series quantitative technical indicators (SMA, EMA, VWAP, RSI, Bollinger Bands)
     and SMA crossover signals for a specified equity ticker.
     """
     trace_id = generate_trace_id()

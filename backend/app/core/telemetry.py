@@ -16,6 +16,7 @@ SILENT_PATHS: frozenset[str] = frozenset({"/health", "/healthz"})
 # DISTRIBUTED TRACING PRIMITIVES (W3C TRACECONTEXT COMPLIANT)
 # ======================================================================
 
+
 def generate_trace_id() -> str:
     """
     Generates a 32-character hexadecimal trace identifier conforming to

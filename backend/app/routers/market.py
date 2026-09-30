@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, status, Depends, Security
+from fastapi import APIRouter, BackgroundTasks, status, Depends
 import asyncio
 import math
 import logging
@@ -10,7 +10,6 @@ from app.database.models import Ticker, MarketPricing
 from app.database.schemas import MarketDataPayload
 from app.core.resilience import async_retry
 from app.core.limiter import RateLimiter
-from app.routers.intelligence import verify_m2m_or_user
 
 router = APIRouter(prefix="/v1/market-data", tags=["Market Ingestion"])
 
@@ -39,10 +38,10 @@ def _fetch_yfinance_data_sync(ticker: str) -> dict:
     vol = int(latest["Volume"]) if not math.isnan(float(latest["Volume"])) else 0
 
     return {
-        "open":   round(open_p,  4),
-        "high":   round(high_p,   4),
-        "low":    round(low_p,    4),
-        "close":  round(close_p,  4),
+        "open": round(open_p, 4),
+        "high": round(high_p, 4),
+        "low": round(low_p, 4),
+        "close": round(close_p, 4),
         "volume": vol,
     }
 
@@ -78,10 +77,10 @@ async def fetch_live_market_content(payload: MarketDataPayload):
         )
         # Graceful fallback — persist the user-provided price if yfinance is unavailable
         ohlcv = {
-            "open":   float(payload.current_price),
-            "high":   float(payload.current_price),
-            "low":    float(payload.current_price),
-            "close":  float(payload.current_price),
+            "open": float(payload.current_price),
+            "high": float(payload.current_price),
+            "low": float(payload.current_price),
+            "close": float(payload.current_price),
             "volume": int(payload.volume),
         }
 
@@ -95,9 +94,7 @@ async def fetch_live_market_content(payload: MarketDataPayload):
 
                 if not ticker_obj:
                     ticker_obj = Ticker(
-                        symbol=payload.ticker.upper(),
-                        company_name=f"{payload.ticker.upper()} Corp",
-                        is_active=True
+                        symbol=payload.ticker.upper(), company_name=f"{payload.ticker.upper()} Corp", is_active=True
                     )
                     session.add(ticker_obj)
                     await session.flush()
@@ -116,14 +113,14 @@ async def fetch_live_market_content(payload: MarketDataPayload):
 
                 # Safely copy values to a dictionary within the active transaction
                 pricing_data = {
-                    "type":      "market_data",
-                    "ticker":    payload.ticker.upper(),
+                    "type": "market_data",
+                    "ticker": payload.ticker.upper(),
                     "timestamp": pricing_record.timestamp.isoformat(),
-                    "open":      float(pricing_record.open_price),
-                    "high":      float(pricing_record.high_price),
-                    "low":       float(pricing_record.low_price),
-                    "close":     float(pricing_record.close_price),
-                    "volume":    int(pricing_record.volume),
+                    "open": float(pricing_record.open_price),
+                    "high": float(pricing_record.high_price),
+                    "low": float(pricing_record.low_price),
+                    "close": float(pricing_record.close_price),
+                    "volume": int(pricing_record.volume),
                     "data_source": "Yahoo_Finance_yfinance",
                 }
 
@@ -133,6 +130,7 @@ async def fetch_live_market_content(payload: MarketDataPayload):
         # Broadcast the data frame to all active websocket clients
         if pricing_data:
             from app.routers.websocket import manager
+
             await manager.broadcast(pricing_data)
             logging.warning(f"📡 [WEBSOCKET BROADCAST] Emitted telemetry for {payload.ticker}: {pricing_data}")
 
@@ -140,11 +138,7 @@ async def fetch_live_market_content(payload: MarketDataPayload):
         logging.error(f"❌ [DATABASE ERROR] Failed to save or broadcast: {str(db_exc)}")
 
 
-@router.post(
-    "/ingest",
-    status_code=status.HTTP_202_ACCEPTED,
-    dependencies=[Depends(market_firewall)]
-)
+@router.post("/ingest", status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(market_firewall)])
 async def ingest_market_data(payload: MarketDataPayload, background_tasks: BackgroundTasks):
     """
     Asynchronous webhook ingestion endpoint returning 202 Accepted.
@@ -167,11 +161,11 @@ def _fetch_yfinance_history_sync(ticker: str, interval: str = "5m") -> list:
     """
     is_4h = interval.lower() == "4h"
     tf_map = {
-        "5m":  ("5d", "5m"),
+        "5m": ("5d", "5m"),
         "15m": ("5d", "15m"),
-        "1h":  ("1mo", "1h"),
-        "4h":  ("3mo", "1h"), # Fetch 1h candles to aggregate into 4h
-        "1d":  ("6mo", "1d"),
+        "1h": ("1mo", "1h"),
+        "4h": ("3mo", "1h"),  # Fetch 1h candles to aggregate into 4h
+        "1d": ("6mo", "1d"),
     }
     period, inv = tf_map.get(interval.lower(), ("5d", "5m"))
     t = yf.Ticker(ticker.upper())
@@ -185,14 +179,16 @@ def _fetch_yfinance_history_sync(ticker: str, interval: str = "5m") -> list:
         high_p = float(row["High"]) if not math.isnan(float(row["High"])) else close_p
         low_p = float(row["Low"]) if not math.isnan(float(row["Low"])) else close_p
         vol = int(row["Volume"]) if not math.isnan(float(row["Volume"])) else 0
-        raw_records.append({
-            "time": ts,
-            "open": round(open_p, 4),
-            "high": round(high_p, 4),
-            "low": round(low_p, 4),
-            "close": round(close_p, 4),
-            "volume": vol,
-        })
+        raw_records.append(
+            {
+                "time": ts,
+                "open": round(open_p, 4),
+                "high": round(high_p, 4),
+                "low": round(low_p, 4),
+                "close": round(close_p, 4),
+                "volume": vol,
+            }
+        )
 
     if not is_4h or not raw_records:
         return raw_records
@@ -201,7 +197,7 @@ def _fetch_yfinance_history_sync(ticker: str, interval: str = "5m") -> list:
     aggregated = []
     chunk_size = 4
     for i in range(0, len(raw_records), chunk_size):
-        chunk = raw_records[i:i + chunk_size]
+        chunk = raw_records[i : i + chunk_size]
         if not chunk:
             continue
         agg_open = chunk[0]["open"]
@@ -210,21 +206,20 @@ def _fetch_yfinance_history_sync(ticker: str, interval: str = "5m") -> list:
         agg_low = min(c["low"] for c in chunk)
         agg_vol = sum(c["volume"] for c in chunk)
         agg_time = chunk[0]["time"]
-        aggregated.append({
-            "time": agg_time,
-            "open": agg_open,
-            "high": agg_high,
-            "low": agg_low,
-            "close": agg_close,
-            "volume": agg_vol,
-        })
+        aggregated.append(
+            {
+                "time": agg_time,
+                "open": agg_open,
+                "high": agg_high,
+                "low": agg_low,
+                "close": agg_close,
+                "volume": agg_vol,
+            }
+        )
     return aggregated
 
 
-@router.get(
-    "/history/{ticker}",
-    status_code=status.HTTP_200_OK
-)
+@router.get("/history/{ticker}", status_code=status.HTTP_200_OK)
 async def get_market_history(
     ticker: str,
     interval: str = "5m",
@@ -286,14 +281,16 @@ async def get_market_history(
                     buckets[b_time].append(r)
 
                 for b_time, items in buckets.items():
-                    db_records.append({
-                        "time": b_time,
-                        "open": items[0]["open"],
-                        "high": max(i["high"] for i in items),
-                        "low": min(i["low"] for i in items),
-                        "close": items[-1]["close"],
-                        "volume": max(i["volume"] for i in items),
-                    })
+                    db_records.append(
+                        {
+                            "time": b_time,
+                            "open": items[0]["open"],
+                            "high": max(i["high"] for i in items),
+                            "low": min(i["low"] for i in items),
+                            "close": items[-1]["close"],
+                            "volume": max(i["volume"] for i in items),
+                        }
+                    )
     except Exception as db_err:
         logging.warning(f"⚠️ [DB HISTORY WARN] {db_err}")
 
@@ -316,8 +313,12 @@ async def get_market_history(
             by_time[live_bucket_time] = {
                 "time": live_bucket_time,
                 "open": latest_db["open"],
-                "high": max(latest_db["high"], yf_records[-1]["high"]) if live_bucket_time == latest_yf_time else latest_db["high"],
-                "low": min(latest_db["low"], yf_records[-1]["low"]) if live_bucket_time == latest_yf_time else latest_db["low"],
+                "high": max(latest_db["high"], yf_records[-1]["high"])
+                if live_bucket_time == latest_yf_time
+                else latest_db["high"],
+                "low": min(latest_db["low"], yf_records[-1]["low"])
+                if live_bucket_time == latest_yf_time
+                else latest_db["low"],
                 "close": latest_db["close"],
                 "volume": latest_db["volume"],
             }

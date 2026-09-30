@@ -25,11 +25,13 @@ def extract_text_from_pdf(file_bytes: bytes) -> List[Dict[str, Any]]:
     for idx, page in enumerate(reader.pages):
         raw_text = page.extract_text() or ""
         cleaned = re.sub(r"\s+", " ", raw_text).strip()
-        pages_data.append({
-            "page_number": idx + 1,
-            "text": cleaned,
-            "char_count": len(cleaned),
-        })
+        pages_data.append(
+            {
+                "page_number": idx + 1,
+                "text": cleaned,
+                "char_count": len(cleaned),
+            }
+        )
 
     return pages_data
 
@@ -65,38 +67,42 @@ def chunk_document(
                 token_count = estimate_tokens(chunk_text)
                 sorted_pages = sorted(list(current_pages))
 
-                chunks.append({
-                    "chunk_id": f"{ticker_upper}-{doc_type}-{chunk_idx}-{uuid.uuid4().hex[:8]}",
-                    "chunk_index": chunk_idx,
-                    "ticker": ticker_upper,
-                    "source_file": source_file,
-                    "doc_type": doc_type,
-                    "page_number": sorted_pages[0] if sorted_pages else page_num,
-                    "page_span": sorted_pages,
-                    "content": chunk_text,
-                    "token_count": token_count,
-                    "char_count": len(chunk_text),
-                })
+                chunks.append(
+                    {
+                        "chunk_id": f"{ticker_upper}-{doc_type}-{chunk_idx}-{uuid.uuid4().hex[:8]}",
+                        "chunk_index": chunk_idx,
+                        "ticker": ticker_upper,
+                        "source_file": source_file,
+                        "doc_type": doc_type,
+                        "page_number": sorted_pages[0] if sorted_pages else page_num,
+                        "page_span": sorted_pages,
+                        "content": chunk_text,
+                        "token_count": token_count,
+                        "char_count": len(chunk_text),
+                    }
+                )
                 chunk_idx += 1
-                accumulated_words = accumulated_words[len(accumulated_words) - overlap_tokens:]
+                accumulated_words = accumulated_words[len(accumulated_words) - overlap_tokens :]
                 current_pages = {page_num}
 
     if accumulated_words:
         chunk_text = " ".join(accumulated_words)
         token_count = estimate_tokens(chunk_text)
         sorted_pages = sorted(list(current_pages))
-        chunks.append({
-            "chunk_id": f"{ticker_upper}-{doc_type}-{chunk_idx}-{uuid.uuid4().hex[:8]}",
-            "chunk_index": chunk_idx,
-            "ticker": ticker_upper,
-            "source_file": source_file,
-            "doc_type": doc_type,
-            "page_number": sorted_pages[0] if sorted_pages else 1,
-            "page_span": sorted_pages,
-            "content": chunk_text,
-            "token_count": token_count,
-            "char_count": len(chunk_text),
-        })
+        chunks.append(
+            {
+                "chunk_id": f"{ticker_upper}-{doc_type}-{chunk_idx}-{uuid.uuid4().hex[:8]}",
+                "chunk_index": chunk_idx,
+                "ticker": ticker_upper,
+                "source_file": source_file,
+                "doc_type": doc_type,
+                "page_number": sorted_pages[0] if sorted_pages else 1,
+                "page_span": sorted_pages,
+                "content": chunk_text,
+                "token_count": token_count,
+                "char_count": len(chunk_text),
+            }
+        )
 
     return chunks
 

@@ -19,6 +19,7 @@ elif DATABASE_URL.startswith("postgresql://") and "+asyncpg" not in DATABASE_URL
 # Strip any ssl= query params from URL — asyncpg handles SSL via connect_args,
 # not URL query strings. Mixing both causes "connection closed mid-operation".
 import re
+
 DATABASE_URL = re.sub(r"[?&]ssl(mode)?=[^&]*", "", DATABASE_URL)
 # Clean up any trailing ? or & left after removal
 DATABASE_URL = re.sub(r"[?&]$", "", DATABASE_URL)
@@ -56,8 +57,8 @@ engine = create_async_engine(
     echo=False,
     pool_size=_pool_size,
     max_overflow=_max_overflow,
-    pool_pre_ping=True,    # evict stale connections before checkout
-    pool_recycle=300,      # recycle every 5 min to avoid server-side idle timeout
+    pool_pre_ping=True,  # evict stale connections before checkout
+    pool_recycle=300,  # recycle every 5 min to avoid server-side idle timeout
     connect_args=_connect_args,
 )
 
@@ -72,4 +73,3 @@ Base = declarative_base()
 async def get_db():
     async with AsyncSessionLocal() as session:
         yield session
-

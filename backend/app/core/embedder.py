@@ -2,7 +2,7 @@ import os
 import math
 import hashlib
 import asyncio
-from typing import List, Optional
+from typing import List
 import httpx
 
 EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1536"))
@@ -33,7 +33,7 @@ def generate_deterministic_embedding(text: str, dim: int = EMBEDDING_DIM) -> Lis
 
         # Cross-token bigram coupling
         if i > 0:
-            bi = f"{words[i-1]}_{word}"
+            bi = f"{words[i - 1]}_{word}"
             h_bi = int(hashlib.md5(bi.encode("utf-8")).hexdigest(), 16)
             pos_bi = h_bi % dim
             sign_bi = 1.0 if (h_bi >> 4) % 2 == 0 else -1.0

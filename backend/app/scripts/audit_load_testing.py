@@ -32,7 +32,7 @@ logger = logging.getLogger("audit.load_testing")
 async def test_locustfile_structure():
     logger.info("Running assertion 1: Validating Locust test harness tasks via CLI parser...")
     locust_path = str(Path(__file__).resolve().parent / "locustfile.py")
-    
+
     proc = subprocess.run(
         [sys.executable, "-m", "locust", "-f", locust_path, "--show-task-ratio"],
         capture_output=True,
@@ -41,7 +41,7 @@ async def test_locustfile_structure():
     )
     assert proc.returncode == 0, f"Locust parser failed with code {proc.returncode}: {proc.stderr}"
     output = proc.stdout
-    
+
     expected_tasks = [
         "submit_batch_intelligence",
         "assault_market_ingestion",
@@ -127,9 +127,7 @@ async def test_concurrency_error_containment():
     tester = SyntheticLoadTester(redis_client=None)
 
     # Start first run
-    task1 = asyncio.create_task(
-        tester.execute_load_test(app=app, concurrency=5, duration_seconds=2.0)
-    )
+    task1 = asyncio.create_task(tester.execute_load_test(app=app, concurrency=5, duration_seconds=2.0))
     await asyncio.sleep(0.05)
 
     # Second concurrent execution must raise RuntimeError

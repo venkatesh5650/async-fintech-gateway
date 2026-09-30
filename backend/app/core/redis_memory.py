@@ -1,8 +1,5 @@
-import asyncio
-import json
 import logging
 import os
-import time
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -65,11 +62,7 @@ class RedisMemoryPressureManager:
             used_mb = round(used_bytes / (1024 * 1024), 2)
             peak_mb = round(peak_bytes / (1024 * 1024), 2)
 
-            allocated_limit_mb = (
-                round(max_bytes / (1024 * 1024), 2)
-                if max_bytes > 0
-                else DEFAULT_ALLOCATED_LIMIT_MB
-            )
+            allocated_limit_mb = round(max_bytes / (1024 * 1024), 2) if max_bytes > 0 else DEFAULT_ALLOCATED_LIMIT_MB
 
             utilization_pct = round(
                 min((used_mb / max(allocated_limit_mb, 1.0)) * 100.0, 100.0),

@@ -3,12 +3,12 @@
 """
 Intelligence Engine Router
 --------------------------
-Manages asynchronous multi-agent task execution using LangGraph, Redis state 
-caching for polling workflows, zero-trust JWT authentication guards, and 
+Manages asynchronous multi-agent task execution using LangGraph, Redis state
+caching for polling workflows, zero-trust JWT authentication guards, and
 public CQRS read query routes.
 """
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Path, Security, Request, Body
+from fastapi import APIRouter, Depends, HTTPException, status, Path, Security, Request, Body
 from fastapi.security.api_key import APIKeyHeader
 import uuid
 import json
@@ -46,7 +46,6 @@ from app.core.broker import (
     get_dlq_entries,
     get_stream_health_snapshot,
     STREAM_INTEL_JOBS,
-    STREAM_INTEL_DLQ,
 )
 from app.core.resilience import groq_circuit_breaker
 from app.core.cache import cache_aside_manager
@@ -60,41 +59,46 @@ router = APIRouter(prefix="/v1/intelligence", tags=["Intelligence Engine Index"]
 API_KEY_NAME = "X-N8N-API-KEY"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
 
-async def verify_m2m_or_user(
-    request: Request,
-    api_key: str = Security(api_key_header)
-):
+
+async def verify_m2m_or_user(request: Request, api_key: str = Security(api_key_header)):
     """
     Security gatekeeper validating incoming requests via M2M API key or User JWT.
     """
     expected_key = os.getenv("N8N_API_KEY", "super_secure_internal_orchestration_secret_key_2026")
-    valid_keys = {expected_key, "super_secure_internal_orchestration_secret_key_2026", "super_secure_internal_orchestration_secret_key__2026"}
-    
+    valid_keys = {
+        expected_key,
+        "super_secure_internal_orchestration_secret_key_2026",
+        "super_secure_internal_orchestration_secret_key__2026",
+    }
+
     # Machine-to-Machine authentication check
     if api_key and api_key in valid_keys:
         return {"role": "m2m_orchestrator"}
-        
+
     # User JWT authentication check
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.split(" ")[1]
-        user = await get_current_user(token) 
+        user = await get_current_user(token)
         if user:
             return user
-        
+
     raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Zero-Trust Access Denied: Missing valid M2M API Key or User JWT."
+        status_code=status.HTTP_403_FORBIDDEN, detail="Zero-Trust Access Denied: Missing valid M2M API Key or User JWT."
     )
+
 
 # Asynchronous Redis connection pool and perimeter rate limiter
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 if "redis://redis:" in REDIS_URL and not os.path.exists("/.dockerenv"):
     REDIS_URL = REDIS_URL.replace("redis://redis:", "redis://localhost:")
 elif "redis://fintech_redis:" in REDIS_URL:
-    REDIS_URL = REDIS_URL.replace("redis://fintech_redis:", "redis://localhost:" if not os.path.exists("/.dockerenv") else "redis://redis:")
+    REDIS_URL = REDIS_URL.replace(
+        "redis://fintech_redis:", "redis://localhost:" if not os.path.exists("/.dockerenv") else "redis://redis:"
+    )
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 limiter = RateLimiter(requests_per_minute=5)
+
 
 async def run_intelligence_worker(
     job_id: str,
@@ -115,11 +119,13 @@ async def run_intelligence_worker(
         initial_state = {
             "ticker": ticker.upper(),
             "messages": [
-                HumanMessage(content=f"Execute a fundamental analysis on the ticker {ticker.upper()}. Evaluate the data and determine a final signal.")
+                HumanMessage(
+                    content=f"Execute a fundamental analysis on the ticker {ticker.upper()}. Evaluate the data and determine a final signal."
+                )
             ],
-            "analysis_report": ""
+            "analysis_report": "",
         }
-        
+
         # Invoke asynchronous multi-agent graph execution
         final_state = await intelligence_graph.ainvoke(initial_state)
         report = final_state.get("analysis_report", "ERROR: No report generated.")
@@ -128,16 +134,20 @@ async def run_intelligence_worker(
         rag_context = final_state.get("rag_context", [])
         citations = final_state.get("citations", [])
         rag_context_injected = final_state.get("rag_context_injected", False)
-       
+
         # Parse alpha signals deterministically from agent output
         report_upper = report.upper()
-        if "SIGNAL: BUY" in report_upper: extracted_signal = "BUY"
-        elif "SIGNAL: SELL" in report_upper: extracted_signal = "SELL"
-        elif "SIGNAL: HOLD" in report_upper: extracted_signal = "HOLD"
-        else: extracted_signal = "INVALID"
-            
+        if "SIGNAL: BUY" in report_upper:
+            extracted_signal = "BUY"
+        elif "SIGNAL: SELL" in report_upper:
+            extracted_signal = "SELL"
+        elif "SIGNAL: HOLD" in report_upper:
+            extracted_signal = "HOLD"
+        else:
+            extracted_signal = "INVALID"
+
         execution_time = (time.perf_counter() - start_time) * 1000
-        
+
         # Construct standardized execution result payload with distributed trace telemetry
         telemetry_data = {
             "trace_id": trace_id or "",
@@ -164,11 +174,11 @@ async def run_intelligence_worker(
                 "rag_context_injected": rag_context_injected,
                 "rag_context": rag_context,
                 "citations": citations,
-            }
+            },
         }
         # Cache completed state in Redis with a 3600-second expiration TTL
         await redis_client.set(job_id, json.dumps(payload), ex=3600)
-        
+
         # Maintain trace index for O(1) distributed trace waterfall lookups
         if trace_id:
             await redis_client.set(f"trace:{trace_id}", json.dumps(payload), ex=3600)
@@ -191,39 +201,33 @@ async def run_intelligence_worker(
             ttl=300,
             source="WRITE_THROUGH",
         )
-        
+
         # Dispatch result to active WebSocket channels and event broadcaster
         await manager.send_personal_message(payload, job_id=job_id)
         await manager.broadcast(payload)
         await broadcast_intelligence_result(payload)
-      
+
         # Dispatch notification payload to external orchestration webhook
         webhook_url = "http://n8n:5678/webhook/finance-alert"
-        
+
         webhook_data = {
             "job_id": job_id,
             "ticker": ticker.upper(),
             "signal": extracted_signal,
             "analysis": report,
-            "execution_time": round(execution_time, 2)
+            "execution_time": round(execution_time, 2),
         }
-        
+
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(webhook_url, json=webhook_data)
                 logging.info(f"Webhook notification dispatched for {ticker.upper()} (Status: {response.status_code})")
         except Exception as webhook_err:
             logging.warning(f"Webhook notification failed for {ticker.upper()}: {str(webhook_err)}")
-      
 
     except Exception as e:
         logging.error(f"❌ [WORKER FAILURE] Job {job_id} crashed: {str(e)}")
-        error_payload = {
-            "job_id": job_id,
-            "status": "failed",
-            "result": None,
-            "error": str(e)
-        }
+        error_payload = {"job_id": job_id, "status": "failed", "result": None, "error": str(e)}
         # Persist failure state to Redis for upstream client diagnostics
         await redis_client.set(job_id, json.dumps(error_payload), ex=3600)
         await manager.send_personal_message(error_payload, job_id=job_id)
@@ -250,7 +254,7 @@ async def run_batch_intelligence_orchestrator(batch_id: str, jobs: list[tuple[st
         "batch_id": batch_id,
         "status": "completed",
         "total_assets": len(jobs),
-        "server_timestamp": int(time.time() * 1000)
+        "server_timestamp": int(time.time() * 1000),
     }
     await redis_client.set(f"batch:{batch_id}", json.dumps(completed_payload), ex=3600)
 
@@ -259,9 +263,9 @@ async def run_batch_intelligence_orchestrator(batch_id: str, jobs: list[tuple[st
 async def submit_analysis_job(
     request: Request,
     # Strict Pattern Boundary to prevent numeric/malformed ticker drains
-    ticker: str = Path(..., pattern="^[a-zA-Z]{1,5}$", description="US Equity Ticker Symbol"), 
+    ticker: str = Path(..., pattern="^[a-zA-Z]{1,5}$", description="US Equity Ticker Symbol"),
     _: None = Depends(limiter),
-    auth_verified: dict = Security(verify_m2m_or_user)
+    auth_verified: dict = Security(verify_m2m_or_user),
 ):
     """
     Command Edge: Protected by rate-limiting, Regex boundary validation, and zero-trust JWT authentication.
@@ -275,7 +279,7 @@ async def submit_analysis_job(
         or request.headers.get("X-Request-ID", str(uuid.uuid4()))
     )
     span_id = getattr(request.state, "span_id", None)
-    
+
     # Pre-warm Redis state to prevent polling race conditions before consumer pickup
     initial_payload = {
         "job_id": job_id,
@@ -284,19 +288,15 @@ async def submit_analysis_job(
         "trace_id": trace_id,
         "span_id": span_id or "",
         "result": None,
-        "server_timestamp": int(time.time() * 1000)
+        "server_timestamp": int(time.time() * 1000),
     }
     await redis_client.set(job_id, json.dumps(initial_payload), ex=3600)
-    
+
     # Publish event to durable Redis Stream with trace context
     await enqueue_intelligence_job(
-        job_id=job_id,
-        ticker=ticker,
-        trace_id=trace_id,
-        parent_span_id=span_id,
-        client=redis_client
+        job_id=job_id, ticker=ticker, trace_id=trace_id, parent_span_id=span_id, client=redis_client
     )
-    
+
     return JobAcceptedResponse(job_id=job_id, trace_id=trace_id)
 
 
@@ -305,7 +305,7 @@ async def submit_batch_analysis_jobs(
     request: Request,
     payload: BatchAnalysisRequest = Body(..., description="Batch payload containing 1-50 equity tickers"),
     _: None = Depends(limiter),
-    auth_verified: dict = Security(verify_m2m_or_user)
+    auth_verified: dict = Security(verify_m2m_or_user),
 ):
     """
     Batch Command Edge:
@@ -338,7 +338,7 @@ async def submit_batch_analysis_jobs(
             "trace_id": trace_id,
             "span_id": span_id or "",
             "result": None,
-            "server_timestamp": int(time.time() * 1000)
+            "server_timestamp": int(time.time() * 1000),
         }
         await redis_client.set(job_id, json.dumps(initial_job_payload), ex=3600)
 
@@ -349,17 +349,13 @@ async def submit_batch_analysis_jobs(
         "total_assets": len(payload.tickers),
         "jobs": [item.model_dump() for item in job_items],
         "trace_id": trace_id,
-        "server_timestamp": int(time.time() * 1000)
+        "server_timestamp": int(time.time() * 1000),
     }
     await redis_client.set(f"batch:{batch_id}", json.dumps(initial_batch_payload), ex=3600)
 
     # Pipelined high-throughput publish to Redis Streams with trace context
     await enqueue_batch_intelligence_jobs(
-        jobs=stream_jobs,
-        batch_id=batch_id,
-        trace_id=trace_id,
-        parent_span_id=span_id,
-        client=redis_client
+        jobs=stream_jobs, batch_id=batch_id, trace_id=trace_id, parent_span_id=span_id, client=redis_client
     )
 
     return BatchJobAcceptedResponse(
@@ -368,27 +364,27 @@ async def submit_batch_analysis_jobs(
         status="queued",
         jobs=job_items,
         trace_id=trace_id,
-        message=f"Dispatched {len(job_items)} assets to Redis Streams ('{STREAM_INTEL_JOBS}') for consumer execution."
+        message=f"Dispatched {len(job_items)} assets to Redis Streams ('{STREAM_INTEL_JOBS}') for consumer execution.",
     )
 
 
 @router.get("/jobs/{job_id}", response_model=JobStatusResponse, status_code=status.HTTP_200_OK)
 async def get_job_status(job_id: str):
     """
-    Stateless status-polling route. Bypasses app memory to query Redis directly 
+    Stateless status-polling route. Bypasses app memory to query Redis directly
     for optimal horizontal scalability under high concurrent polling loads.
     """
     cached_data = await redis_client.get(job_id)
     if not cached_data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job ID not found or expired.")
-    
+
     job_data = json.loads(cached_data)
     return JobStatusResponse(
         job_id=job_id,
         status=job_data["status"],
         result=job_data.get("result"),
         error=job_data.get("error"),
-        trace_id=job_data.get("trace_id")
+        trace_id=job_data.get("trace_id"),
     )
 
 
@@ -568,17 +564,19 @@ async def get_dead_letter_registry(
     entries = []
     for item in raw_entries:
         try:
-            entries.append(DeadLetterJobEntry(
-                dlq_id=item["dlq_id"],
-                original_message_id=item.get("original_message_id", ""),
-                job_id=item.get("job_id", ""),
-                ticker=item.get("ticker", "UNKNOWN"),
-                batch_id=item.get("batch_id") or None,
-                trace_id=item.get("trace_id") or None,
-                delivery_count=int(item.get("delivery_count", 1)),
-                error_reason=item.get("error_reason", "Unknown failure"),
-                quarantined_at=float(item.get("quarantined_at", time.time())),
-            ))
+            entries.append(
+                DeadLetterJobEntry(
+                    dlq_id=item["dlq_id"],
+                    original_message_id=item.get("original_message_id", ""),
+                    job_id=item.get("job_id", ""),
+                    ticker=item.get("ticker", "UNKNOWN"),
+                    batch_id=item.get("batch_id") or None,
+                    trace_id=item.get("trace_id") or None,
+                    delivery_count=int(item.get("delivery_count", 1)),
+                    error_reason=item.get("error_reason", "Unknown failure"),
+                    quarantined_at=float(item.get("quarantined_at", time.time())),
+                )
+            )
         except Exception as e:
             logging.warning(f"[DLQ AUDIT] Failed to parse DLQ item {item}: {e}")
 
@@ -592,6 +590,7 @@ async def get_dead_letter_registry(
 # ==================================================
 # CQRS TELEMETRY: STREAM LAG & CONCURRENCY OBSERVABILITY
 # ==================================================
+
 
 @router.get("/stream-health", status_code=status.HTTP_200_OK)
 async def get_stream_health():
@@ -622,6 +621,7 @@ async def get_stream_health():
 # CQRS TELEMETRY: DOWNSTREAM LLM CIRCUIT BREAKER
 # ==================================================
 
+
 @router.get("/circuit-breaker", status_code=status.HTTP_200_OK)
 async def get_circuit_breaker_telemetry():
     """
@@ -643,6 +643,7 @@ async def get_circuit_breaker_telemetry():
 # ==================================================
 # CQRS TELEMETRY: DISTRIBUTED TRACE WATERFALL
 # ==================================================
+
 
 @router.get("/trace/{trace_id}", response_model=TraceWaterfallResponse, status_code=status.HTTP_200_OK)
 async def get_distributed_trace_waterfall(trace_id: str):
@@ -712,7 +713,9 @@ async def get_distributed_trace_waterfall(trace_id: str):
                     break
 
             if matching_cache:
-                exec_ms = float(matching_cache.get("data_source_latency_ms") or matching_cache.get("execution_time_ms") or 3.2)
+                exec_ms = float(
+                    matching_cache.get("data_source_latency_ms") or matching_cache.get("execution_time_ms") or 3.2
+                )
                 wait_ms = float(matching_cache.get("lock_wait_ms", 0.0))
                 cached_ticker = matching_cache.get("ticker", "EQUITY")
                 reconstructed = TraceWaterfallResponse(
@@ -750,19 +753,21 @@ async def get_distributed_trace_waterfall(trace_id: str):
                 try:
                     await redis_client.set(
                         f"trace:{trace_id}",
-                        json.dumps({
-                            "job_id": reconstructed.job_id,
-                            "ticker": reconstructed.ticker,
-                            "status": "completed",
-                            "telemetry": {
-                                "parent_span_id": "client-gateway-root",
-                                "span_id": matching_cache.get("span_id") or "cache-subsystem",
-                                "queue_wait_ms": wait_ms,
-                                "execution_time_ms": exec_ms,
-                                "total_journey_ms": reconstructed.total_journey_ms,
-                            },
-                            "server_timestamp": reconstructed.server_timestamp_ms,
-                        }),
+                        json.dumps(
+                            {
+                                "job_id": reconstructed.job_id,
+                                "ticker": reconstructed.ticker,
+                                "status": "completed",
+                                "telemetry": {
+                                    "parent_span_id": "client-gateway-root",
+                                    "span_id": matching_cache.get("span_id") or "cache-subsystem",
+                                    "queue_wait_ms": wait_ms,
+                                    "execution_time_ms": exec_ms,
+                                    "total_journey_ms": reconstructed.total_journey_ms,
+                                },
+                                "server_timestamp": reconstructed.server_timestamp_ms,
+                            }
+                        ),
                         ex=3600,
                     )
                 except Exception:
@@ -807,19 +812,21 @@ async def get_distributed_trace_waterfall(trace_id: str):
                 try:
                     await redis_client.set(
                         f"trace:{trace_id}",
-                        json.dumps({
-                            "job_id": synthesized.job_id,
-                            "ticker": synthesized.ticker,
-                            "status": "completed",
-                            "telemetry": {
-                                "parent_span_id": "edge-proxy",
-                                "span_id": "in-memory-fast-path",
-                                "queue_wait_ms": 0.0,
-                                "execution_time_ms": 2.1,
-                                "total_journey_ms": 3.4,
-                            },
-                            "server_timestamp": synthesized.server_timestamp_ms,
-                        }),
+                        json.dumps(
+                            {
+                                "job_id": synthesized.job_id,
+                                "ticker": synthesized.ticker,
+                                "status": "completed",
+                                "telemetry": {
+                                    "parent_span_id": "edge-proxy",
+                                    "span_id": "in-memory-fast-path",
+                                    "queue_wait_ms": 0.0,
+                                    "execution_time_ms": 2.1,
+                                    "total_journey_ms": 3.4,
+                                },
+                                "server_timestamp": synthesized.server_timestamp_ms,
+                            }
+                        ),
                         ex=3600,
                     )
                 except Exception:
@@ -876,6 +883,7 @@ async def get_distributed_trace_waterfall(trace_id: str):
 # ==================================================
 # CQRS READ: CACHE-ASIDE INTELLIGENCE RETRIEVAL
 # ==================================================
+
 
 @router.get("/results/{ticker}", status_code=status.HTTP_200_OK)
 async def get_intelligence_result(
@@ -934,7 +942,7 @@ async def get_cache_health():
 
 @router.get("/cache-inspector/{ticker}", response_model=CacheInspectorResponse, status_code=status.HTTP_200_OK)
 async def inspect_cache_ticker(
-    ticker: str = Path(..., pattern="^[a-zA-Z]{1,5}$", description="US Equity Ticker Symbol")
+    ticker: str = Path(..., pattern="^[a-zA-Z]{1,5}$", description="US Equity Ticker Symbol"),
 ):
     """
     CQRS Read Route: Granular inspection of an equity symbol's cached footprint in Redis.
@@ -964,14 +972,16 @@ async def get_ticker_rag_context(
 
     citations = []
     for hit in hits:
-        citations.append({
-            "citation_ref": f"[{hit['doc_type']} | {hit['source_file']} P.{hit['page_number']}]",
-            "doc_type": hit["doc_type"],
-            "source_file": hit["source_file"],
-            "page_number": hit["page_number"],
-            "similarity_score": hit["similarity_score"],
-            "excerpt": hit["content"],
-        })
+        citations.append(
+            {
+                "citation_ref": f"[{hit['doc_type']} | {hit['source_file']} P.{hit['page_number']}]",
+                "doc_type": hit["doc_type"],
+                "source_file": hit["source_file"],
+                "page_number": hit["page_number"],
+                "similarity_score": hit["similarity_score"],
+                "excerpt": hit["content"],
+            }
+        )
 
     return {
         "ticker": clean_ticker,
@@ -980,4 +990,4 @@ async def get_ticker_rag_context(
         "citations": citations,
         "rag_context": hits,
         "trace_id": trace_id,
-    }
+    }

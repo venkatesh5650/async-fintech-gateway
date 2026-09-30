@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 # Replace with your actual Discord URL
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1534885356732678234/Uru9TNOLAJp7zybqXgDW9gKuNZ6mtk4TzVEE8xRt4Sn8mSxZSx-3XdZBKIoeTtsklASQ"
 # Replace with your actual n8n webhook URL
-N8N_WEBHOOK_URL = "http://host.docker.internal:5678/webhook/finance-alert" 
+N8N_WEBHOOK_URL = "http://host.docker.internal:5678/webhook/finance-alert"
 
 
 async def send_to_discord_dlq(payload: dict, error_msg: str):
@@ -29,7 +29,7 @@ async def send_to_discord_dlq(payload: dict, error_msg: str):
     # Exponential backoff: waits 2s, then 4s, up to max 10s
     wait=wait_exponential(multiplier=1, min=2, max=10),
     retry=retry_if_exception_type((httpx.RequestError, httpx.HTTPStatusError)),
-    reraise=True
+    reraise=True,
 )
 async def emit_to_n8n_with_retry(payload: dict):
     """Attempts to send data to n8n. Retries autonomously on network failure."""

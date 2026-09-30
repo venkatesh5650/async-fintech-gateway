@@ -511,7 +511,6 @@ class CacheAsideManager:
             "server_timestamp_ms": now_ms,
         }
 
-
     async def acquire_mutex(self, ticker: str, ttl: int = MUTEX_LOCK_TIMEOUT_SEC) -> tuple[bool, Optional[str]]:
         client = await self.get_client()
         lock_key = self.get_lock_key(ticker)
@@ -535,7 +534,5 @@ class CacheAsideManager:
             self._client = None
 
 
-
 # Global singleton instance
 cache_aside_manager = CacheAsideManager()
-

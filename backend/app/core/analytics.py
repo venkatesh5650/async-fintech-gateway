@@ -11,7 +11,7 @@ from app.database.models import ComputedSignal
 
 def safe_float(val: Any) -> Optional[float]:
     """
-    Safely casts database numeric values to float, converting NaN/Inf/None 
+    Safely casts database numeric values to float, converting NaN/Inf/None
     to valid JSON-serializable None.
     """
     if val is None:
@@ -27,7 +27,7 @@ def safe_float(val: Any) -> Optional[float]:
 
 class QuantitativeAnalyticsEngine:
     """
-    Quantitative technical analysis engine executing native PostgreSQL 
+    Quantitative technical analysis engine executing native PostgreSQL
     window functions over distinct historical time-series pricing data.
     """
 
@@ -142,16 +142,29 @@ class QuantitativeAnalyticsEngine:
                         "lower": None,
                         "bandwidth_pct": None,
                         "status": "INSUFFICIENT_DATA",
-                    }
+                    },
                 },
                 "crossover_signal": {
                     "status": "INSUFFICIENT_DATA",
                     "strength": "NEUTRAL",
-                    "description": f"No pricing history recorded for ticker {symbol_upper}."
-                }
+                    "description": f"No pricing history recorded for ticker {symbol_upper}.",
+                },
             }
 
-        ticker_id, timestamp, close_price, sma_10, sma_50, sma_200, vwap, bb_middle, bb_upper, bb_lower, rsi_14, total_count = row
+        (
+            ticker_id,
+            timestamp,
+            close_price,
+            sma_10,
+            sma_50,
+            sma_200,
+            vwap,
+            bb_middle,
+            bb_upper,
+            bb_lower,
+            rsi_14,
+            total_count,
+        ) = row
 
         cp_val = safe_float(close_price) or 0.0
         sma_10_val = safe_float(sma_10)
@@ -210,27 +223,49 @@ class QuantitativeAnalyticsEngine:
         # Upsert computed signals into database table
         if ticker_id and timestamp:
             try:
-                stmt = pg_insert(ComputedSignal).values({
-                    "ticker_id": ticker_id,
-                    "timestamp": timestamp,
-                    "rsi_14": Decimal(str(round(rsi_14_val, 4))) if rsi_14_val is not None else None,
-                    "rsi_status": rsi_status,
-                    "bollinger_upper": Decimal(str(round(bb_upper_val, 4))) if bb_upper_val is not None else None,
-                    "bollinger_middle": Decimal(str(round(bb_middle_val, 4))) if bb_middle_val is not None else None,
-                    "bollinger_lower": Decimal(str(round(bb_lower_val, 4))) if bb_lower_val is not None else None,
-                    "bollinger_status": bb_status,
-                    "bandwidth_pct": Decimal(str(round(bandwidth_pct, 4))) if bandwidth_pct is not None else None,
-                }).on_conflict_do_update(
-                    constraint="uix_computed_ticker_timestamp",
-                    set_={
-                        "rsi_14": Decimal(str(round(rsi_14_val, 4))) if rsi_14_val is not None else None,
-                        "rsi_status": rsi_status,
-                        "bollinger_upper": Decimal(str(round(bb_upper_val, 4))) if bb_upper_val is not None else None,
-                        "bollinger_middle": Decimal(str(round(bb_middle_val, 4))) if bb_middle_val is not None else None,
-                        "bollinger_lower": Decimal(str(round(bb_lower_val, 4))) if bb_lower_val is not None else None,
-                        "bollinger_status": bb_status,
-                        "bandwidth_pct": Decimal(str(round(bandwidth_pct, 4))) if bandwidth_pct is not None else None,
-                    }
+                stmt = (
+                    pg_insert(ComputedSignal)
+                    .values(
+                        {
+                            "ticker_id": ticker_id,
+                            "timestamp": timestamp,
+                            "rsi_14": Decimal(str(round(rsi_14_val, 4))) if rsi_14_val is not None else None,
+                            "rsi_status": rsi_status,
+                            "bollinger_upper": Decimal(str(round(bb_upper_val, 4)))
+                            if bb_upper_val is not None
+                            else None,
+                            "bollinger_middle": Decimal(str(round(bb_middle_val, 4)))
+                            if bb_middle_val is not None
+                            else None,
+                            "bollinger_lower": Decimal(str(round(bb_lower_val, 4)))
+                            if bb_lower_val is not None
+                            else None,
+                            "bollinger_status": bb_status,
+                            "bandwidth_pct": Decimal(str(round(bandwidth_pct, 4)))
+                            if bandwidth_pct is not None
+                            else None,
+                        }
+                    )
+                    .on_conflict_do_update(
+                        constraint="uix_computed_ticker_timestamp",
+                        set_={
+                            "rsi_14": Decimal(str(round(rsi_14_val, 4))) if rsi_14_val is not None else None,
+                            "rsi_status": rsi_status,
+                            "bollinger_upper": Decimal(str(round(bb_upper_val, 4)))
+                            if bb_upper_val is not None
+                            else None,
+                            "bollinger_middle": Decimal(str(round(bb_middle_val, 4)))
+                            if bb_middle_val is not None
+                            else None,
+                            "bollinger_lower": Decimal(str(round(bb_lower_val, 4)))
+                            if bb_lower_val is not None
+                            else None,
+                            "bollinger_status": bb_status,
+                            "bandwidth_pct": Decimal(str(round(bandwidth_pct, 4)))
+                            if bandwidth_pct is not None
+                            else None,
+                        },
+                    )
                 )
                 await session.execute(stmt)
                 await session.commit()
@@ -239,7 +274,11 @@ class QuantitativeAnalyticsEngine:
 
         return {
             "symbol": symbol_upper,
-            "calculated_at": timestamp.isoformat() if isinstance(timestamp, datetime) else str(timestamp) if timestamp else None,
+            "calculated_at": timestamp.isoformat()
+            if isinstance(timestamp, datetime)
+            else str(timestamp)
+            if timestamp
+            else None,
             "data_points_analyzed": total_count,
             "current_price": cp_val,
             "indicators": {
@@ -256,13 +295,9 @@ class QuantitativeAnalyticsEngine:
                     "lower": round(bb_lower_val, 4) if bb_lower_val is not None else None,
                     "bandwidth_pct": round(bandwidth_pct, 4) if bandwidth_pct is not None else None,
                     "status": bb_status,
-                }
+                },
             },
-            "crossover_signal": {
-                "status": signal_status,
-                "strength": signal_strength,
-                "description": description
-            }
+            "crossover_signal": {"status": signal_status, "strength": signal_strength, "description": description},
         }
 
     @staticmethod
@@ -378,7 +413,11 @@ class QuantitativeAnalyticsEngine:
 
         return {
             "symbol": symbol_upper,
-            "calculated_at": timestamp.isoformat() if isinstance(timestamp, datetime) else str(timestamp) if timestamp else None,
+            "calculated_at": timestamp.isoformat()
+            if isinstance(timestamp, datetime)
+            else str(timestamp)
+            if timestamp
+            else None,
             "data_points_analyzed": total_count,
             "volatility_30d_pct": round(volatility_30d_pct, 2),
             "sharpe_ratio": round(sharpe_ratio, 2),
@@ -389,9 +428,7 @@ class QuantitativeAnalyticsEngine:
 
     @staticmethod
     async def compute_correlation_matrix(
-        session: AsyncSession,
-        symbols: Optional[list[str]] = None,
-        days: int = 30
+        session: AsyncSession, symbols: Optional[list[str]] = None, days: int = 30
     ) -> Dict[str, Any]:
         if not symbols:
             res_syms = await session.execute(text("SELECT symbol FROM tickers ORDER BY symbol ASC LIMIT 10;"))
@@ -525,12 +562,7 @@ class QuantitativeAnalyticsEngine:
             else:
                 sharpe_score = 10.0
 
-        composite_score = (
-            0.30 * sma_score +
-            0.25 * rsi_score +
-            0.25 * bb_score +
-            0.20 * sharpe_score
-        )
+        composite_score = 0.30 * sma_score + 0.25 * rsi_score + 0.25 * bb_score + 0.20 * sharpe_score
 
         # Risk-adjustment guard: severe drawdown or extreme volatility with negative Sharpe
         # penalizes false mean-reversion traps during an asset crash
@@ -556,7 +588,7 @@ class QuantitativeAnalyticsEngine:
         try:
             ver_res = await session.execute(
                 text("SELECT COALESCE(MAX(version), 0) + 1 FROM signal_snapshots WHERE ticker = :sym"),
-                {"sym": symbol_upper}
+                {"sym": symbol_upper},
             )
             next_ver = ver_res.scalar() or 1
 
@@ -573,8 +605,8 @@ class QuantitativeAnalyticsEngine:
                     "rsi": rsi_val,
                     "vol": volatility_res.get("volatility_30d_pct"),
                     "sharpe": sharpe_ratio,
-                    "ver": next_ver
-                }
+                    "ver": next_ver,
+                },
             )
             await session.commit()
         except Exception:
@@ -608,8 +640,8 @@ class QuantitativeAnalyticsEngine:
                     "rating": volatility_res.get("sharpe_rating", "SUBPAR"),
                     "score": round(sharpe_score, 1),
                     "weight": 0.20,
-                }
-            }
+                },
+            },
         }
 
     @staticmethod
@@ -622,25 +654,23 @@ class QuantitativeAnalyticsEngine:
                 WHERE ticker = :sym
                 ORDER BY version DESC LIMIT :limit;
             """),
-            {"sym": symbol_upper, "limit": limit}
+            {"sym": symbol_upper, "limit": limit},
         )
         rows = res.fetchall()
         snapshots = []
         for r in rows:
-            snapshots.append({
-                "version": r[0],
-                "timestamp": r[1].isoformat() if r[1] else None,
-                "composite_score": safe_float(r[2]),
-                "recommendation": r[3],
-                "rsi_14": safe_float(r[4]),
-                "volatility_30d_pct": safe_float(r[5]),
-                "sharpe_ratio": safe_float(r[6]),
-            })
-        return {
-            "symbol": symbol_upper,
-            "total_snapshots": len(snapshots),
-            "snapshots": snapshots
-        }
+            snapshots.append(
+                {
+                    "version": r[0],
+                    "timestamp": r[1].isoformat() if r[1] else None,
+                    "composite_score": safe_float(r[2]),
+                    "recommendation": r[3],
+                    "rsi_14": safe_float(r[4]),
+                    "volatility_30d_pct": safe_float(r[5]),
+                    "sharpe_ratio": safe_float(r[6]),
+                }
+            )
+        return {"symbol": symbol_upper, "total_snapshots": len(snapshots), "snapshots": snapshots}
 
     @staticmethod
     async def get_snapshot_diff(session: AsyncSession, symbol: str) -> Dict[str, Any]:
@@ -652,33 +682,29 @@ class QuantitativeAnalyticsEngine:
                 WHERE ticker = :sym
                 ORDER BY version DESC LIMIT 2;
             """),
-            {"sym": symbol_upper}
+            {"sym": symbol_upper},
         )
         rows = res.fetchall()
         if not rows:
-            return {
-                "symbol": symbol_upper,
-                "has_diff": False,
-                "message": "No snapshots recorded yet for this ticker."
-            }
-        
+            return {"symbol": symbol_upper, "has_diff": False, "message": "No snapshots recorded yet for this ticker."}
+
         current = rows[0]
         previous = rows[1] if len(rows) > 1 else rows[0]
-        
+
         c_score = safe_float(current[2]) or 0.0
         p_score = safe_float(previous[2]) or 0.0
         score_diff = round(c_score - p_score, 2)
-        
+
         c_rsi = safe_float(current[4]) or 0.0
         p_rsi = safe_float(previous[4]) or 0.0
         rsi_diff = round(c_rsi - p_rsi, 2)
-        
+
         c_vol = safe_float(current[5]) or 0.0
         p_vol = safe_float(previous[5]) or 0.0
         vol_diff = round(c_vol - p_vol, 2)
-        
-        rec_changed = (current[3] != previous[3])
-        
+
+        rec_changed = current[3] != previous[3]
+
         return {
             "symbol": symbol_upper,
             "has_diff": len(rows) > 1,
@@ -691,7 +717,7 @@ class QuantitativeAnalyticsEngine:
                 "recommendation": current[3],
                 "rsi_14": c_rsi,
                 "volatility_30d_pct": c_vol,
-                "sharpe_ratio": safe_float(current[6])
+                "sharpe_ratio": safe_float(current[6]),
             },
             "previous_snapshot": {
                 "version": previous[0],
@@ -700,7 +726,7 @@ class QuantitativeAnalyticsEngine:
                 "recommendation": previous[3],
                 "rsi_14": p_rsi,
                 "volatility_30d_pct": p_vol,
-                "sharpe_ratio": safe_float(previous[6])
+                "sharpe_ratio": safe_float(previous[6]),
             },
             "deltas": {
                 "composite_score_delta": score_diff,
@@ -708,8 +734,8 @@ class QuantitativeAnalyticsEngine:
                 "volatility_delta": vol_diff,
                 "recommendation_changed": rec_changed,
                 "recommendation_from": previous[3],
-                "recommendation_to": current[3]
-            }
+                "recommendation_to": current[3],
+            },
         }
 
     @staticmethod
@@ -718,7 +744,7 @@ class QuantitativeAnalyticsEngine:
         symbol: str,
         initial_capital: float = 10000.0,
         strategy: str = "SMA_CROSSOVER",
-        days: int = 90
+        days: int = 90,
     ) -> Dict[str, Any]:
         symbol_upper = symbol.upper()
         query = text("""
@@ -759,7 +785,7 @@ class QuantitativeAnalyticsEngine:
                 "total_trades": 0,
                 "winning_trades": 0,
                 "win_rate_pct": 0.0,
-                "equity_curve": []
+                "equity_curve": [],
             }
 
         prices = [safe_float(r[1]) or 0.0 for r in rows]
@@ -768,8 +794,8 @@ class QuantitativeAnalyticsEngine:
         sma10 = []
         sma50 = []
         for i in range(len(prices)):
-            sma10.append(sum(prices[max(0, i-9):i+1]) / min(i+1, 10))
-            sma50.append(sum(prices[max(0, i-49):i+1]) / min(i+1, 50))
+            sma10.append(sum(prices[max(0, i - 9) : i + 1]) / min(i + 1, 10))
+            sma50.append(sum(prices[max(0, i - 49) : i + 1]) / min(i + 1, 50))
 
         cash = initial_capital
         position = 0.0
@@ -837,13 +863,15 @@ class QuantitativeAnalyticsEngine:
             if dd > max_drawdown:
                 max_drawdown = dd
 
-            equity_curve.append({
-                "date": date_str,
-                "price": round(price, 2),
-                "equity": round(current_equity, 2),
-                "benchmark_equity": round(benchmark_equity, 2),
-                "action": action
-            })
+            equity_curve.append(
+                {
+                    "date": date_str,
+                    "price": round(price, 2),
+                    "equity": round(current_equity, 2),
+                    "benchmark_equity": round(benchmark_equity, 2),
+                    "action": action,
+                }
+            )
 
         final_equity = equity_curve[-1]["equity"]
         strategy_return_pct = round(((final_equity - initial_capital) / initial_capital) * 100.0, 2)
@@ -855,6 +883,7 @@ class QuantitativeAnalyticsEngine:
         sharpe_ratio = 0.0
         if daily_returns and len(daily_returns) > 1:
             import statistics
+
             avg_r = sum(daily_returns) / len(daily_returns)
             std_r = statistics.stdev(daily_returns)
             if std_r > 0:
@@ -873,13 +902,13 @@ class QuantitativeAnalyticsEngine:
             "total_trades": trades,
             "winning_trades": winning_trades,
             "win_rate_pct": win_rate_pct,
-            "equity_curve": equity_curve
+            "equity_curve": equity_curve,
         }
 
     SECTOR_MAP = {
         "Technology": ["AAPL", "MSFT", "NVDA", "AMD", "INTC"],
         "Consumer Discretionary": ["TSLA", "AMZN"],
-        "Communication Services": ["GOOGL", "META", "NFLX"]
+        "Communication Services": ["GOOGL", "META", "NFLX"],
     }
 
     @staticmethod
@@ -893,8 +922,9 @@ class QuantitativeAnalyticsEngine:
 
             for sym in symbols:
                 comp = await QuantitativeAnalyticsEngine.compute_composite_signal(session, sym)
-                
-                res = await session.execute(text("""
+
+                res = await session.execute(
+                    text("""
                     WITH raw_p AS (
                         SELECT mp.close_price, DATE(mp.timestamp) as p_date
                         FROM market_pricing mp JOIN tickers t ON mp.ticker_id = t.id
@@ -906,10 +936,13 @@ class QuantitativeAnalyticsEngine:
                          LAST_VALUE(close_price) OVER (ORDER BY p_date DESC)) / 
                          NULLIF(LAST_VALUE(close_price) OVER (ORDER BY p_date DESC), 0) * 100.0
                     FROM raw_p LIMIT 1;
-                """), {"sym": sym, "days": days})
+                """),
+                    {"sym": sym, "days": days},
+                )
                 row = res.fetchone()
                 ret_pct = safe_float(row[0]) if row else 0.0
-                if ret_pct is None: ret_pct = 0.0
+                if ret_pct is None:
+                    ret_pct = 0.0
 
                 score = comp.get("composite_score", 50.0)
                 ticker_scores.append(score)
@@ -932,21 +965,16 @@ class QuantitativeAnalyticsEngine:
             else:
                 rotation_status = "OUTFLOW"
 
-            sectors.append({
-                "sector": sector_name,
-                "symbols": symbols,
-                "avg_composite_score": avg_score,
-                "avg_return_pct": avg_return,
-                "rotation_status": rotation_status,
-                "top_performing_symbol": top_ticker or symbols[0],
-                "top_symbol_return_pct": round(top_return, 2) if top_return != -999.0 else 0.0
-            })
+            sectors.append(
+                {
+                    "sector": sector_name,
+                    "symbols": symbols,
+                    "avg_composite_score": avg_score,
+                    "avg_return_pct": avg_return,
+                    "rotation_status": rotation_status,
+                    "top_performing_symbol": top_ticker or symbols[0],
+                    "top_symbol_return_pct": round(top_return, 2) if top_return != -999.0 else 0.0,
+                }
+            )
 
-        return {
-            "days_analyzed": days,
-            "total_sectors": len(sectors),
-            "sectors": sectors
-        }
-
-
-
+        return {"days_analyzed": days, "total_sectors": len(sectors), "sectors": sectors}

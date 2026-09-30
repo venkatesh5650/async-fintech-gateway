@@ -1,7 +1,5 @@
 import asyncio
-import json
 import logging
-import os
 import time
 import uuid
 from datetime import datetime, timezone
@@ -94,9 +92,9 @@ class ConnectionPoolDiagnosticManager:
         self._stress_in_progress = True
         run_id = f"pool_stress_{uuid.uuid4().hex[:10]}"
         tid = trace_id or generate_trace_id()
-        start_wall_time = time.perf_counter()
 
         queue_wait_latencies: list[float] = []
+
         acquired_count = 0
         failed_count = 0
         release_event = asyncio.Event()
@@ -132,9 +130,7 @@ class ConnectionPoolDiagnosticManager:
             self._stress_in_progress = False
 
         avg_queue_wait = (
-            round(sum(queue_wait_latencies) / len(queue_wait_latencies), 2)
-            if queue_wait_latencies
-            else 0.0
+            round(sum(queue_wait_latencies) / len(queue_wait_latencies), 2) if queue_wait_latencies else 0.0
         )
         max_queue_wait = round(max(queue_wait_latencies), 2) if queue_wait_latencies else 0.0
 

@@ -27,3 +27,26 @@ dependencies = [
     "pgvector>=0.3.0",
     "locust>=2.20.0",
 ]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+src = ["app"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+]
+ignore = [
+    "E501",  # line too long
+    "E402",  # module level import not at top of file
+    "W291",  # trailing whitespace in multi-line templates/raw strings
+]
+
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"app/scripts/*" = ["F401", "E402"]
+

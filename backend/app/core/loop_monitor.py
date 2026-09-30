@@ -1,12 +1,11 @@
 import asyncio
 import logging
 import math
-import os
 import time
 import uuid
 from collections import deque
 from datetime import datetime, timezone
-from typing import Deque, List, Optional
+from typing import Deque, Optional
 
 import redis.asyncio as redis
 
@@ -166,7 +165,7 @@ class EventLoopLatencyMonitor:
             # Benchmark recovery time to return to sub-threshold latency
             rec_t0 = time.perf_counter()
             await asyncio.sleep(0.005)
-            recovery_drift = await self.measure_instant_lag_ms()
+            _ = await self.measure_instant_lag_ms()
             rec_t1 = time.perf_counter()
             recovery_time_ms = round((rec_t1 - rec_t0) * 1000.0, 2)
 

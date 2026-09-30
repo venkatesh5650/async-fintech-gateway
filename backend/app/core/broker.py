@@ -3,7 +3,7 @@
 """
 Redis Streams Enterprise Message Broker Module
 -----------------------------------------------
-Provides cloud-native message queuing abstractions using Redis Streams 
+Provides cloud-native message queuing abstractions using Redis Streams
 and Consumer Groups.
 
 Decouples HTTP request ingestion from heavy LangGraph compute tasks,
@@ -57,9 +57,7 @@ async def close_redis_client() -> None:
 
 
 async def ensure_consumer_group(
-    stream: str = STREAM_INTEL_JOBS,
-    group: str = GROUP_INTEL_WORKERS,
-    client: Optional[redis.Redis] = None
+    stream: str = STREAM_INTEL_JOBS, group: str = GROUP_INTEL_WORKERS, client: Optional[redis.Redis] = None
 ) -> bool:
     """
     Idempotently provisions the Redis Stream and Consumer Group.
@@ -85,7 +83,7 @@ async def enqueue_intelligence_job(
     batch_id: Optional[str] = None,
     trace_id: Optional[str] = None,
     parent_span_id: Optional[str] = None,
-    client: Optional[redis.Redis] = None
+    client: Optional[redis.Redis] = None,
 ) -> str:
     """
     Event Publisher (Edge Ingestion).
@@ -119,7 +117,7 @@ async def enqueue_batch_intelligence_jobs(
     batch_id: str,
     trace_id: Optional[str] = None,
     parent_span_id: Optional[str] = None,
-    client: Optional[redis.Redis] = None
+    client: Optional[redis.Redis] = None,
 ) -> list[str]:
     """
     High-Throughput Pipelined Batch Publisher.
@@ -143,7 +141,7 @@ async def enqueue_batch_intelligence_jobs(
                 "enqueued_at": now_str,
             }
             pipe.xadd(STREAM_INTEL_JOBS, payload)
-        
+
         message_ids = await pipe.execute()
 
     logger.info(
@@ -161,9 +159,7 @@ async def get_stream_len(stream: str = STREAM_INTEL_JOBS, client: Optional[redis
 
 
 async def get_pending_summary(
-    stream: str = STREAM_INTEL_JOBS,
-    group: str = GROUP_INTEL_WORKERS,
-    client: Optional[redis.Redis] = None
+    stream: str = STREAM_INTEL_JOBS, group: str = GROUP_INTEL_WORKERS, client: Optional[redis.Redis] = None
 ) -> dict:
     """
     Inspects the Pending Entries List (PEL) for unacknowledged messages.
@@ -241,9 +237,11 @@ async def get_stream_health_snapshot(
     )
 
     stream_len = int(stream_len_result) if isinstance(stream_len_result, int) else 0
-    lag_data = lag_result if isinstance(lag_result, dict) else {
-        "lag": 0, "pel_count": 0, "consumer_count": 0, "last_delivered_id": "0-0"
-    }
+    lag_data = (
+        lag_result
+        if isinstance(lag_result, dict)
+        else {"lag": 0, "pel_count": 0, "consumer_count": 0, "last_delivered_id": "0-0"}
+    )
 
     total_lag = lag_data["lag"] + lag_data["pel_count"]
     if total_lag == 0:

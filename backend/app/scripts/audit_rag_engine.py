@@ -91,7 +91,9 @@ async def run_capstone_audit():
         assert chunk["token_count"] <= 512
         assert "chunk_id" in chunk
         assert chunk["ticker"] == "GOOGL"
-    print(f"✅ Assertion 1 Passed: PDF sliding-window chunker verified ({parsed['total_chunks']} chunks, {parsed['total_tokens']} tokens).")
+    print(
+        f"✅ Assertion 1 Passed: PDF sliding-window chunker verified ({parsed['total_chunks']} chunks, {parsed['total_tokens']} tokens)."
+    )
 
     # --------------------------------------------------------------------------
     # Assertion 2: pgvector Vector Storage & Embedding Normalization
@@ -136,7 +138,9 @@ async def run_capstone_audit():
     assert len(search_hits) >= 1
     assert search_hits[0]["chunk_id"] == "chunk_capstone_googl_1"
     assert search_hits[0]["similarity_score"] > 0.3
-    print(f"✅ Assertion 3 Passed: Semantic search ranked target passage #1 (score: {search_hits[0]['similarity_score']:.4f}).")
+    print(
+        f"✅ Assertion 3 Passed: Semantic search ranked target passage #1 (score: {search_hits[0]['similarity_score']:.4f})."
+    )
 
     # --------------------------------------------------------------------------
     # Assertion 4: LangGraph RAG Multi-Agent State Context & Citations
@@ -164,12 +168,12 @@ async def run_capstone_audit():
     # Confirm chunks are stored in DB
     async with AsyncSessionLocal() as session:
         db_chunks = (
-            await session.execute(
-                DocumentChunk.__table__.select().where(DocumentChunk.ticker == "NVDA")
-            )
+            await session.execute(DocumentChunk.__table__.select().where(DocumentChunk.ticker == "NVDA"))
         ).fetchall()
         assert len(db_chunks) >= 1, "NVDA EDGAR chunks must be persisted in database"
-    print(f"✅ Assertion 5 Passed: SEC EDGAR daemon auto-ingestion verified ({edgar_result['chunks_generated']} chunks persisted).")
+    print(
+        f"✅ Assertion 5 Passed: SEC EDGAR daemon auto-ingestion verified ({edgar_result['chunks_generated']} chunks persisted)."
+    )
 
     # --------------------------------------------------------------------------
     # Assertion 6: Multi-Tenant Ticker Scoping & Zero Contamination
@@ -191,7 +195,9 @@ async def run_capstone_audit():
         assert "composite_score" in composite
         assert 0.0 <= composite["composite_score"] <= 100.0
         assert "recommendation" in composite
-    print("✅ Assertion 7 Passed: Quantitative engine mathematical determinism invariant verified with zero regressions.")
+    print(
+        "✅ Assertion 7 Passed: Quantitative engine mathematical determinism invariant verified with zero regressions."
+    )
 
     print("=" * 80)
     print("🎉 PHASE 2 MILESTONE 4 COMPLETE: 7/7 ASSERTIONS PASSED WITH ZERO REGRESSIONS.")

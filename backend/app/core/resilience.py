@@ -4,7 +4,7 @@ import random
 import time
 from enum import Enum
 from functools import wraps
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 logger = logging.getLogger("uvicorn.error")
 
@@ -14,6 +14,7 @@ def async_retry(retries: int = 3, delay: float = 1.0, backoff: float = 2.0):
     Exponential Backoff Retry Decorator.
     Protects data fetching operations from transient third-party API outages.
     """
+
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -31,11 +32,15 @@ def async_retry(retries: int = 3, delay: float = 1.0, backoff: float = 2.0):
                     await asyncio.sleep(current_delay)
                     current_delay *= backoff
 
-            logger.error(f"❌ [CRITICAL] Market data fetcher '{func.__name__}' failed permanently after {retries} retries.")
+            logger.error(
+                f"❌ [CRITICAL] Market data fetcher '{func.__name__}' failed permanently after {retries} retries."
+            )
             if last_exception is not None:
                 raise last_exception
             raise RuntimeError(f"Operation '{func.__name__}' failed permanently after {retries} retries.")
+
         return wrapper
+
     return decorator
 
 
@@ -43,10 +48,11 @@ def async_retry(retries: int = 3, delay: float = 1.0, backoff: float = 2.0):
 # RATE-LIMIT RESILIENCE ENGINE: CIRCUIT BREAKER & JITTERED BACKOFF
 # ======================================================================
 
+
 class CircuitState(str, Enum):
-    CLOSED = "CLOSED"       # Normal operation; all requests allowed through
-    OPEN = "OPEN"           # Throttled/tripped; requests fast-rejected or paused
-    HALF_OPEN = "HALF_OPEN" # Cooldown elapsed; canary trial request permitted
+    CLOSED = "CLOSED"  # Normal operation; all requests allowed through
+    OPEN = "OPEN"  # Throttled/tripped; requests fast-rejected or paused
+    HALF_OPEN = "HALF_OPEN"  # Cooldown elapsed; canary trial request permitted
 
 
 def is_rate_limit_error(exc: Exception) -> bool:
@@ -106,7 +112,7 @@ def calculate_backoff_with_jitter(
 class GroqLLMCircuitBreaker:
     """
     Circuit Breaker pattern specifically protecting the Groq LLM cluster.
-    
+
     States:
       - CLOSED: Calls proceed normally.
       - OPEN: Tripped by repeated rate-limit / 429 responses. Fast-blocks
@@ -183,10 +189,7 @@ class GroqLLMCircuitBreaker:
 
         if is_rate_limit:
             self.consecutive_rate_limits += 1
-            if (
-                self.consecutive_rate_limits >= self.failure_threshold
-                or self.state == CircuitState.HALF_OPEN
-            ):
+            if self.consecutive_rate_limits >= self.failure_threshold or self.state == CircuitState.HALF_OPEN:
                 self.state = CircuitState.OPEN
                 self.trip_timestamp = time.time()
                 self.total_trips += 1

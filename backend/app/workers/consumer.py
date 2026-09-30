@@ -24,7 +24,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 import redis.asyncio as redis
 from app.core.broker import (
     STREAM_INTEL_JOBS,
-    STREAM_INTEL_DLQ,
     GROUP_INTEL_WORKERS,
     DEFAULT_REDIS_URL,
     MAX_DELIVERY_ATTEMPTS,
@@ -45,18 +44,15 @@ from app.core.resilience import (
 from app.routers.intelligence import run_intelligence_worker
 from app.core.telemetry import generate_span_id
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] [CONSUMER] %(message)s"
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] [CONSUMER] %(message)s")
 logger = logging.getLogger(__name__)
 
 MAX_CONCURRENT_JOBS = int(os.getenv("BATCH_CONCURRENCY_LIMIT", "5"))
 BLOCK_TIMEOUT_MS = int(os.getenv("CONSUMER_BLOCK_MS", "2000"))
 
 # Dynamic Concurrency Tuning Configuration (Backpressure Control)
-MIN_CONCURRENCY = int(os.getenv("MIN_CONCURRENCY", "3"))    # Never drop below (idle baseline)
-MAX_CONCURRENCY = int(os.getenv("MAX_CONCURRENCY", "10"))   # Hard cap (Groq free tier safe)
+MIN_CONCURRENCY = int(os.getenv("MIN_CONCURRENCY", "3"))  # Never drop below (idle baseline)
+MAX_CONCURRENCY = int(os.getenv("MAX_CONCURRENCY", "10"))  # Hard cap (Groq free tier safe)
 SCALE_UP_THRESHOLD = int(os.getenv("SCALE_UP_THRESHOLD", "5"))  # Lag count that triggers +1 step
 LAG_CHECK_INTERVAL_SEC = float(os.getenv("LAG_CHECK_INTERVAL_SEC", "10.0"))  # How often to re-evaluate
 
@@ -88,11 +84,7 @@ class StreamConsumerWorker:
         Initializes connection pool and ensures stream consumer group is bootstrapped.
         """
         self.redis_client = redis.from_url(self.redis_url, decode_responses=True)
-        await ensure_consumer_group(
-            stream=STREAM_INTEL_JOBS,
-            group=GROUP_INTEL_WORKERS,
-            client=self.redis_client
-        )
+        await ensure_consumer_group(stream=STREAM_INTEL_JOBS, group=GROUP_INTEL_WORKERS, client=self.redis_client)
         logger.info(
             f"🚀 [INIT] Worker '{self.consumer_id}' attached to Group '{GROUP_INTEL_WORKERS}' on Stream '{STREAM_INTEL_JOBS}' (Concurrency: {self.max_concurrency})"
         )
@@ -124,10 +116,7 @@ class StreamConsumerWorker:
         async with self.semaphore:
             # Inspect delivery attempts to prevent poison-pill crash loops
             delivery_count = await get_message_delivery_count(
-                message_id=message_id,
-                stream=STREAM_INTEL_JOBS,
-                group=GROUP_INTEL_WORKERS,
-                client=self.redis_client
+                message_id=message_id, stream=STREAM_INTEL_JOBS, group=GROUP_INTEL_WORKERS, client=self.redis_client
             )
 
             if delivery_count > MAX_DELIVERY_ATTEMPTS:
@@ -140,7 +129,7 @@ class StreamConsumerWorker:
                     "ticker": ticker.upper(),
                     "error": f"Quarantined to Dead-Letter Queue after {delivery_count} failed attempts.",
                     "delivery_count": delivery_count,
-                    "quarantined_at": int(time.time() * 1000)
+                    "quarantined_at": int(time.time() * 1000),
                 }
                 await self.redis_client.set(job_id, json.dumps(dead_letter_payload), ex=3600)
 
@@ -153,7 +142,7 @@ class StreamConsumerWorker:
                     error_reason=actual_reason,
                     delivery_count=delivery_count,
                     parent_span_id=parent_span,
-                    client=self.redis_client
+                    client=self.redis_client,
                 )
 
                 # Store distributed trace snapshot for the quarantined transaction
@@ -168,14 +157,14 @@ class StreamConsumerWorker:
                             "queue_wait_ms": queue_wait_ms,
                             "execution_time_ms": 15.2,
                             "total_journey_ms": queue_wait_ms + 15.2,
-                        }
+                        },
                     }
                     await self.redis_client.set(f"trace:{trace_id}", json.dumps(trace_snapshot), ex=3600)
 
                 try:
                     await send_to_discord_dlq(
                         payload={"job_id": job_id, "ticker": ticker.upper(), "trace_id": trace_id},
-                        error_msg=f"Job exceeded {MAX_DELIVERY_ATTEMPTS} attempts. Quarantined to DLQ."
+                        error_msg=f"Job exceeded {MAX_DELIVERY_ATTEMPTS} attempts. Quarantined to DLQ.",
                     )
                 except Exception:
                     pass

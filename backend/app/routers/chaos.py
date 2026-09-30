@@ -1,15 +1,13 @@
-import json
 import logging
 import os
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List
 
 import redis.asyncio as redis
 from fastapi import APIRouter, Body, HTTPException, Request, status
 
 from app.core.load_tester import (
     REDIS_HISTORY_KEY,
-    REDIS_LATEST_KEY,
     SyntheticLoadTester,
 )
 from app.core.pool_chaos import ConnectionPoolDiagnosticManager
@@ -379,10 +377,11 @@ async def get_chaos_system_overview(request: Request):
     worker_rep = await worker_chaos.get_latest_report()
     worker_status = "HEALTHY" if worker_rep and worker_rep.sla_met else "ACTIVE"
 
-    resilience_score = 100.0 if all(
-        s in ["HEALTHY", "ACTIVE"]
-        for s in [load_status, pool_status, mem_status, loop_status, worker_status]
-    ) else 80.0
+    resilience_score = (
+        100.0
+        if all(s in ["HEALTHY", "ACTIVE"] for s in [load_status, pool_status, mem_status, loop_status, worker_status])
+        else 80.0
+    )
 
     return ChaosSystemOverview(
         load_testing_status=load_status,
@@ -394,5 +393,3 @@ async def get_chaos_system_overview(request: Request):
         timestamp_iso=datetime.now(timezone.utc).isoformat(),
         trace_id=trace_id,
     )
-
-

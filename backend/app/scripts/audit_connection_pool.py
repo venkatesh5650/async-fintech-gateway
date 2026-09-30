@@ -116,9 +116,7 @@ async def test_pool_collision_prevention():
     logger.info("Running assertion 5: Testing concurrent stress run collision handling...")
     manager = ConnectionPoolDiagnosticManager(redis_client=None)
 
-    task1 = asyncio.create_task(
-        manager.simulate_starvation(engine=engine, concurrency=5, hold_duration=1.5)
-    )
+    task1 = asyncio.create_task(manager.simulate_starvation(engine=engine, concurrency=5, hold_duration=1.5))
     await asyncio.sleep(0.05)
 
     collision_intercepted = False

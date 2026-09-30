@@ -1,12 +1,11 @@
 import json
 import os
-import uuid
 import time
 import logging
-from typing import Optional, List
+from typing import Optional
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, status, Request
 import redis.asyncio as redis
-from sqlalchemy import select, delete
+from sqlalchemy import delete
 
 from app.core.document_parser import parse_and_chunk_pdf
 from app.core.embedder import generate_batch_embeddings, EMBEDDING_DIM
@@ -31,7 +30,9 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 if "redis://redis:" in REDIS_URL and not os.path.exists("/.dockerenv"):
     REDIS_URL = REDIS_URL.replace("redis://redis:", "redis://localhost:")
 elif "redis://fintech_redis:" in REDIS_URL:
-    REDIS_URL = REDIS_URL.replace("redis://fintech_redis:", "redis://localhost:" if not os.path.exists("/.dockerenv") else "redis://redis:")
+    REDIS_URL = REDIS_URL.replace(
+        "redis://fintech_redis:", "redis://localhost:" if not os.path.exists("/.dockerenv") else "redis://redis:"
+    )
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 
 MAX_PDF_SIZE_BYTES = 25 * 1024 * 1024
@@ -311,7 +312,9 @@ async def get_embedding_progress(document_id: str):
     is_embedded = doc_meta.get("status") == "EMBEDDED"
 
     embedded_count = int(doc_meta.get("embedded_chunks", total_chunks if is_embedded else 0))
-    percentage = 100.0 if is_embedded else (round((embedded_count / total_chunks * 100.0), 1) if total_chunks > 0 else 0.0)
+    percentage = (
+        100.0 if is_embedded else (round((embedded_count / total_chunks * 100.0), 1) if total_chunks > 0 else 0.0)
+    )
     current_status = "COMPLETED" if is_embedded else ("EMBEDDING" if embedded_count > 0 else "PARSED")
 
     return EmbeddingProgressResponse(
@@ -322,4 +325,3 @@ async def get_embedding_progress(document_id: str):
         embedded_chunks=embedded_count,
         percentage=percentage,
     )
-
