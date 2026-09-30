@@ -1,8 +1,8 @@
 # ROADMAP STATE - 120-Day Automated Equity Research Engine
 
 ## 1. Project Context & Current Position
-* **Current Day:** Day 85 Complete (Phase 2 Milestone 5: Stress Testing & Chaos Engineering — 100% Certified & Locked)
-* **Next Action:** Begin Day 86 — Full Regression Audit Suite & RegressionAuditDashboard (Phase 2 Milestone 6)
+* **Current Day:** Day 90 Complete (Phase 2 Capstone: Production Dry Run & Capstone Polish — 100% Certified, Tagged v0.9.0, Sealed)
+* **Next Action:** Begin Day 91 — Live Cloud Orchestration (Multi-stage Dockerfiles, Render/AWS Deploy, Phase 3 Milestone 1)
 * **Target Role:** FinTech AI Automation Engineer / Systems Architect
 * **Core Philosophy:** We strictly follow the principles outlined in "The 1% Advantage: Engineering a Durable FinTech Career".
 * **AI Agent Directive:** Do not write black-box code or rewrite existing architecture. You are operating as a 1% Systems Architect. Read the completed days to understand the existing context, then execute strictly according to `canonical_roadmap.md` in `.agents/rules/`.
@@ -16,8 +16,8 @@ Phase 2  (Days 66–70)  → Distributed Caching — LOCKED
 Phase 2  (Days 71–75)  → Quantitative Analytics (SMA, RSI, Bollinger) — LOCKED
 Phase 2  (Days 76–80)  → Document Ingestion & RAG Pipelines (pgvector, 10-K/10-Q) — LOCKED
 Phase 2  (Days 81–85)  → Stress Testing & Chaos Engineering (Locust) — LOCKED
-Phase 2  (Days 86–90)  → Production Dry Run & Capstone Polish ← CURRENT
-Phase 3  (Days 91–100) → Live Cloud Orchestration (Render, Docker, Prometheus, Grafana)
+Phase 2  (Days 86–90)  → Production Dry Run & Capstone Polish — LOCKED (v0.9.0)
+Phase 3  (Days 91–100) → Live Cloud Orchestration (Render, Docker, Prometheus, Grafana) ← NEXT
 Phase 3  (Days 101–110)→ Build in Public (LangGraph Visualizer, Loom, Portfolio)
 Phase 3  (Days 111–120)→ US Founder Infiltration & Contract Seeding
 ```
@@ -203,8 +203,105 @@ Phase 2 Milestone 4 (Days 76–80: Document Ingestion & RAG Pipelines) is 100% C
 
 Phase 2 Milestone 5 (Days 81–85: Stress Testing & Chaos Engineering) is 100% Complete, Certified, and Locked.
 
+## 9. Phase 2 Capstone — Production Dry Run & Polish (Days 86–90)
 
-## 9. INVARIANT CONSTRAINTS — Never Violate
+* **Day 86:** Unified Master Regression Audit Suite & `RegressionAuditDashboard`:
+  * Engineered `MasterRegressionOrchestrator` in [`app/core/regression_orchestrator.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/core/regression_orchestrator.py) aggregating all 5 system domain audit suites into an institutional 33-point verification engine with granular assertion status, execution latency benchmarks, and Redis state persistence (`audit:regression:latest`, `audit:regression:history`).
+  * Built CLI master runner in [`app/scripts/audit_master_regression.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/scripts/audit_master_regression.py) testing all 5 milestones end-to-end with zero regressions.
+  * Mounted secured REST endpoints `GET /v1/audit/regression/latest` and `POST /v1/audit/regression/run` in [`app/routers/regression.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/routers/regression.py) with W3C `trace_id` generation and zero-trust authentication.
+  * Added Pydantic schemas `RegressionAssertionDetail`, `RegressionSuiteReport`, and `MasterRegressionReport` in [`app/database/schemas.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/database/schemas.py).
+  * Shipped Next.js 15 BFF proxy route [`frontend/app/api/audit/regression/route.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/app/api/audit/regression/route.ts) supporting cached telemetry querying and on-demand full regression execution.
+  * Added TypeScript interfaces in [`frontend/src/types/api.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/types/api.ts).
+  * Created [`RegressionAuditDashboard.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/RegressionAuditDashboard.tsx) featuring a 100% Certified status badge, 33-assertion progress bar, per-domain execution latency tiles, search and status filter controls, expandable assertion checklist accordions with validation badges, and interactive "Run Full Regression" execution trigger.
+  * Mounted `RegressionAuditDashboard` into [`OperationsConsole.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/OperationsConsole.tsx) under the primary `🧪 Regression Audit` operational tab.
+  * Executed Master Regression Audit suite (`audit_master_regression.py`) with 100% pass rate (33/33 assertions passed across all 5 suites in 12.3s):
+    1. Phase 1 Core Engine & Microservices Infrastructure: 7/7 PASSED
+    2. Phase 2 Redis Streams, Tracing & Distributed Caching: 7/7 PASSED
+    3. Phase 2 Quantitative Time-Series Analytics & Oscillators: 7/7 PASSED
+    4. Phase 2 Document Ingestion, pgvector & Qualitative RAG: 7/7 PASSED
+    5. Phase 2 Stress Testing & Chaos Engineering: 5/5 PASSED
+  * Verified 0 frontend TypeScript errors (`npx tsc --noEmit`).
+
+Phase 2 Capstone Day 86 is 100% Complete, Certified, and Sealed.
+
+* **Day 87:** Production Architecture Blueprint & Interactive System Visualizer:
+  * Engineered `SystemArchitectureRegistry` in [`app/core/architecture.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/core/architecture.py) declaring 7 architectural tiers, 14 constituent micro-nodes with strict latency SLAs, 16 directed data flow edges, and canonical Mermaid diagram syntax.
+  * Mounted secured REST endpoints `GET /v1/system/architecture` and `GET /v1/system/architecture/mermaid` in [`app/routers/architecture.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/routers/architecture.py) with W3C `trace_id` generation.
+  * Added Pydantic schemas `ArchitectureNode`, `ArchitectureEdge`, `ArchitectureSubsystem`, and `SystemArchitectureTopology` in [`app/database/schemas.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/database/schemas.py).
+  * Shipped Next.js 15 BFF proxy route [`frontend/app/api/system/architecture/route.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/app/api/system/architecture/route.ts) with zero-trust token propagation.
+  * Added TypeScript interfaces in [`frontend/src/types/api.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/types/api.ts).
+  * Created [`ArchitectureDiagramViewer.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/ArchitectureDiagramViewer.tsx) featuring 3-way toggle views: Interactive Data Flow with component node inspection, Tier Catalog (7 subsystems), and raw copyable Mermaid blueprint code.
+  * Created dedicated route [`frontend/app/about/page.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/app/about/page.tsx) embedding the full architecture diagram with dark aesthetic and institutional styling.
+  * Mounted `ArchitectureDiagramViewer` into [`OperationsConsole.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/OperationsConsole.tsx) under the dedicated `📐 Architecture Blueprint` operational tab.
+  * Executed architecture audit suite (`audit_architecture_spec.py`) with 100% pass rate (5/5 assertions: core metadata, node consistency, edge referential integrity, Mermaid syntax validation, REST API contracts).
+  * Verified 0 regressions on Master Regression suite (`audit_master_regression.py` 33/33 assertions passed 100%) and 0 frontend TypeScript errors (`npx tsc --noEmit`).
+
+Phase 2 Capstone Day 87 is 100% Complete, Certified, and Sealed.
+
+* **Day 88:** Code Quality, Type Hygiene & Zero-Debt Hardening:
+  * Integrated `ruff` enterprise static analyzer and formatter into backend virtual environment (`uv pip install ruff`) and configured strict rules (`[tool.ruff] select = ["E", "W", "F"]`, line-length 120) in [`backend/pyproject.toml`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/pyproject.toml).
+  * Executed comprehensive repository cleanup: reformatted 53 Python modules and eradicated 100% of unused imports, dead references, and variable assignment warnings (`F841` cleared in `worker_chaos.py` and `audit_redis_memory.py`).
+  * Engineered `CodeQualityAuditor` in [`app/core/code_quality.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/core/code_quality.py) with 4-engine verification: Codebase Scale Metric Scan, AST Syntax & Parser Verification (0 syntax errors across 100% of codebase), Ruff Static Analysis (0 errors), and Ruff Formatter Enforcement.
+  * Added Pydantic contracts `CodeQualityCheckItem` and `CodeQualityReport` in [`app/database/schemas.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/database/schemas.py).
+  * Mounted secured REST API endpoints `GET /v1/system/code-quality` and `POST /v1/system/code-quality/scan` in [`app/routers/code_quality.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/routers/code_quality.py) with W3C `trace_id` generation.
+  * Shipped Next.js 15 BFF proxy route [`frontend/app/api/system/code-quality/route.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/app/api/system/code-quality/route.ts) with zero-trust token propagation.
+  * Added TypeScript interfaces in [`frontend/src/types/api.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/types/api.ts).
+  * Built [`CodeQualityPanel.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/CodeQualityPanel.tsx) with real-time audit triggers, metric cards (100% linter clean, ~12.8k LOC across 54 files, 100% AST integrity, 4/4 checks passed), expandable diagnostic details, rule matrix viewer, and machine-contract JSON explorer.
+  * Mounted `CodeQualityPanel` into [`OperationsConsole.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/OperationsConsole.tsx) under the primary `🧹 Code Quality` operational tab.
+  * Executed automated code quality audit suite ([`audit_code_quality.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/scripts/audit_code_quality.py)) with 100% pass rate (5/5 assertions: core quality auditor execution, codebase metric footprint, AST syntax integrity, ruff linter/formatter cleanliness, GET & POST HTTP API contract verification).
+  * Verified 0 regressions on Master Regression suite (`audit_master_regression.py` 33/33 assertions passed 100%) and 0 frontend TypeScript errors (`npx tsc --noEmit`).
+
+Phase 2 Capstone Day 88 is 100% Complete, Certified, and Sealed.
+
+* **Day 89:** Enterprise OpenAPI 3.1 Documentation & Interactive API Explorer:
+  * Engineered OpenAPI 3.1 schema specification engine in [`app/core/openapi.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/core/openapi.py) with full info metadata, 10 domain category tags, dual security schemes (`BearerAuth` and `ApiKeyAuth`), and standardized error response components (`BadRequestError`, `UnauthorizedError`, `RateLimitError`, `InternalServerError`).
+  * Attached custom OpenAPI builder to `app.openapi` in [`app/main.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/main.py) and mounted live specification probe `GET /v1/system/openapi.json`.
+  * Built programmatic specification exporter in [`app/scripts/export_openapi.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/scripts/export_openapi.py) generating synchronized artifacts at [`backend/openapi.json`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/openapi.json) and [`frontend/public/openapi.json`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/public/openapi.json) (59 operations, 60 Pydantic schemas).
+  * Shipped Next.js 15 BFF proxy route [`frontend/app/api/docs/spec/route.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/app/api/docs/spec/route.ts) with filesystem failover support.
+  * Added TypeScript interfaces in [`frontend/src/types/api.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/types/api.ts).
+  * Built [`ApiDocsBrowser.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/ApiDocsBrowser.tsx) featuring:
+    * Interactive Explorer with method badges, live parameter inputs, response status matrices, and in-browser "Try It Out" execution tester with latency telemetry.
+    * Real-time search query filter and 10 domain category tag selector pills.
+    * Embedded Swagger UI portal view (`/docs`) with standalone launcher.
+    * One-click OpenAPI JSON schema downloader and clipboard copier.
+  * Created dedicated route [`frontend/app/docs/page.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/app/docs/page.tsx) with dark terminal aesthetic and top navigation bar.
+  * Mounted `ApiDocsBrowser` into [`OperationsConsole.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/OperationsConsole.tsx) under the primary `📖 API Docs` operational tab.
+  * Executed automated OpenAPI specification audit suite ([`audit_openapi_spec.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/scripts/audit_openapi_spec.py)) with 100% pass rate (5/5 assertions: core specification metadata, 10 domain tags coverage, 59 route operations, security schemes & error responses, filesystem artifact and live GET /v1/system/openapi.json integrity).
+  * Verified 0 regressions on Master Regression suite (`audit_master_regression.py` 33/33 assertions passed 100%), Code Quality suite (`audit_code_quality.py` 5/5 assertions passed 100%), and 0 frontend TypeScript errors (`npx tsc --noEmit`).
+
+Phase 2 Capstone Day 89 is 100% Complete, Certified, and Sealed.
+
+* **Day 90:** Phase 2 Sealed — End-to-End Production Dry Run, Root README & v0.9.0 Sign-Off:
+  * Engineered `Phase2CapstoneReportBuilder` in [`app/core/capstone_report.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/core/capstone_report.py) aggregating metrics across all 6 Phase 2 milestones, 48+ passing assertions, active subsystem telemetry (Streams=ACTIVE, Circuit=CLOSED, Cache=OPERATIONAL, RAG=OPERATIONAL), and codebase scale metrics (60 Python modules, 13,566 LOC).
+  * Added Pydantic schemas `Phase2MilestoneSummary` and `Phase2CapstoneReport` in [`app/database/schemas.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/database/schemas.py).
+  * Mounted secured REST API route `GET /v1/system/capstone-report` in [`app/routers/capstone.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/routers/capstone.py) with W3C `trace_id` generation.
+  * Shipped Next.js 15 BFF proxy route [`frontend/app/api/system/capstone-report/route.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/app/api/system/capstone-report/route.ts) with zero-trust token propagation.
+  * Added TypeScript interfaces in [`frontend/src/types/api.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/types/api.ts).
+  * Built [`Phase2CapstoneReportPanel.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/Phase2CapstoneReport.tsx) featuring:
+    * Executive Summary view with KPI telemetry cards (Version v0.9.0, Status SEALED, 100% Pass Rate, 6/6 Milestones, 48/48 Assertions, Subsystem Status).
+    * Interactive Milestones view with 6 expandable audit milestone cards detailing capabilities, assertions, and audit script links.
+    * Machine-contract JSON raw viewer with one-click clipboard copying.
+  * Created dedicated route [`frontend/app/capstone/page.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/app/capstone/page.tsx) with dark terminal aesthetic and top navigation bar.
+  * Mounted `Phase2CapstoneReportPanel` into [`OperationsConsole.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/OperationsConsole.tsx) under the primary `🏆 Phase 2 Capstone` operational tab.
+  * Synchronized enterprise OpenAPI 3.1 specification artifacts across [`backend/openapi.json`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/openapi.json) and [`frontend/public/openapi.json`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/public/openapi.json) (61 routes, 10 domain tags, 62 schemas).
+  * Rewrote root [`README.md`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/README.md) with comprehensive 7-tier architecture blueprint, Mermaid diagrams, 11-audit milestone verification table, OpenAPI specifications, and local ignition quickstart.
+  * Executed automated Phase 2 Capstone audit suite ([`audit_phase2_capstone.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/scripts/audit_phase2_capstone.py)) with 100% pass rate (5/5 assertions: release version metadata, 6 milestones completeness, subsystem health, LOC footprint, REST API contract).
+  * Verified 0 regressions across entire test battery:
+    1. `audit_master_regression.py`: 33/33 assertions passed (100%).
+    2. `audit_openapi_spec.py`: 5/5 assertions passed (100%).
+    3. `audit_code_quality.py`: 5/5 assertions passed (100%).
+    4. `ruff check app`: 0 errors.
+    5. `npx tsc --noEmit`: 0 errors.
+  * Tagged git release `v0.9.0` sealing Phase 2 permanently.
+
+================================================================================
+🏆 PHASE 2 IS OFFICIALLY 100% CERTIFIED, LOCKED, AND SEALED AT v0.9.0.
+================================================================================
+
+
+
+## 10. INVARIANT CONSTRAINTS — Never Violate
+
 
 * **Do not regress:** Zero-trust Pydantic perimeter, WebSocket sequence validation, adaptive concurrency control, distributed telemetry tracing.
 * **Protect the Event Loop:** Retain strict async I/O boundaries. No blocking calls in hot paths.

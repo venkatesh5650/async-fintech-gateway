@@ -10,10 +10,29 @@ from decimal import Decimal
 
 from sqlalchemy import text, select, delete
 from app.database.database import engine, Base, AsyncSessionLocal
-from app.database.models import Ticker, MarketPricing, User, ComputedSignal, DocumentChunk
+from app.database.models import Ticker, MarketPricing
 from app.core.limiter import RateLimiter
-from app.core.telemetry import StructuredLoggingMiddleware  
-from app.routers import auth, intelligence, market, websocket, analytics, documents, chaos
+from app.core.openapi import (
+    OPENAPI_SUMMARY,
+    OPENAPI_TITLE,
+    OPENAPI_VERSION,
+    TAGS_METADATA,
+    custom_openapi,
+)
+from app.core.telemetry import StructuredLoggingMiddleware
+from app.routers import (
+    analytics,
+    architecture,
+    auth,
+    capstone,
+    chaos,
+    code_quality,
+    documents,
+    intelligence,
+    market,
+    regression,
+    websocket,
+)
 
 import os
 import asyncio
@@ -26,26 +45,27 @@ from app.workers.market_poller import MarketPollerWorker
 # Drift range controls trend bias → directly drives RSI, SMA crossovers, Sharpe ratio
 TICKER_PROFILES = {
     # Strong bull trend → STRONG_BUY signal
-    "AAPL": (Decimal("150.00"), 0.005, 0.025,  0.008),  # Steady uptrend
+    "AAPL": (Decimal("150.00"), 0.005, 0.025, 0.008),  # Steady uptrend
     # Aggressive bull, high volatility → BUY with HIGH_RISK
-    "NVDA": (Decimal("95.00"),  0.010, 0.045,  0.020),  # Explosive growth
+    "NVDA": (Decimal("95.00"), 0.010, 0.045, 0.020),  # Explosive growth
     # Mild bull → BUY/NEUTRAL
-    "MSFT": (Decimal("320.00"), 0.002, 0.015,  0.006),  # Slow steady grind up
+    "MSFT": (Decimal("320.00"), 0.002, 0.015, 0.006),  # Slow steady grind up
     # Bearish, declining → SELL signal
     "TSLA": (Decimal("250.00"), -0.030, 0.005, 0.025),  # Downtrend
     # Bearish moderate → SELL
     "META": (Decimal("450.00"), -0.015, 0.008, 0.015),  # Slight downtrend
     # Neutral/flat, low vol → NEUTRAL
-    "GOOGL": (Decimal("140.00"), -0.005, 0.010, 0.005), # Sideways chop
+    "GOOGL": (Decimal("140.00"), -0.005, 0.010, 0.005),  # Sideways chop
     # Strong bear → STRONG_SELL
-    "AMD":  (Decimal("180.00"), -0.035, 0.008, 0.022),  # Sharp decline
+    "AMD": (Decimal("180.00"), -0.035, 0.008, 0.022),  # Sharp decline
     # Mild bull, low vol → BUY (safe)
-    "JPM":  (Decimal("160.00"), 0.003, 0.018,  0.004),  # Blue chip uptrend
+    "JPM": (Decimal("160.00"), 0.003, 0.018, 0.004),  # Blue chip uptrend
     # Flat/neutral, low vol → NEUTRAL
-    "GS":   (Decimal("380.00"), -0.003, 0.012, 0.006),  # Sideways
+    "GS": (Decimal("380.00"), -0.003, 0.012, 0.006),  # Sideways
     # Moderate bull → BUY
-    "MS":   (Decimal("85.00"),  0.004, 0.020,  0.007),  # Mild uptrend
+    "MS": (Decimal("85.00"), 0.004, 0.020, 0.007),  # Mild uptrend
 }
+
 
 async def _seed_historical_data_inline():
     """Seeds 100 days of OHLCV data using the app's own AsyncSessionLocal.
@@ -84,24 +104,32 @@ async def _seed_historical_data_inline():
                     close_price = open_price * (Decimal("1.0") + fluctuation)
                     # Ensure price never goes below $1
                     close_price = max(close_price, Decimal("1.00"))
-                    high_price = max(open_price, close_price) * (Decimal("1.0") + Decimal(str(random.uniform(0.001, wick))))
-                    low_price  = min(open_price, close_price) * (Decimal("1.0") - Decimal(str(random.uniform(0.001, wick))))
+                    high_price = max(open_price, close_price) * (
+                        Decimal("1.0") + Decimal(str(random.uniform(0.001, wick)))
+                    )
+                    low_price = min(open_price, close_price) * (
+                        Decimal("1.0") - Decimal(str(random.uniform(0.001, wick)))
+                    )
                     volume = random.randint(10_000_000, 75_000_000)
                     current_close = close_price
-                    session.add(MarketPricing(
-                        ticker_id=ticker_obj.id,
-                        timestamp=candle_ts,
-                        open_price=round(open_price, 4),
-                        high_price=round(high_price, 4),
-                        low_price=round(low_price, 4),
-                        close_price=round(close_price, 4),
-                        volume=volume,
-                    ))
+                    session.add(
+                        MarketPricing(
+                            ticker_id=ticker_obj.id,
+                            timestamp=candle_ts,
+                            open_price=round(open_price, 4),
+                            high_price=round(high_price, 4),
+                            low_price=round(low_price, 4),
+                            close_price=round(close_price, 4),
+                            volume=volume,
+                        )
+                    )
 
     logging.warning("✅ [AUTO-SEED] 100-day historical data seeded for all 10 tickers with distinct profiles.")
 
+
 # Track container boot time for uptime metrics
 START_TIME = time.time()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -116,7 +144,8 @@ async def lifespan(app: FastAPI):
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        await conn.execute(text("""
+        await conn.execute(
+            text("""
             CREATE TABLE IF NOT EXISTS signal_snapshots (
                 id SERIAL PRIMARY KEY,
                 ticker VARCHAR(10) NOT NULL,
@@ -128,12 +157,14 @@ async def lifespan(app: FastAPI):
                 sharpe_ratio NUMERIC(5,2),
                 version INTEGER DEFAULT 1
             );
-        """))
+        """)
+        )
     logging.warning("✅ [DATABASE INIT] Verified/Created all PostgreSQL tables and signal_snapshots schema.")
 
     # Automatic User Seeding
     try:
         from seed_user import seed_users
+
         await seed_users()
     except Exception as seed_err:
         logging.warning(f"⚠️ [AUTO-SEED WARNING] User seeding check failed: {seed_err}")
@@ -150,7 +181,6 @@ async def lifespan(app: FastAPI):
             logging.warning(f"✅ [AUTO-SEED] market_pricing has {row_count} rows — skipping seed.")
     except Exception as data_seed_err:
         logging.warning(f"⚠️ [AUTO-SEED WARNING] Historical data seeding failed: {data_seed_err}", exc_info=True)
-
 
     # Infrastructure Bootstrap: Redis Streams & Consumer Groups
     try:
@@ -192,9 +222,18 @@ async def lifespan(app: FastAPI):
         await worker.shutdown()
     if consumer_task:
         consumer_task.cancel()
-    await close_redis_client() 
+    await close_redis_client()
 
-app = FastAPI(title="Fintech Intelligence Gateway", lifespan=lifespan)
+
+app = FastAPI(
+    title=OPENAPI_TITLE,
+    version=OPENAPI_VERSION,
+    summary=OPENAPI_SUMMARY,
+    openapi_tags=TAGS_METADATA,
+    lifespan=lifespan,
+)
+
+app.openapi = lambda: custom_openapi(app)
 
 # 1. Register Cloud-Native Structured Logging Middleware
 app.add_middleware(StructuredLoggingMiddleware)
@@ -207,29 +246,33 @@ app.include_router(websocket.router)
 app.include_router(analytics.router)
 app.include_router(documents.router)
 app.include_router(chaos.router)
+app.include_router(regression.router)
+app.include_router(architecture.router)
+app.include_router(code_quality.router)
+app.include_router(capstone.router)
 
 # Perimeter Defense: Rate Limiter Configuration
 limiter = RateLimiter(requests_per_minute=5)
+
 
 # Intercept default 422 errors to prevent internal Pydantic schema leakage
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     errors = []
     for error in exc.errors():
-        errors.append({
-            "field": ".".join(str(loc) for loc in error["loc"] if loc != "body"),
-            "issue": error["msg"],
-            "rejected_value": error.get("input")
-        })
-    
+        errors.append(
+            {
+                "field": ".".join(str(loc) for loc in error["loc"] if loc != "body"),
+                "issue": error["msg"],
+                "rejected_value": error.get("input"),
+            }
+        )
+
     return JSONResponse(
-        status_code=status.HTTP_400_BAD_REQUEST, 
-        content={
-            "status": "blocked",
-            "error_type": "DataFirewallViolation",
-            "details": errors
-        }
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={"status": "blocked", "error_type": "DataFirewallViolation", "details": errors},
     )
+
 
 @app.get("/health", tags=["System Telemetry"])
 @app.get("/healthz", tags=["System Telemetry"])
@@ -245,8 +288,8 @@ async def liveness_probe():
             "status": "healthy",
             "uptime_seconds": uptime_seconds,
             "firewall": "active",
-            "environment": "production"
-        }
+            "environment": "production",
+        },
     )
 
 
@@ -261,12 +304,13 @@ async def manual_seed_data():
         async with engine.connect() as conn:
             result = await conn.execute(text("SELECT COUNT(*) FROM market_pricing"))
             count = result.scalar()
-        return JSONResponse(
-            status_code=status.HTTP_200_OK,
-            content={"status": "seeded", "rows_inserted": count}
-        )
+        return JSONResponse(status_code=status.HTTP_200_OK, content={"status": "seeded", "rows_inserted": count})
     except Exception as e:
         return JSONResponse(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"status": "error", "detail": str(e)}
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, content={"status": "error", "detail": str(e)}
         )
+
+
+@app.get("/v1/system/openapi.json", tags=["System Telemetry & Health Probes"])
+async def get_system_openapi_spec():
+    return JSONResponse(status_code=status.HTTP_200_OK, content=app.openapi())

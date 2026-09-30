@@ -17,8 +17,18 @@ import ConnectionPoolMonitor from "./ConnectionPoolMonitor";
 import RedisMemoryPressureCard from "./RedisMemoryPressureCard";
 import EventLoopLatencyChart from "./EventLoopLatencyChart";
 import ChaosRecoveryTimeline from "./ChaosRecoveryTimeline";
+import { RegressionAuditDashboard } from "./RegressionAuditDashboard";
+import { ArchitectureDiagramViewer } from "./ArchitectureDiagramViewer";
+import { CodeQualityPanel } from "./CodeQualityPanel";
+import { ApiDocsBrowser } from "./ApiDocsBrowser";
+import { Phase2CapstoneReportPanel } from "./Phase2CapstoneReport";
 
 export type OpsTab =
+  | "capstone"
+  | "docs"
+  | "codequality"
+  | "architecture"
+  | "regression"
   | "registry"
   | "stress"
   | "pool"
@@ -52,6 +62,11 @@ interface TabConfig {
 }
 
 const OPS_TABS: TabConfig[] = [
+  { id: "capstone", label: "Phase 2 Capstone", shortLabel: "Capstone", icon: "🏆" },
+  { id: "docs", label: "API Docs Explorer", shortLabel: "API Docs", icon: "📖" },
+  { id: "codequality", label: "Code Quality", shortLabel: "Quality", icon: "🧹" },
+  { id: "architecture", label: "Architecture Blueprint", shortLabel: "Architecture", icon: "📐" },
+  { id: "regression", label: "Regression Audit", shortLabel: "Regression", icon: "🧪" },
   { id: "registry", label: "Live Job Registry", shortLabel: "Registry", icon: "📋" },
   { id: "stress", label: "Stress Testing", shortLabel: "Stress", icon: "⚡" },
   { id: "pool", label: "Connection Pool", shortLabel: "Pool", icon: "🏊" },
@@ -117,7 +132,17 @@ export default function OperationsConsole({
       </div>
 
       {/* Active Operational Telemetry View */}
-      {activeOpsTab === "registry" ? (
+      {activeOpsTab === "capstone" ? (
+        <Phase2CapstoneReportPanel />
+      ) : activeOpsTab === "docs" ? (
+        <ApiDocsBrowser />
+      ) : activeOpsTab === "codequality" ? (
+        <CodeQualityPanel />
+      ) : activeOpsTab === "architecture" ? (
+        <ArchitectureDiagramViewer />
+      ) : activeOpsTab === "regression" ? (
+        <RegressionAuditDashboard />
+      ) : activeOpsTab === "registry" ? (
         <JobAuditPanel onSelectTrace={onSelectTrace} />
       ) : activeOpsTab === "stress" ? (
         <LoadTestResultsPanel />

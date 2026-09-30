@@ -556,6 +556,171 @@ export interface ChaosSystemOverview {
   trace_id: string;
 }
 
+export interface RegressionAssertionDetail {
+  assertion_number: number;
+  title: string;
+  passed: boolean;
+  details?: string;
+}
 
+export interface RegressionSuiteReport {
+  suite_id: string;
+  suite_name: string;
+  status: "PASSED" | "FAILED" | string;
+  assertions_passed: number;
+  total_assertions: number;
+  duration_ms: number;
+  assertions: RegressionAssertionDetail[];
+}
 
+export interface MasterRegressionReport {
+  run_id: string;
+  status: "PASSED" | "FAILED" | string;
+  total_suites: number;
+  suites_passed: number;
+  total_assertions: number;
+  assertions_passed: number;
+  pass_rate_pct: number;
+  total_duration_ms: number;
+  timestamp_iso: string;
+  trace_id: string;
+  suites: RegressionSuiteReport[];
+}
 
+export interface ArchitectureNode {
+  id: string;
+  name: string;
+  subsystem: string;
+  tech_stack: string;
+  role: string;
+  protocol: string;
+  latency_sla_ms: number;
+}
+
+export interface ArchitectureEdge {
+  source: string;
+  target: string;
+  protocol: "HTTP" | "WS" | "REDIS_STREAM" | "SQL" | "IPC" | string;
+  description: string;
+  is_async: boolean;
+}
+
+export interface ArchitectureSubsystem {
+  id: string;
+  title: string;
+  description: string;
+  nodes: ArchitectureNode[];
+}
+
+export interface SystemArchitectureTopology {
+  system_name: string;
+  version: string;
+  status: string;
+  subsystems: ArchitectureSubsystem[];
+  edges: ArchitectureEdge[];
+  mermaid_diagram: string;
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+export interface CodeQualityCheckItem {
+  check_name: string;
+  tool: "ruff" | "ast" | "file_scanner" | string;
+  status: "PASSED" | "WARNING" | "FAILED";
+  issues_found: number;
+  details: string[];
+  duration_ms: number;
+}
+
+export interface CodeQualityReport {
+  run_id: string;
+  status: "PASSED" | "FAILED";
+  total_checks: number;
+  passed_checks: number;
+  total_files_scanned: number;
+  total_lines_of_code: number;
+  total_issues: number;
+  linter_clean: boolean;
+  formatter_clean: boolean;
+  checks: CodeQualityCheckItem[];
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+export interface OpenApiTag {
+  name: string;
+  description?: string;
+}
+
+export interface OpenApiResponse {
+  description: string;
+  content?: Record<string, { schema?: any; example?: any }>;
+}
+
+export interface OpenApiParameter {
+  name: string;
+  in: "query" | "header" | "path" | "cookie";
+  required?: boolean;
+  description?: string;
+  schema?: any;
+}
+
+export interface OpenApiOperation {
+  tags?: string[];
+  summary?: string;
+  description?: string;
+  operationId?: string;
+  parameters?: OpenApiParameter[];
+  requestBody?: {
+    required?: boolean;
+    content?: Record<string, { schema?: any; example?: any }>;
+  };
+  responses: Record<string, OpenApiResponse>;
+}
+
+export interface OpenApiDocument {
+  openapi: string;
+  info: {
+    title: string;
+    version: string;
+    summary?: string;
+    description?: string;
+  };
+  tags?: OpenApiTag[];
+  paths: Record<string, Record<string, OpenApiOperation>>;
+  components?: {
+    schemas?: Record<string, any>;
+    securitySchemes?: Record<string, any>;
+    responses?: Record<string, any>;
+  };
+}
+
+export interface Phase2MilestoneSummary {
+  milestone_id: string;
+  title: string;
+  status: "SEALED" | "CERTIFIED" | string;
+  days_covered: string;
+  assertions_count: number;
+  audit_suite: string;
+  key_features: string[];
+}
+
+export interface Phase2CapstoneReport {
+  version: string;
+  status: string;
+  system_name: string;
+  total_milestones: number;
+  milestones_sealed: number;
+  total_assertions: number;
+  assertions_passed: number;
+  pass_rate_pct: number;
+  stream_health_status: string;
+  circuit_breaker_state: string;
+  cache_layer_status: string;
+  rag_embeddings_status: string;
+  lines_of_code: number;
+  python_modules_count: number;
+  milestones: Phase2MilestoneSummary[];
+  timestamp_iso: string;
+  trace_id: string;
+}
