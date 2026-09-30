@@ -18,7 +18,7 @@ logger = logging.getLogger("audit_openapi_spec")
 
 async def run_openapi_audit():
     logger.info("================================================================================")
-    logger.info("[DAY 89 AUDIT] ENTERPRISE OPENAPI 3.1 SPECIFICATION VERIFICATION AUDIT")
+    logger.info("[SYSTEM AUDIT] ENTERPRISE OPENAPI 3.1 SPECIFICATION CONTRACT AUDIT")
     logger.info("================================================================================")
 
     schema = custom_openapi(app)
@@ -101,7 +101,7 @@ async def run_openapi_audit():
     )
 
     logger.info("================================================================================")
-    logger.info("[DAY 89 CERTIFIED] 5/5 OPENAPI SPECIFICATION ASSERTIONS PASSED (100% CLEAN)")
+    logger.info("[CONTRACT CERTIFIED] 5/5 OPENAPI SPECIFICATION ASSERTIONS PASSED (100% CLEAN)")
     logger.info("================================================================================")
 
 

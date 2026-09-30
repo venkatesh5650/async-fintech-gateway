@@ -684,7 +684,7 @@ class Phase2MilestoneSummary(BaseModel):
     milestone_id: str = Field(..., description="Milestone code: M1 | M2 | M3 | M4 | M5 | CAPSTONE")
     title: str = Field(..., description="Milestone designation")
     status: str = Field(default="SEALED", description="Status: SEALED | CERTIFIED")
-    days_covered: str = Field(..., description="Roadmap days range")
+    days_covered: str = Field(..., description="Architecture module specification code (e.g. MOD-STREAM-01)")
     assertions_count: int = Field(..., description="Number of verified audit assertions")
     audit_suite: str = Field(..., description="Associated audit script")
     key_features: list[str] = Field(default_factory=list, description="Core architectural deliverables")

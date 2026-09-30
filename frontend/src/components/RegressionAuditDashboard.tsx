@@ -121,7 +121,7 @@ export const RegressionAuditDashboard: React.FC = () => {
                   )}
                 </h2>
                 <p className="text-sm text-slate-400 mt-0.5">
-                  End-to-End Enterprise Invariant Verification across all 5 System Milestones (Days 1–85)
+                  End-to-End Enterprise Invariant Verification across all 5 Subsystems (Core, Streams, Caching, Quant, RAG, Chaos)
                 </p>
               </div>
             </div>

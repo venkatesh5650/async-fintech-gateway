@@ -306,19 +306,19 @@ export const Phase2CapstoneReportPanel: React.FC = () => {
               <ul className="space-y-1.5 text-xs text-slate-300">
                 <li className="flex items-center gap-1.5">
                   <span className="text-cyan-400">→</span>
-                  <span><strong>Days 91–93:</strong> Docker multi-stage builds & Render cloud microservices deployment</span>
+                  <span><strong>Milestone 3.1:</strong> Docker multi-stage builds & Render cloud microservices deployment</span>
                 </li>
                 <li className="flex items-center gap-1.5">
                   <span className="text-cyan-400">→</span>
-                  <span><strong>Days 94–95:</strong> Production environment promotion & Alembic automated migrations</span>
+                  <span><strong>Milestone 3.2:</strong> Production environment promotion & Alembic automated migrations</span>
                 </li>
                 <li className="flex items-center gap-1.5">
                   <span className="text-cyan-400">→</span>
-                  <span><strong>Days 96–97:</strong> Prometheus /metrics instrumentation & Grafana cloud observability</span>
+                  <span><strong>Milestone 3.3:</strong> Prometheus /metrics instrumentation & Grafana cloud observability</span>
                 </li>
                 <li className="flex items-center gap-1.5">
                   <span className="text-cyan-400">→</span>
-                  <span><strong>Days 98–100:</strong> Live Uptime monitoring, Sentry alerts, and v1.0.0-rc smoke test</span>
+                  <span><strong>Milestone 3.4:</strong> Live Uptime monitoring, Sentry alerts, and v1.0.0-rc smoke test</span>
                 </li>
               </ul>
             </div>

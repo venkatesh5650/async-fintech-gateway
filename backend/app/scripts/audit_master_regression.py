@@ -13,7 +13,7 @@ logger = logging.getLogger("audit_master_regression")
 
 async def run_master_regression():
     logger.info("================================================================================")
-    logger.info("🏆 [DAY 86 MASTER REGRESSION SUITE] 33-POINT FULL SYSTEM VERIFICATION")
+    logger.info("[SYSTEM AUDIT] MASTER REGRESSION SUITE & FULL-STACK INVARIANT VERIFICATION")
     logger.info("================================================================================")
 
     orchestrator = MasterRegressionOrchestrator()

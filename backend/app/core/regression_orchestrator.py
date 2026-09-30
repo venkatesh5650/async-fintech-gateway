@@ -232,7 +232,7 @@ class MasterRegressionOrchestrator:
         duration = (time.perf_counter() - start_t) * 1000.0
         return RegressionSuiteReport(
             suite_id="system_core",
-            suite_name="Phase 1 Core Engine & Microservices Infrastructure",
+            suite_name="Core Engine & Zero-Trust Perimeter (SPEC-CORE)",
             status="PASSED" if passed_count == 7 else "FAILED",
             assertions_passed=passed_count,
             total_assertions=7,
@@ -429,7 +429,7 @@ class MasterRegressionOrchestrator:
         duration = (time.perf_counter() - start_t) * 1000.0
         return RegressionSuiteReport(
             suite_id="event_stream",
-            suite_name="Phase 2 Milestone 1 & 2: Redis Streams, Tracing & Distributed Caching",
+            suite_name="Event Mesh, Redis Streams & Distributed Caching (SPEC-STREAM-CACHE)",
             status="PASSED" if passed_count == 7 else "FAILED",
             assertions_passed=passed_count,
             total_assertions=7,
@@ -627,7 +627,7 @@ class MasterRegressionOrchestrator:
         duration = (time.perf_counter() - start_t) * 1000.0
         return RegressionSuiteReport(
             suite_id="quant_analytics",
-            suite_name="Phase 2 Milestone 3: Quantitative Time-Series Analytics & Oscillators",
+            suite_name="Quantitative Time-Series Analytics & Oscillators (SPEC-QUANT)",
             status="PASSED" if passed_count == 7 else "FAILED",
             assertions_passed=passed_count,
             total_assertions=7,
@@ -884,7 +884,7 @@ startxref
         duration = (time.perf_counter() - start_t) * 1000.0
         return RegressionSuiteReport(
             suite_id="rag_engine",
-            suite_name="Phase 2 Milestone 4: Document Ingestion, pgvector & Qualitative RAG",
+            suite_name="Document Ingestion, pgvector & Qualitative RAG (SPEC-RAG)",
             status="PASSED" if passed_count == 7 else "FAILED",
             assertions_passed=passed_count,
             total_assertions=7,
@@ -1038,7 +1038,7 @@ startxref
         duration = (time.perf_counter() - start_t) * 1000.0
         return RegressionSuiteReport(
             suite_id="chaos_engineering",
-            suite_name="Phase 2 Milestone 5: Stress Testing & Chaos Engineering",
+            suite_name="High-Throughput Stress Testing & Chaos Engineering (SPEC-CHAOS)",
             status="PASSED" if passed_count == 5 else "FAILED",
             assertions_passed=passed_count,
             total_assertions=5,

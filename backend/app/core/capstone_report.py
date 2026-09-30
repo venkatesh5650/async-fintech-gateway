@@ -33,7 +33,7 @@ class Phase2CapstoneRegistry:
                 milestone_id="M1",
                 title="Redis Streams Broker & Message Workers",
                 status="SEALED",
-                days_covered="Days 61–65",
+                days_covered="MOD-STREAM-01",
                 assertions_count=7,
                 audit_suite="audit_event_stream.py",
                 key_features=[
@@ -48,7 +48,7 @@ class Phase2CapstoneRegistry:
                 milestone_id="M2",
                 title="Distributed Caching & Read Optimization",
                 status="SEALED",
-                days_covered="Days 66–70",
+                days_covered="MOD-CACHE-02",
                 assertions_count=5,
                 audit_suite="audit_cache_layer.py",
                 key_features=[
@@ -63,7 +63,7 @@ class Phase2CapstoneRegistry:
                 milestone_id="M3",
                 title="Quantitative Time-Series Analytics & Oscillators",
                 status="SEALED",
-                days_covered="Days 71–75",
+                days_covered="MOD-QUANT-03",
                 assertions_count=7,
                 audit_suite="audit_quant_analytics.py",
                 key_features=[
@@ -78,7 +78,7 @@ class Phase2CapstoneRegistry:
                 milestone_id="M4",
                 title="Document Ingestion, pgvector & Qualitative RAG",
                 status="SEALED",
-                days_covered="Days 76–80",
+                days_covered="MOD-RAG-04",
                 assertions_count=7,
                 audit_suite="audit_rag_engine.py",
                 key_features=[
@@ -93,7 +93,7 @@ class Phase2CapstoneRegistry:
                 milestone_id="M5",
                 title="Stress Testing & Chaos Engineering",
                 status="SEALED",
-                days_covered="Days 81–85",
+                days_covered="MOD-CHAOS-05",
                 assertions_count=5,
                 audit_suite="audit_chaos.py",
                 key_features=[
@@ -108,7 +108,7 @@ class Phase2CapstoneRegistry:
                 milestone_id="CAPSTONE",
                 title="Production Dry Run, Quality & Architecture Hardening",
                 status="SEALED",
-                days_covered="Days 86–90",
+                days_covered="MOD-CAPSTONE-06",
                 assertions_count=17,
                 audit_suite="audit_master_regression.py",
                 key_features=[

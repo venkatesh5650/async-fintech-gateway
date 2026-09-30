@@ -23,7 +23,7 @@ def run_export():
     total_schemas = len(schema.get("components", {}).get("schemas", {}))
 
     print("================================================================================")
-    print("[DAY 89] ENTERPRISE OPENAPI 3.1 SPECIFICATION EXPORT COMPLETE")
+    print("[SPECIFICATION EXPORT] ENTERPRISE OPENAPI 3.1 CONTRACTS GENERATED")
     print("================================================================================")
     print(f"Title:         {schema.get('info', {}).get('title')}")
     print(f"Version:       {schema.get('info', {}).get('version')}")

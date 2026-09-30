@@ -4,7 +4,7 @@ import { Phase2CapstoneReportPanel } from "@/components/Phase2CapstoneReport";
 export const metadata = {
   title: "Phase 2 Capstone Report | Automated Equity Research Engine",
   description:
-    "Production dry run verification, milestone sign-offs, and architectural certifications for Phase 2 (Days 1-90) sealed at v0.9.0.",
+    "Production dry run verification, milestone sign-offs, and architectural certifications for Phase 2 sealed at v0.9.0.",
 };
 
 export default function CapstonePage() {
@@ -53,7 +53,7 @@ export default function CapstonePage() {
         <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center space-x-2">
             <span className="text-gray-400">ENGINE STATE:</span>
-            <span className="text-gray-300">Phase 2 Certified // Days 1-90 Pass Rate: 100%</span>
+            <span className="text-gray-300">Phase 2 Certified // Release v0.9.0 Invariant Pass Rate: 100%</span>
           </div>
           <div>RELEASE: v0.9.0 PRODUCTION DRY RUN CERTIFIED</div>
         </div>

@@ -16,7 +16,7 @@ logger = logging.getLogger("audit_phase2_capstone")
 
 async def run_phase2_capstone_audit():
     logger.info("================================================================================")
-    logger.info("[DAY 90 AUDIT] PHASE 2 CAPSTONE CERTIFICATION & PRODUCTION SIGN-OFF AUDIT")
+    logger.info("[SYSTEM AUDIT] RELEASE v0.9.0 PRODUCTION DRY RUN & CAPSTONE CERTIFICATION")
     logger.info("================================================================================")
 
     report = capstone_registry.get_capstone_report()
@@ -75,7 +75,7 @@ async def run_phase2_capstone_audit():
     )
 
     logger.info("================================================================================")
-    logger.info("[DAY 90 CERTIFIED] 5/5 PHASE 2 CAPSTONE ASSERTIONS PASSED (v0.9.0 SEALED)")
+    logger.info("[PRODUCTION CERTIFIED] 5/5 RELEASE v0.9.0 CAPSTONE ASSERTIONS PASSED (SEALED)")
     logger.info("================================================================================")
 
 

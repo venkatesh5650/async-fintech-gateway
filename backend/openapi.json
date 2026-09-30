@@ -4603,7 +4603,7 @@
           "days_covered": {
             "type": "string",
             "title": "Days Covered",
-            "description": "Roadmap days range"
+            "description": "Architecture module specification code (e.g. MOD-STREAM-01)"
           },
           "assertions_count": {
             "type": "integer",
