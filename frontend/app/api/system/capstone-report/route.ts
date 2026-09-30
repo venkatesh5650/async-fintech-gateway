@@ -18,7 +18,11 @@ export async function GET() {
     const cookieStore = await cookies();
     const token = cookieStore.get("session_token")?.value;
 
-    const headers: Record<string, string> = {};
+    const headers: Record<string, string> = {
+      "X-N8N-API-KEY":
+        process.env.N8N_API_KEY ||
+        "super_secure_internal_orchestration_secret_key_2026",
+    };
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     }
