@@ -32,8 +32,10 @@ import { GrafanaDashboardSpecPanel } from "./GrafanaDashboardSpecPanel";
 import { TraceWaterfallExplorer } from "./TraceWaterfallExplorer";
 import { ProductionIngressPanel } from "./ProductionIngressPanel";
 import { ProductionSmokeTestPanel } from "./ProductionSmokeTestPanel";
+import { LangGraphTopologyVisualizer } from "./LangGraphTopologyVisualizer";
 
 export type OpsTab =
+  | "langgraph"
   | "capstone3"
   | "metrics"
   | "grafana"
@@ -82,6 +84,7 @@ interface TabConfig {
 }
 
 const OPS_TABS: TabConfig[] = [
+  { id: "langgraph", label: "LangGraph Visualizer", shortLabel: "LangGraph", icon: "🧠" },
   { id: "capstone3", label: "Phase 3 Capstone", shortLabel: "Go-Live", icon: "🏆" },
   { id: "metrics", label: "Prometheus Metrics", shortLabel: "Metrics", icon: "📊" },
   { id: "grafana", label: "Grafana & SLOs", shortLabel: "Grafana", icon: "📈" },
@@ -162,7 +165,9 @@ export default function OperationsConsole({
       </div>
 
       {/* Active Operational Telemetry View */}
-      {activeOpsTab === "capstone3" ? (
+      {activeOpsTab === "langgraph" ? (
+        <LangGraphTopologyVisualizer />
+      ) : activeOpsTab === "capstone3" ? (
         <ProductionSmokeTestPanel />
       ) : activeOpsTab === "metrics" ? (
         <PrometheusMetricsConsole />

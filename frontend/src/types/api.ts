@@ -1244,6 +1244,83 @@ export interface GoLiveCertificate {
   signature_hash: string;
 }
 
+// ==============================================================================
+// LangGraph Multi-Agent Topology & Dynamic Execution Tracer (SPEC-GRAPH-TOPOLOGY)
+// ==============================================================================
+
+export interface GraphNodeSpec {
+  id: string;
+  label: string;
+  node_type: "INTELLIGENCE" | "TOOL_EXECUTION" | "SYNTHESIS" | "QUALITY_GATE" | "TERMINATION" | string;
+  category: "AGENT" | "TOOL" | "REPORTING" | "GATEKEEPER" | "SYSTEM" | string;
+  description: string;
+  tools_bound: string[];
+  position_x: number;
+  position_y: number;
+}
+
+export interface GraphEdgeSpec {
+  id: string;
+  source: string;
+  target: string;
+  edge_type: "DIRECT" | "CONDITIONAL" | string;
+  label?: string | null;
+  condition_expr?: string | null;
+  animated: boolean;
+}
+
+export interface GraphStateChannelSpec {
+  channel_name: string;
+  type_name: string;
+  reducer: string;
+  description: string;
+  example_value?: string | null;
+}
+
+export interface GraphTopologyResponse {
+  graph_id: string;
+  version: string;
+  entry_point: string;
+  terminal_nodes: string[];
+  nodes: GraphNodeSpec[];
+  edges: GraphEdgeSpec[];
+  state_channels: GraphStateChannelSpec[];
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+export interface AgentNodeExecutionStep {
+  step_number: number;
+  node_id: string;
+  node_label: string;
+  status: "SUCCESS" | "FAILED" | "RETRY" | string;
+  duration_ms: number;
+  input_state_summary: Record<string, unknown>;
+  output_state_delta: Record<string, unknown>;
+  messages_added_count: number;
+  tokens_estimated: number;
+  timestamp_iso: string;
+}
+
+export interface GraphExecutionTraceResponse {
+  execution_id: string;
+  ticker: string;
+  scenario: "NOMINAL" | "RETRY_LOOP" | "TOOL_EXPEDITION" | "RAG_FAILURE" | string;
+  status: "SUCCESS" | "DEGRADED" | "FAILED" | string;
+  total_duration_ms: number;
+  final_signal: "BUY" | "SELL" | "HOLD" | "INVALID" | string;
+  steps_count: number;
+  steps: AgentNodeExecutionStep[];
+  trace_id: string;
+  timestamp_iso: string;
+}
+
+export interface GraphSimulationRequest {
+  ticker: string;
+  scenario: "NOMINAL" | "RETRY_LOOP" | "TOOL_EXPEDITION" | "RAG_FAILURE" | string;
+}
+
+
 
 
 

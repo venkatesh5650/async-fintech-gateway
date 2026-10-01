@@ -1306,6 +1306,99 @@ class GoLiveCertificate(BaseModel):
     issued_at_iso: str = Field(..., description="Issuance timestamp")
     signature_hash: str = Field(..., description="SHA-256 integrity signature hash")
 
+    model_config = ConfigDict(populate_by_name=True)
+
+
+# ==============================================================================
+# LangGraph Multi-Agent Topology & Dynamic Execution Tracer (SPEC-GRAPH-TOPOLOGY)
+# ==============================================================================
+
+class GraphNodeSpec(BaseModel):
+    id: str = Field(..., description="Unique graph node identifier")
+    label: str = Field(..., description="Human-readable node label")
+    node_type: str = Field(..., description="Functional classification: INTELLIGENCE | TOOL_EXECUTION | SYNTHESIS | QUALITY_GATE | TERMINATION")
+    category: str = Field(..., description="Visual styling category: AGENT | TOOL | REPORTING | GATEKEEPER | SYSTEM")
+    description: str = Field(..., description="Executive operational purpose of node")
+    tools_bound: list[str] = Field(default_factory=list, description="Bound tools accessible from this node")
+    position_x: float = Field(..., description="Default canvas horizontal coordinate")
+    position_y: float = Field(..., description="Default canvas vertical coordinate")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class GraphEdgeSpec(BaseModel):
+    id: str = Field(..., description="Unique edge identifier")
+    source: str = Field(..., description="Source node ID")
+    target: str = Field(..., description="Destination node ID")
+    edge_type: str = Field(default="DIRECT", description="Routing type: DIRECT | CONDITIONAL")
+    label: Optional[str] = Field(None, description="Conditional edge predicate descriptor")
+    condition_expr: Optional[str] = Field(None, description="Logical routing expression")
+    animated: bool = Field(default=False, description="Whether edge renders animated particles in UI")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class GraphStateChannelSpec(BaseModel):
+    channel_name: str = Field(..., description="AgentState TypedDict key name")
+    type_name: str = Field(..., description="Python type annotation signature")
+    reducer: str = Field(..., description="State channel mutation reducer: operator.add | replace")
+    description: str = Field(..., description="State semantics and usage across nodes")
+    example_value: Optional[str] = Field(None, description="Representative payload sample")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class GraphTopologyResponse(BaseModel):
+    graph_id: str = Field(default="equity-research-multi-agent", description="Workflow state graph identifier")
+    version: str = Field(default="v1.0.0", description="LangGraph topology release version")
+    entry_point: str = Field(default="agent", description="Initial workflow execution entry node")
+    terminal_nodes: list[str] = Field(default_factory=lambda: ["__end__"], description="Terminal end states")
+    nodes: list[GraphNodeSpec] = Field(default_factory=list, description="Declarative workflow node list")
+    edges: list[GraphEdgeSpec] = Field(default_factory=list, description="Directed and conditional edge definitions")
+    state_channels: list[GraphStateChannelSpec] = Field(default_factory=list, description="Introspected AgentState channels")
+    timestamp_iso: str = Field(..., description="Topology extraction timestamp")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class AgentNodeExecutionStep(BaseModel):
+    step_number: int = Field(..., description="Ordered execution sequence (1-indexed)")
+    node_id: str = Field(..., description="Node invoked during this step")
+    node_label: str = Field(..., description="Display label of the node")
+    status: str = Field(default="SUCCESS", description="Step outcome: SUCCESS | FAILED | RETRY")
+    duration_ms: float = Field(..., description="Node latency in milliseconds")
+    input_state_summary: dict[str, Any] = Field(default_factory=dict, description="State keys provided before execution")
+    output_state_delta: dict[str, Any] = Field(default_factory=dict, description="State channels mutated by node")
+    messages_added_count: int = Field(default=0, description="New message objects appended to history")
+    tokens_estimated: int = Field(default=0, description="LLM prompt + completion token usage")
+    timestamp_iso: str = Field(..., description="Step execution timestamp")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class GraphExecutionTraceResponse(BaseModel):
+    execution_id: str = Field(..., description="Unique LangGraph execution run identifier")
+    ticker: str = Field(..., description="Asset symbol evaluated in this run")
+    scenario: str = Field(..., description="Simulation scenario: NOMINAL | RETRY_LOOP | TOOL_EXPEDITION | RAG_FAILURE")
+    status: str = Field(default="SUCCESS", description="Final run status: SUCCESS | DEGRADED | FAILED")
+    total_duration_ms: float = Field(..., description="End-to-end multi-agent execution duration")
+    final_signal: str = Field(..., description="Deterministic signal outcome: BUY | SELL | HOLD | INVALID")
+    steps_count: int = Field(..., description="Total execution steps traversed")
+    steps: list[AgentNodeExecutionStep] = Field(default_factory=list, description="Chronological execution trace")
+    trace_id: str = Field(..., description="W3C traceparent identifier")
+    timestamp_iso: str = Field(..., description="Trace completion timestamp")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class GraphSimulationRequest(BaseModel):
+    ticker: str = Field(default="AAPL", description="Asset ticker to evaluate in state machine simulation")
+    scenario: str = Field(default="NOMINAL", description="Execution pattern: NOMINAL | RETRY_LOOP | TOOL_EXPEDITION | RAG_FAILURE")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 
 
 

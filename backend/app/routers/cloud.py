@@ -18,6 +18,7 @@ from app.core.env_auditor import EnvironmentConfigAuditor
 from app.core.health_probes import CloudReadinessProbeManager
 from app.core.grafana_spec import GrafanaSpecManager, SloThresholdEvaluator
 from app.core.go_live_certifier import go_live_certifier
+from app.core.graph_topology import langgraph_topology_manager
 from app.core.migration_runner import DatabaseMigrationRunner
 from app.core.production_ingress import ingress_config_manager
 from app.core.production_seeder import ProductionSeedManager
@@ -32,6 +33,9 @@ from app.database.schemas import (
     EnvironmentAuditReport,
     GoLiveCertificate,
     GrafanaDashboardSpec,
+    GraphExecutionTraceResponse,
+    GraphSimulationRequest,
+    GraphTopologyResponse,
     IngressVerificationReport,
     LivenessProbeResult,
     MetricSummaryReport,
@@ -547,6 +551,82 @@ async def get_go_live_certificate(
     if traceparent:
         trace_id, _ = parse_traceparent(traceparent)
     return go_live_certifier.generate_certificate(trace_id=trace_id)
+
+
+# ==============================================================================
+# LangGraph Multi-Agent Topology & Dynamic Execution Tracer (SPEC-GRAPH-TOPOLOGY)
+# ==============================================================================
+
+@router.get(
+    "/graph/topology",
+    response_model=GraphTopologyResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get Declarative LangGraph Multi-Agent Topology Specification",
+    description="Returns introspected React Flow nodes, directed edges, conditional branches, and AgentState channel schemas.",
+)
+async def get_langgraph_topology(
+    traceparent: Optional[str] = Header(None, alias="traceparent"),
+) -> GraphTopologyResponse:
+    trace_id = None
+    if traceparent:
+        trace_id, _ = parse_traceparent(traceparent)
+    return langgraph_topology_manager.get_topology_spec(trace_id=trace_id)
+
+
+@router.get(
+    "/graph/traces/{execution_id}",
+    response_model=GraphExecutionTraceResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get Detailed Multi-Agent Execution Trace",
+    description="Returns step-by-step state machine execution history with state deltas, tokens, and duration metrics.",
+)
+async def get_langgraph_execution_trace(
+    execution_id: str,
+    traceparent: Optional[str] = Header(None, alias="traceparent"),
+) -> GraphExecutionTraceResponse:
+    trace = langgraph_topology_manager.get_execution_trace(execution_id=execution_id)
+    if not trace:
+        # Fall back to simulated execution
+        trace_id = None
+        if traceparent:
+            trace_id, _ = parse_traceparent(traceparent)
+        trace = langgraph_topology_manager.simulate_execution(ticker="NVDA", scenario="NOMINAL", trace_id=trace_id)
+    return trace
+
+
+@router.get(
+    "/graph/traces",
+    response_model=list[GraphExecutionTraceResponse],
+    status_code=status.HTTP_200_OK,
+    summary="List Recent Multi-Agent Execution Traces",
+    description="Returns recent execution traces from operational memory ring buffer.",
+)
+async def list_langgraph_execution_traces(
+    limit: int = 10,
+) -> list[GraphExecutionTraceResponse]:
+    return langgraph_topology_manager.list_recent_executions(limit=limit)
+
+
+@router.post(
+    "/graph/simulate-step",
+    response_model=GraphExecutionTraceResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Simulate Multi-Agent State Machine Execution Run",
+    description="Simulates a complete LangGraph multi-agent execution traversing nodes, tools, and quality gates.",
+)
+async def simulate_langgraph_execution(
+    request: GraphSimulationRequest,
+    traceparent: Optional[str] = Header(None, alias="traceparent"),
+) -> GraphExecutionTraceResponse:
+    trace_id = None
+    if traceparent:
+        trace_id, _ = parse_traceparent(traceparent)
+    return langgraph_topology_manager.simulate_execution(
+        ticker=request.ticker,
+        scenario=request.scenario,
+        trace_id=trace_id,
+    )
+
 
 
 

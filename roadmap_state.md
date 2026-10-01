@@ -632,8 +632,63 @@ Phase 3 Milestone 2 Day 99 is 100% Complete, Certified, and Sealed.
     12. `ruff check app`: 0 errors.
     13. `npx tsc --noEmit`: 0 errors.
 
-**Phase 3 Milestone 2 (Days 96–100: Prometheus Metrics, Grafana SLOs, Distributed Tracing, Production Ingress & Capstone Seal) is 100% Complete, Certified, and Locked.**
-**Cumulative Roadmap Status: 100 / 120 Days Completed (83.33% of Canonical Roadmap). Version: v1.0.0-rc1.**
+**Phase 3 Milestone 2 (Cloud Orchestration & Production Observability) is 100% Complete, Certified, and Locked.**
+
+### Phase 3 Milestone 3: Build in Public & Executive Visualizers (SPEC-GRAPH-TOPOLOGY)
+
+* **Multi-Agent State Machine Topology & Dynamic Execution Tracer (MOD-GRAPH-01 & MOD-GRAPH-02):**
+  * Engineered `LangGraphTopologyManager` in [`backend/app/core/graph_topology.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/core/graph_topology.py):
+    1. **Declarative StateGraph Introspection:** Analyzes compiled LangGraph state graph generating 5 functional nodes:
+       - `agent`: Intelligence Reasoning Agent (`INTELLIGENCE` / `AGENT`, canvas coordinates: 180, 120), bound tools (`get_historical_prices`, `get_market_sentiment`).
+       - `tools`: Deterministic Tool Execution (`TOOL_EXECUTION` / `TOOL`, canvas coordinates: 560, 120), executes market lookup & real-time sentiment scoring.
+       - `reporting`: Synthesis & Memorandum Generator (`SYNTHESIS` / `REPORTING`, canvas coordinates: 180, 360), crafts structured multi-factor analytical memorandums.
+       - `gatekeeper`: Zero-Hallucination Gatekeeper (`QUALITY_GATE` / `GATEKEEPER`, canvas coordinates: 560, 360), enforces deterministic ternary signal compliance.
+       - `__end__`: Certified Decision Artifact (`TERMINATION` / `SYSTEM`, canvas coordinates: 900, 360), cryptographically verified decision endpoint.
+    2. **Directed & Conditional Edge Specifications:** Maps 6 routing edges:
+       - `agent -> tools` (CONDITIONAL: `invoke_tools`)
+       - `agent -> reporting` (CONDITIONAL: `synthesize`)
+       - `tools -> agent` (DIRECT: `tool_result`)
+       - `reporting -> gatekeeper` (DIRECT: `evaluate_quality`)
+       - `gatekeeper -> agent` (CONDITIONAL: `retry_feedback` loop)
+       - `gatekeeper -> __end__` (CONDITIONAL: `certified_signal`)
+    3. **AgentState Channel Reducer Introspection:** Formally specifies 10 state channels with types and reducers (`messages` via `operator.add`, `ticker`, `analysis_report`, `is_sufficient`, `retry_count`, `quant_context`, `quant_context_injected`, `rag_context`, `citations`, `rag_context_injected` via `replace`).
+    4. **Multi-Scenario Execution Tracing Engine:** Simulates and records end-to-end multi-agent execution runs across 4 distinct operational scenarios:
+       - `NOMINAL`: Fast 3-step path (`agent` -> `reporting` -> `gatekeeper` -> `__end__`) yielding `SIGNAL: BUY` in 117.0ms.
+       - `TOOL_EXPEDITION`: 5-step path (`agent` -> `tools` -> `agent` -> `reporting` -> `gatekeeper` -> `__end__`) in 172.8ms.
+       - `RETRY_LOOP`: 6-step corrective feedback recovery loop (`gatekeeper` -> `agent` -> `reporting` -> `gatekeeper`) in 184.5ms.
+       - `RAG_FAILURE`: Invariant data deficit fallback yielding `SIGNAL: INVALID` in 65.8ms.
+  * Defined Pydantic contracts in [`app/database/schemas.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/database/schemas.py): `GraphNodeSpec`, `GraphEdgeSpec`, `GraphStateChannelSpec`, `GraphTopologyResponse`, `AgentNodeExecutionStep`, `GraphExecutionTraceResponse`, and `GraphSimulationRequest`.
+  * Mounted secured REST API endpoints in [`app/routers/cloud.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/routers/cloud.py):
+    - `GET /v1/cloud/graph/topology`: Returns complete React Flow compatible nodes, edges, and state channels.
+    - `GET /v1/cloud/graph/traces`: Lists recent multi-agent runs from the ring buffer.
+    - `GET /v1/cloud/graph/traces/{execution_id}`: Step-by-step state delta and token usage details.
+    - `POST /v1/cloud/graph/simulate-step`: Parameterized multi-agent state machine simulation.
+  * Shipped Next.js 15 BFF proxy routes with zero-trust token propagation:
+    - [`frontend/app/api/cloud/graph/topology/route.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/app/api/cloud/graph/topology/route.ts)
+    - [`frontend/app/api/cloud/graph/traces/route.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/app/api/cloud/graph/traces/route.ts)
+    - [`frontend/app/api/cloud/graph/traces/[executionId]/route.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/app/api/cloud/graph/traces/[executionId]/route.ts)
+    - [`frontend/app/api/cloud/graph/simulate-step/route.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/app/api/cloud/graph/simulate-step/route.ts)
+  * Added TypeScript interfaces in [`frontend/src/types/api.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/types/api.ts).
+  * Built [`LangGraphTopologyVisualizer.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/LangGraphTopologyVisualizer.tsx) featuring:
+    - Interactive SVG State Graph Canvas with animated bezier paths, glow filters, and active node pulse highlighting.
+    - Step-by-Step Playback Controller (Play, Pause, Step Next, Step Prev) with microsecond latency counters.
+    - 4-Scenario Interactive Runner (Nominal, Tool Expedition, Retry Loop, RAG Fallback).
+    - Tabbed Operational Inspector (Active Step Delta, 10-Channel TypedDict Schema, Execution Run History, and Declarative JSON Export).
+  * Mounted `LangGraphTopologyVisualizer` into [`OperationsConsole.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/OperationsConsole.tsx) under the primary `🧠 LangGraph Visualizer` operational rail tab.
+  * Executed automated LangGraph Topology audit suite ([`audit_graph_topology.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/scripts/audit_graph_topology.py)) with 100% pass rate (5/5 assertions: declarative node topology, directed/conditional edges, state channels, 4-scenario simulation, and REST API contracts).
+  * Verified 0 regressions across all test batteries:
+    1. `audit_graph_topology.py`: 5/5 assertions passed (100%).
+    2. `audit_phase3_capstone.py`: 5/5 assertions passed (100%).
+    3. `audit_production_ingress.py`: 5/5 assertions passed (100%).
+    4. `audit_trace_waterfall.py`: 5/5 assertions passed (100%).
+    5. `audit_grafana_spec.py`: 5/5 assertions passed (100%).
+    6. `audit_telemetry_metrics.py`: 5/5 assertions passed (100%).
+    7. `audit_master_regression.py`: 33/33 assertions passed (100%).
+    8. `ruff check app`: 0 errors.
+    9. `npx tsc --noEmit`: 0 errors.
+
+**Phase 3 Milestone 3 Multi-Agent Visualizer Core is 100% Complete, Certified, and Operational.**
+**Cumulative Roadmap Status: Certified LangGraph Visualizer Active. Version: v1.0.0-rc1.**
 
 ## 12. INVARIANT CONSTRAINTS — Never Violate
 
