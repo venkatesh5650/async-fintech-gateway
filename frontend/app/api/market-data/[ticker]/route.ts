@@ -1,7 +1,17 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
+export const dynamic = "force-dynamic";
+
 type Context = { params: Promise<{ ticker: string }> };
+
+function getBackendBaseUrl(): string {
+  const raw =
+    process.env.BACKEND_URL ||
+    process.env.NEXT_PUBLIC_API_URL ||
+    "http://127.0.0.1:8000";
+  return raw.replace(/\/+$/, "");
+}
 
 export async function GET(request: Request, context: Context) {
   const resolvedParams = await context.params;
@@ -10,7 +20,7 @@ export async function GET(request: Request, context: Context) {
   const { searchParams } = new URL(request.url);
   const interval = searchParams.get("interval") || "5m";
 
-  const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+  const backendUrl = getBackendBaseUrl();
 
   try {
     const cookieStore = await cookies();
@@ -18,6 +28,9 @@ export async function GET(request: Request, context: Context) {
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
+      "X-N8N-API-KEY":
+        process.env.N8N_API_KEY ||
+        "super_secure_internal_orchestration_secret_key_2026",
     };
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
@@ -54,9 +67,10 @@ export async function GET(request: Request, context: Context) {
 
     const data = await response.json();
     return NextResponse.json(data);
-  } catch (error) {
+  } catch (error: any) {
+    console.error(`[BFF market-data] Failed fetching history for ${ticker}:`, error?.message || error);
     return NextResponse.json(
-      { error: "Failed to fetch historical market data" },
+      { error: error?.message || "Failed to fetch historical market data" },
       { status: 500 },
     );
   }
