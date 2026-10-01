@@ -1,0 +1,44 @@
+# ==============================================================================
+# Multi-Stage Dockerfile: Background Redis Stream Consumer Worker
+# Target: Headless asynchronous stream processing daemon
+# Non-root execution: appuser (UID 10001)
+# ==============================================================================
+
+# --- Stage 1: Build & Dependency Resolution ---
+FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim AS builder
+
+WORKDIR /build
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PYTHONUNBUFFERED=1
+
+COPY pyproject.toml ./
+
+RUN uv venv /opt/venv && \
+    uv pip install --no-cache -r pyproject.toml
+
+# --- Stage 2: Headless Production Runtime ---
+FROM python:3.11-slim-bookworm AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH"
+
+# Provision least-privilege non-root service account
+RUN groupadd --system --gid 10001 appgroup && \
+    useradd --system --uid 10001 --gid 10001 --no-create-home --shell /bin/false appuser
+
+WORKDIR /app
+
+# Copy isolated virtual environment from builder stage
+COPY --from=builder /opt/venv /opt/venv
+
+# Copy application source code
+COPY --chown=appuser:appgroup . /app
+
+# Switch to non-root service account
+USER appuser
+
+# Headless background consumer daemon entrypoint
+CMD ["python", "-m", "app.workers.consumer"]

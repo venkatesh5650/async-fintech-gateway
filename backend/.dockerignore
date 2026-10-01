@@ -1,7 +1,43 @@
+# System & Version Control
+.git
+.gitignore
+.github
+.agents
+
+# Python Environments & Cache
 .venv
 venv
+env
 __pycache__
 *.pyc
+*.pyo
+*.pyd
+.Python
+
+# Tool & Linter Caches
+.ruff_cache
 .pytest_cache
-.git
+.mypy_cache
+.coverage
+htmlcov
+
+# Environment Variables & Secrets
 .env
+.env.*
+*.pem
+*.key
+
+# Local Data Dumps & Databases
+*.dump
+*.sqlite*
+fintech-local-backup.dump
+
+# IDE & Editor Files
+.vscode
+.idea
+*.swp
+*~
+
+# Logs & Temporary Files
+*.log
+scratch/

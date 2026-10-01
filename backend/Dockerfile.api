@@ -1,0 +1,49 @@
+# ==============================================================================
+# Multi-Stage Dockerfile: FastAPI Web & WebSocket API Gateway
+# Target: Production-hardened ASGI microservice gateway
+# Non-root execution: appuser (UID 10001)
+# ==============================================================================
+
+# --- Stage 1: Build & Dependency Resolution ---
+FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim AS builder
+
+WORKDIR /build
+
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    PYTHONUNBUFFERED=1
+
+COPY pyproject.toml ./
+
+RUN uv venv /opt/venv && \
+    uv pip install --no-cache -r pyproject.toml
+
+# --- Stage 2: Production Distroless/Slim Runtime ---
+FROM python:3.11-slim-bookworm AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    PORT=8000
+
+# Provision least-privilege non-root service account
+RUN groupadd --system --gid 10001 appgroup && \
+    useradd --system --uid 10001 --gid 10001 --no-create-home --shell /bin/false appuser
+
+WORKDIR /app
+
+# Copy isolated virtual environment from builder stage
+COPY --from=builder /opt/venv /opt/venv
+
+# Copy application source code
+COPY --chown=appuser:appgroup . /app
+
+# Switch to non-root service account
+USER appuser
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
