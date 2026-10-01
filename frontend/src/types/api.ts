@@ -724,3 +724,527 @@ export interface Phase2CapstoneReport {
   timestamp_iso: string;
   trace_id: string;
 }
+
+export interface ContainerSecurityCheck {
+  check_id: string;
+  title: string;
+  status: "PASSED" | "FAILED" | "WARNING" | string;
+  description: string;
+  severity: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW" | string;
+}
+
+export interface ContainerImageSpec {
+  service_name: "api_gateway" | "stream_worker" | string;
+  dockerfile_path: string;
+  base_image: string;
+  is_multistage: boolean;
+  is_non_root: boolean;
+  user_name: string;
+  exposed_ports: number[];
+  entrypoint_cmd: string;
+  healthcheck_defined: boolean;
+  security_score_pct: number;
+  security_checks: ContainerSecurityCheck[];
+}
+
+export interface DockerIgnoreAudit {
+  is_valid: boolean;
+  total_rules: number;
+  critical_exclusions_present: string[];
+  missing_exclusions: string[];
+  rules_sample: string[];
+}
+
+export interface ContainerSpecReport {
+  system_name: string;
+  status: "CERTIFIED" | "WARNING" | "FAILED" | string;
+  total_services: number;
+  compliance_score_pct: number;
+  services: ContainerImageSpec[];
+  dockerignore_audit: DockerIgnoreAudit;
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+export interface CloudResourceNode {
+  id: string;
+  name: string;
+  resource_type: "web_service" | "background_worker" | "managed_database" | "managed_cache" | string;
+  runtime: string;
+  plan: string;
+  dockerfile_path?: string | null;
+  health_check_path?: string | null;
+  auto_deploy: boolean;
+  env_vars_count: number;
+  status: "CONFIGURED" | "ACTIVE" | "HEALTHY" | string;
+}
+
+export interface CloudDependencyEdge {
+  source_id: string;
+  target_id: string;
+  protocol: "HTTP" | "REDIS_STREAM" | "SQL" | "IPC" | string;
+  purpose: string;
+  is_critical: boolean;
+}
+
+export interface CloudTopologyReport {
+  system_name: string;
+  version: string;
+  environment: string;
+  iac_spec_path: string;
+  total_services: number;
+  total_datastores: number;
+  total_edges: number;
+  nodes: CloudResourceNode[];
+  edges: CloudDependencyEdge[];
+  raw_yaml_spec: string;
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+export interface SubsystemProbe {
+  name: string;
+  status: "HEALTHY" | "DEGRADED" | "UNHEALTHY" | string;
+  latency_ms: number;
+  is_critical: boolean;
+  details?: string | null;
+}
+
+export interface LivenessProbeResult {
+  status: "HEALTHY" | "UNHEALTHY" | string;
+  uptime_seconds: number;
+  event_loop_healthy: boolean;
+  timestamp_iso: string;
+}
+
+export interface ReadinessProbeResult {
+  status: "READY" | "NOT_READY" | string;
+  overall_healthy: boolean;
+  subsystems: SubsystemProbe[];
+  total_latency_ms: number;
+  timestamp_iso: string;
+}
+
+export interface StartupProbeResult {
+  status: "INITIALIZED" | "IN_PROGRESS" | "FAILED" | string;
+  schema_ready: boolean;
+  migrations_current: boolean;
+  tables_found: string[];
+  timestamp_iso: string;
+}
+
+export interface TieredHealthMatrixReport {
+  system_name: string;
+  overall_status: "HEALTHY" | "DEGRADED" | "UNHEALTHY" | string;
+  liveness: LivenessProbeResult;
+  readiness: ReadinessProbeResult;
+  startup: StartupProbeResult;
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+export interface SecurityCheckItem {
+  name: string;
+  category: "SECRETS" | "DATABASE" | "CORS" | "TRANSPORT" | "COMPUTE" | string;
+  status: "PASS" | "WARN" | "FAIL" | string;
+  description: string;
+  remediation?: string | null;
+}
+
+export interface SecretRedactionItem {
+  key_name: string;
+  is_configured: boolean;
+  masked_value: string;
+  entropy_bits: number;
+  status: "SECURE" | "DEFAULT_WARNING" | "UNCONFIGURED" | string;
+}
+
+export interface EnvironmentAuditReport {
+  system_name: string;
+  profile: "DEVELOPMENT" | "STAGING" | "PRODUCTION" | string;
+  compliance_score_pct: number;
+  status: "CERTIFIED" | "REQUIRES_HARDENING" | "NON_COMPLIANT" | string;
+  total_checks_passed: number;
+  total_checks_count: number;
+  checks: SecurityCheckItem[];
+  redacted_secrets: SecretRedactionItem[];
+  allowed_origins: string[];
+  ssl_required: boolean;
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+export interface MigrationStatusReport {
+  status: "SYNCHRONIZED" | "PARTIAL" | "FAILED" | string;
+  tables_verified: string[];
+  pgvector_extension_ready: boolean;
+  total_tables: number;
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+export interface TickerSeedSummary {
+  symbol: string;
+  company_name: string;
+  candles_count: number;
+  signals_count: number;
+  rag_chunks_count: number;
+  latest_candle_date?: string | null;
+  status: "SEEDED" | "EMPTY" | "INCOMPLETE" | string;
+}
+
+export interface SeedStatusReport {
+  system_name: string;
+  is_seeded: boolean;
+  total_tickers: number;
+  total_candles: number;
+  total_signals: number;
+  total_rag_chunks: number;
+  tickers: TickerSeedSummary[];
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+export interface SeedExecutionRequest {
+  tickers?: string[];
+  days_history?: number;
+  seed_rag_passages?: boolean;
+  force_refresh?: boolean;
+}
+
+export interface SeedExecutionResponse {
+  run_id: string;
+  status: "COMPLETED" | "FAILED" | string;
+  seeded_tickers_count: number;
+  total_candles_inserted: number;
+  total_signals_inserted: number;
+  total_chunks_inserted: number;
+  duration_ms: number;
+  tickers: string[];
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+// ==================================================
+// PROMETHEUS METRIC EXPORTERS & TELEMETRY TYPES (DAY 96)
+// ==================================================
+
+export interface GoldenSignalsMetrics {
+  throughput_rps: number;
+  total_requests: number;
+  error_requests: number;
+  error_rate_pct: number;
+  p50_latency_ms: number;
+  p90_latency_ms: number;
+  p99_latency_ms: number;
+  event_loop_lag_ms: number;
+}
+
+export interface CacheTelemetryMetrics {
+  hits: number;
+  misses: number;
+  hit_rate_pct: number;
+}
+
+export interface DbPoolTelemetryMetrics {
+  active_connections: number;
+  idle_connections: number;
+  max_connections: number;
+}
+
+export interface PrometheusSampleItem {
+  name: string;
+  type: string;
+  help: string;
+  labels: Record<string, string>;
+  value: number;
+}
+
+export interface MetricSummaryReport {
+  golden_signals: GoldenSignalsMetrics;
+  stream_lag: Record<string, number>;
+  cache_telemetry: CacheTelemetryMetrics;
+  circuit_breaker_status: Record<string, string>;
+  db_pool_status: DbPoolTelemetryMetrics;
+  active_metrics_count: number;
+  samples: PrometheusSampleItem[];
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+export interface TrafficSimulationRequest {
+  count?: number;
+}
+
+export interface TrafficSimulationResponse {
+  simulated_requests: number;
+  status: "SUCCESS" | "FAILED" | string;
+  message: string;
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+// ==================================================
+// GRAFANA DASHBOARD & SLI/SLO TYPES (DAY 97)
+// ==================================================
+
+export interface GrafanaPanelSpec {
+  id: number;
+  title: string;
+  type: string;
+  gridPos: { h: number; w: number; x: number; y: number };
+  targets: Array<{ expr: string; legendFormat?: string; refId?: string }>;
+  options: Record<string, any>;
+}
+
+export interface GrafanaDashboardSpec {
+  title: string;
+  uid: string;
+  description: string;
+  tags: string[];
+  timezone: string;
+  schemaVersion: number;
+  version: number;
+  refresh: string;
+  time: Record<string, string>;
+  panels: GrafanaPanelSpec[];
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+export interface PrometheusAlertRule {
+  alert: string;
+  expr: string;
+  for: string;
+  severity: "CRITICAL" | "WARNING" | "INFO" | string;
+  summary: string;
+  description: string;
+  action: string;
+}
+
+export interface SloItem {
+  name: string;
+  target: string;
+  current_value: string;
+  error_budget_remaining_pct: number;
+  burn_rate_1h: number;
+  status: "COMPLIANT" | "WARNING" | "BREACHED" | string;
+  description: string;
+}
+
+export interface SloStatusReport {
+  overall_compliance_score: number;
+  active_slos_count: number;
+  slos: SloItem[];
+  alert_rules_count: number;
+  alert_rules: PrometheusAlertRule[];
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+export interface AlertDispatchTestRequest {
+  alert_name?: string;
+  severity?: string;
+  message?: string;
+}
+
+export interface AlertDispatchTestResponse {
+  status: "DISPATCHED" | "FAILED" | string;
+  alert_name: string;
+  severity: string;
+  message: string;
+  dispatched_to: string[];
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+export interface WaterfallSpanItem {
+  span_id: string;
+  parent_span_id: string | null;
+  name: string;
+  service: string;
+  kind: "SERVER" | "CLIENT" | "INTERNAL" | "PRODUCER" | "CONSUMER" | string;
+  status: "OK" | "ERROR" | "SLOW" | string;
+  start_time_iso: string;
+  end_time_iso: string;
+  duration_ms: number;
+  relative_offset_ms: number;
+  offset_percent: number;
+  width_percent: number;
+  depth: number;
+  is_critical_path: boolean;
+  tags: Record<string, string | number | boolean>;
+  traceparent: string;
+}
+
+export interface TraceWaterfallDetail {
+  trace_id: string;
+  root_span_name: string;
+  service_name: string;
+  status: "OK" | "ERROR" | "SLOW" | string;
+  total_duration_ms: number;
+  critical_path_duration_ms: number;
+  span_count: number;
+  error_count: number;
+  root_start_iso: string;
+  root_end_iso: string;
+  spans: WaterfallSpanItem[];
+  w3c_traceparent: string;
+}
+
+export interface TraceSummaryItem {
+  trace_id: string;
+  root_span_name: string;
+  service_name: string;
+  status: "OK" | "ERROR" | "SLOW" | string;
+  status_code: number;
+  duration_ms: number;
+  span_count: number;
+  error_count: number;
+  timestamp_iso: string;
+  ticker?: string | null;
+  tags: Record<string, string | number | boolean>;
+}
+
+export interface TraceQueryResponse {
+  total: number;
+  traces: TraceSummaryItem[];
+  active_trace_id?: string | null;
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+export interface TraceSimulationResponse {
+  status: string;
+  trace_id: string;
+  ticker: string;
+  span_count: number;
+  total_duration_ms: number;
+  waterfall: TraceWaterfallDetail;
+}
+
+export interface SecurityHeaderSpec {
+  header_name: string;
+  directive_value: string;
+  category: "TRANSPORT" | "FRAMING" | "CONTENT" | "PERMISSIONS" | string;
+  is_compliant: boolean;
+  description: string;
+}
+
+export interface TlsCertificateSpec {
+  domain: string;
+  issuer: string;
+  tls_version: string;
+  cipher_suite: string;
+  key_type: string;
+  valid_from_iso: string;
+  valid_until_iso: string;
+  days_until_expiry: number;
+  ocsp_stapling_enabled: boolean;
+  hsts_preload_ready: boolean;
+}
+
+export interface DomainRouteSpec {
+  hostname: string;
+  target_cluster: string;
+  routing_tier: "EDGE_API" | "WEB_APP" | "WEBSOCKET_STREAM" | string;
+  port: number;
+  protocols: string[];
+  rate_limit: string;
+}
+
+export interface RateLimitRuleSpec {
+  zone_name: string;
+  rate_expression: string;
+  burst_capacity: number;
+  target_tier: string;
+}
+
+export interface ProductionIngressSpec {
+  ingress_controller: string;
+  ssl_grade: string;
+  security_score: number;
+  certificate: TlsCertificateSpec;
+  security_headers: SecurityHeaderSpec[];
+  routes: DomainRouteSpec[];
+  rate_limits: RateLimitRuleSpec[];
+  raw_nginx_config: string;
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+export interface IngressVerificationItem {
+  check_name: string;
+  category: "TLS" | "HEADERS" | "ROUTING" | "RATELIMIT" | string;
+  status: "PASSED" | "WARNING" | "FAILED" | string;
+  details: string;
+}
+
+export interface IngressVerificationReport {
+  status: "CERTIFIED" | "DEGRADED" | "FAILED" | string;
+  ssl_grade: string;
+  overall_score: number;
+  checks_total: number;
+  checks_passed: number;
+  checkpoints: IngressVerificationItem[];
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+export interface ReadinessCheckItem {
+  day: number;
+  criterion_name: string;
+  subsystem: string;
+  status: "CERTIFIED" | "PENDING" | "FAILED" | string;
+  details: string;
+}
+
+export interface ProductionReadinessReport {
+  status: "CERTIFIED_FOR_PRODUCTION" | "DEGRADED" | "FAILED" | string;
+  readiness_score: number;
+  version: string;
+  checks_passed: number;
+  checks_total: number;
+  criteria: ReadinessCheckItem[];
+  timestamp_iso: string;
+  trace_id: string;
+}
+
+export interface SmokeTestStep {
+  step_number: number;
+  name: string;
+  service: string;
+  status: "SUCCESS" | "FAILED" | string;
+  duration_ms: number;
+  details: string;
+}
+
+export interface SmokeTestResult {
+  status: "SUCCESS" | "FAILED" | string;
+  ticker: string;
+  total_duration_ms: number;
+  steps_passed: number;
+  steps_total: number;
+  steps: SmokeTestStep[];
+  trace_id: string;
+  timestamp_iso: string;
+}
+
+export interface GoLiveCertificate {
+  certificate_id: string;
+  title: string;
+  phase: string;
+  release_tag: string;
+  status: string;
+  readiness_percentage: number;
+  signed_by: string;
+  total_days_certified: number;
+  codebase_metrics: Record<string, string | number | boolean>;
+  issued_at_iso: string;
+  signature_hash: string;
+}
+
+
+
+
+

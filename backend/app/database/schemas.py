@@ -1,5 +1,6 @@
-from typing import Optional, Dict, Any
-from pydantic import BaseModel, Field, field_validator
+from enum import Enum
+from typing import Optional, Dict, Any, Union
+from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 
 class MarketDataPayload(BaseModel):
@@ -710,3 +711,602 @@ class Phase2CapstoneReport(BaseModel):
     )
     timestamp_iso: str = Field(..., description="Timestamp of capstone certification")
     trace_id: str = Field(..., description="W3C trace context identifier")
+
+
+# ==================================================
+# CLOUD CONTAINER SPECIFICATION CONTRACTS
+# ==================================================
+
+
+class ContainerSecurityCheck(BaseModel):
+    check_id: str = Field(..., description="Unique check identifier")
+    title: str = Field(..., description="Security check title")
+    status: str = Field(..., description="PASSED | FAILED | WARNING")
+    description: str = Field(..., description="Details of the verification check")
+    severity: str = Field(default="MEDIUM", description="CRITICAL | HIGH | MEDIUM | LOW")
+
+
+class ContainerImageSpec(BaseModel):
+    service_name: str = Field(..., description="Service identifier: api_gateway | stream_worker")
+    dockerfile_path: str = Field(..., description="Path to Dockerfile specification")
+    base_image: str = Field(..., description="Base image specification")
+    is_multistage: bool = Field(..., description="Whether multi-stage build pattern is enforced")
+    is_non_root: bool = Field(..., description="Whether container runs as non-root user")
+    user_name: str = Field(..., description="Declared user or UID in runtime container")
+    exposed_ports: list[int] = Field(default_factory=list, description="Exposed network ports")
+    entrypoint_cmd: str = Field(..., description="Default execution command")
+    healthcheck_defined: bool = Field(..., description="Whether Docker HEALTHCHECK instruction is defined")
+    security_score_pct: float = Field(..., description="Container hardening score (0.0 to 100.0)")
+    security_checks: list[ContainerSecurityCheck] = Field(default_factory=list, description="Audit check breakdown")
+
+
+class DockerIgnoreAudit(BaseModel):
+    is_valid: bool = Field(..., description="Whether .dockerignore meets security hygiene standards")
+    total_rules: int = Field(..., description="Total defined ignore rules")
+    critical_exclusions_present: list[str] = Field(default_factory=list, description="Critical assets excluded")
+    missing_exclusions: list[str] = Field(default_factory=list, description="Missing safety rules if any")
+    rules_sample: list[str] = Field(default_factory=list, description="Sample of active ignore rules")
+
+
+class ContainerSpecReport(BaseModel):
+    system_name: str = Field(default="Automated Equity Research Engine", description="Application identifier")
+    status: str = Field(default="CERTIFIED", description="Specification status: CERTIFIED | WARNING | FAILED")
+    total_services: int = Field(default=2, description="Total containerized microservice definitions")
+    compliance_score_pct: float = Field(..., description="Overall container compliance score (0.0 to 100.0)")
+    services: list[ContainerImageSpec] = Field(default_factory=list, description="Container specs for all services")
+    dockerignore_audit: DockerIgnoreAudit = Field(..., description="Audit results for .dockerignore")
+    timestamp_iso: str = Field(..., description="Timestamp of diagnostics generation")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
+
+# ==================================================
+# CLOUD TOPOLOGY & INFRASTRUCTURE-AS-CODE CONTRACTS
+# ==================================================
+
+
+class CloudResourceNode(BaseModel):
+    id: str = Field(..., description="Resource identifier (e.g. api_gateway, stream_worker, redis, postgres)")
+    name: str = Field(..., description="Display name / Render service name")
+    resource_type: str = Field(..., description="web_service | background_worker | managed_database | managed_cache")
+    runtime: str = Field(..., description="Runtime environment (e.g. docker, redis, postgres)")
+    plan: str = Field(default="free", description="Deployment tier / compute plan")
+    dockerfile_path: Optional[str] = Field(None, description="Target Dockerfile relative path")
+    health_check_path: Optional[str] = Field(None, description="HTTP health probe route")
+    auto_deploy: bool = Field(default=True, description="Continuous deployment trigger enabled")
+    env_vars_count: int = Field(default=0, description="Number of injected environment variables")
+    status: str = Field(default="CONFIGURED", description="Operational status: CONFIGURED | ACTIVE | HEALTHY")
+
+
+class CloudDependencyEdge(BaseModel):
+    source_id: str = Field(..., description="Originating node ID")
+    target_id: str = Field(..., description="Destination node ID")
+    protocol: str = Field(..., description="HTTP | REDIS_STREAM | SQL | IPC")
+    purpose: str = Field(..., description="Functional purpose of dependency edge")
+    is_critical: bool = Field(default=True, description="Whether connection is a critical dependency")
+
+
+class CloudTopologyReport(BaseModel):
+    system_name: str = Field(default="Automated Equity Research Engine", description="Application identifier")
+    version: str = Field(default="v1.0.0-rc", description="System version target")
+    environment: str = Field(default="cloud_production", description="Target environment")
+    iac_spec_path: str = Field(default="render.yaml", description="Path to IaC specification file")
+    total_services: int = Field(default=2, description="Total compute services declared")
+    total_datastores: int = Field(default=2, description="Total managed data stores declared")
+    total_edges: int = Field(default=4, description="Total dependency linkages")
+    nodes: list[CloudResourceNode] = Field(default_factory=list, description="All declared cloud resources")
+    edges: list[CloudDependencyEdge] = Field(default_factory=list, description="Dependency interconnects")
+    raw_yaml_spec: str = Field(..., description="Raw Infrastructure-as-Code YAML specification")
+    timestamp_iso: str = Field(..., description="Diagnostics timestamp")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
+
+# ==================================================
+# CLOUD TIERED HEALTH PROBES CONTRACTS
+# ==================================================
+
+
+class SubsystemProbe(BaseModel):
+    name: str = Field(..., description="Subsystem identifier: postgresql | redis | pgvector | stream_worker")
+    status: str = Field(..., description="HEALTHY | DEGRADED | UNHEALTHY")
+    latency_ms: float = Field(..., description="Execution latency in milliseconds")
+    is_critical: bool = Field(default=True, description="Whether failure compromises core gateway readiness")
+    details: Optional[str] = Field(None, description="Diagnostic message or version info")
+
+
+class LivenessProbeResult(BaseModel):
+    status: str = Field(default="HEALTHY", description="Liveness status: HEALTHY | UNHEALTHY")
+    uptime_seconds: float = Field(..., description="Process uptime in seconds")
+    event_loop_healthy: bool = Field(default=True, description="Whether ASGI event loop is unblocked")
+    timestamp_iso: str = Field(..., description="Liveness probe timestamp")
+
+
+class ReadinessProbeResult(BaseModel):
+    status: str = Field(default="READY", description="Readiness status: READY | NOT_READY")
+    overall_healthy: bool = Field(default=True, description="Whether all critical dependencies are ready")
+    subsystems: list[SubsystemProbe] = Field(default_factory=list, description="Subsystem health probes")
+    total_latency_ms: float = Field(..., description="Total execution latency for all readiness probes")
+    timestamp_iso: str = Field(..., description="Readiness probe timestamp")
+
+
+class StartupProbeResult(BaseModel):
+    status: str = Field(default="INITIALIZED", description="Startup status: INITIALIZED | IN_PROGRESS | FAILED")
+    schema_ready: bool = Field(default=True, description="Whether database models and tables exist")
+    migrations_current: bool = Field(default=True, description="Whether schema revision is synchronized")
+    tables_found: list[str] = Field(default_factory=list, description="Verified database tables")
+    timestamp_iso: str = Field(..., description="Startup probe timestamp")
+
+
+class TieredHealthMatrixReport(BaseModel):
+    system_name: str = Field(default="Automated Equity Research Engine", description="Application identifier")
+    overall_status: str = Field(default="HEALTHY", description="System state: HEALTHY | DEGRADED | UNHEALTHY")
+    liveness: LivenessProbeResult = Field(..., description="Fast process liveness probe result")
+    readiness: ReadinessProbeResult = Field(..., description="Deep dependency readiness probe result")
+    startup: StartupProbeResult = Field(..., description="Cold-start initialization probe result")
+    timestamp_iso: str = Field(..., description="Matrix compilation timestamp")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
+
+# ==================================================
+# ENVIRONMENT PROMOTION & SECRET SANITIZATION CONTRACTS
+# ==================================================
+
+
+class EnvironmentProfileEnum(str, Enum):
+    DEVELOPMENT = "DEVELOPMENT"
+    STAGING = "STAGING"
+    PRODUCTION = "PRODUCTION"
+
+
+class SecurityCheckItem(BaseModel):
+    name: str = Field(..., description="Security invariant check identifier")
+    category: str = Field(..., description="Category: SECRETS | DATABASE | CORS | TRANSPORT | COMPUTE")
+    status: str = Field(..., description="PASS | WARN | FAIL")
+    description: str = Field(..., description="Detailed explanation of the security evaluation")
+    remediation: Optional[str] = Field(None, description="Actionable recommendation if check warns or fails")
+
+
+class SecretRedactionItem(BaseModel):
+    key_name: str = Field(..., description="Environment variable or credential name")
+    is_configured: bool = Field(..., description="Whether key is present in environment")
+    masked_value: str = Field(..., description="Safe masked signature with zero raw entropy leak")
+    entropy_bits: float = Field(..., description="Estimated Shannon entropy of the configured credential")
+    status: str = Field(..., description="SECURE | DEFAULT_WARNING | UNCONFIGURED")
+
+
+class EnvironmentAuditReport(BaseModel):
+    system_name: str = Field(default="Automated Equity Research Engine", description="System identifier")
+    profile: str = Field(default="DEVELOPMENT", description="Active profile: DEVELOPMENT | STAGING | PRODUCTION")
+    compliance_score_pct: float = Field(..., description="10-point production security compliance score (0-100%)")
+    status: str = Field(default="CERTIFIED", description="Security readiness: CERTIFIED | REQUIRES_HARDENING | NON_COMPLIANT")
+    total_checks_passed: int = Field(..., description="Number of passed security invariant checks")
+    total_checks_count: int = Field(..., description="Total evaluated security checks")
+    checks: list[SecurityCheckItem] = Field(default_factory=list, description="Security check evaluations")
+    redacted_secrets: list[SecretRedactionItem] = Field(default_factory=list, description="Redacted credentials audit")
+    allowed_origins: list[str] = Field(default_factory=list, description="Configured CORS allowed origins")
+    ssl_required: bool = Field(default=False, description="Whether SSL/TLS enforcement is active")
+    timestamp_iso: str = Field(..., description="Report compilation timestamp")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
+
+# ==================================================
+# PRODUCTION DATABASE MIGRATION & SEEDING CONTRACTS
+# ==================================================
+
+
+class MigrationStatusReport(BaseModel):
+    status: str = Field(default="SYNCHRONIZED", description="Migration state: SYNCHRONIZED | APPLIED | FAILED")
+    tables_verified: list[str] = Field(default_factory=list, description="Verified PostgreSQL relational tables")
+    pgvector_extension_ready: bool = Field(default=True, description="Whether vector extension is active")
+    total_tables: int = Field(..., description="Total tables checked")
+    timestamp_iso: str = Field(..., description="Verification timestamp")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
+
+class TickerSeedSummary(BaseModel):
+    symbol: str = Field(..., description="Equity ticker symbol (e.g. AAPL, NVDA)")
+    company_name: str = Field(..., description="Full institutional corporate entity name")
+    candles_count: int = Field(..., description="Number of persisted daily OHLCV candles")
+    signals_count: int = Field(..., description="Number of persisted technical signals")
+    rag_chunks_count: int = Field(..., description="Number of persisted SEC EDGAR RAG passages")
+    latest_candle_date: Optional[str] = Field(None, description="Most recent candle date string")
+    status: str = Field(default="SEEDED", description="Status: SEEDED | EMPTY | INCOMPLETE")
+
+
+class SeedStatusReport(BaseModel):
+    system_name: str = Field(default="Automated Equity Research Engine", description="System identifier")
+    is_seeded: bool = Field(..., description="Whether institutional equities have baseline data")
+    total_tickers: int = Field(..., description="Total tracked institutional equities")
+    total_candles: int = Field(..., description="Total OHLCV candles across all tickers")
+    total_signals: int = Field(..., description="Total computed technical signals across all tickers")
+    total_rag_chunks: int = Field(..., description="Total SEC EDGAR RAG passages across all tickers")
+    tickers: list[TickerSeedSummary] = Field(default_factory=list, description="Per-ticker seeding summaries")
+    timestamp_iso: str = Field(..., description="Report compilation timestamp")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
+
+class SeedExecutionRequest(BaseModel):
+    tickers: Optional[list[str]] = Field(None, description="Optional subset of tickers to seed; defaults to 10 core equities")
+    days_history: int = Field(default=90, ge=10, le=365, description="Number of daily candles to generate (10-365)")
+    seed_rag_passages: bool = Field(default=True, description="Whether to seed SEC EDGAR 10-K RAG passages")
+    force_refresh: bool = Field(default=False, description="Whether to overwrite existing price points")
+
+
+class SeedExecutionResponse(BaseModel):
+    run_id: str = Field(..., description="Deterministic or unique seed run identifier")
+    status: str = Field(default="COMPLETED", description="Execution status: COMPLETED | FAILED")
+    seeded_tickers_count: int = Field(..., description="Count of successfully seeded equity tickers")
+    total_candles_inserted: int = Field(..., description="Count of daily OHLCV candles written")
+    total_signals_inserted: int = Field(..., description="Count of technical signals written")
+    total_chunks_inserted: int = Field(..., description="Count of SEC EDGAR RAG chunks written")
+    duration_ms: float = Field(..., description="Execution time in milliseconds")
+    tickers: list[str] = Field(default_factory=list, description="List of processed equity symbols")
+    timestamp_iso: str = Field(..., description="Completion timestamp")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
+
+# ==================================================
+# PROMETHEUS METRIC EXPORTERS & TELEMETRY CONTRACTS (DAY 96)
+# ==================================================
+
+
+class GoldenSignalsMetrics(BaseModel):
+    throughput_rps: float = Field(..., description="Inbound requests per second")
+    total_requests: int = Field(..., description="Total cumulative HTTP requests recorded")
+    error_requests: int = Field(..., description="Total 4xx/5xx requests recorded")
+    error_rate_pct: float = Field(..., description="Percentage of requests resulting in error")
+    p50_latency_ms: float = Field(..., description="50th percentile (median) latency in ms")
+    p90_latency_ms: float = Field(..., description="90th percentile latency in ms")
+    p99_latency_ms: float = Field(..., description="99th percentile latency in ms")
+    event_loop_lag_ms: float = Field(..., description="Observed ASGI event loop scheduling lag in ms")
+
+
+class CacheTelemetryMetrics(BaseModel):
+    hits: int = Field(..., description="Distributed cache hits count")
+    misses: int = Field(..., description="Distributed cache misses count")
+    hit_rate_pct: float = Field(..., description="Cache efficiency ratio percentage")
+
+
+class DbPoolTelemetryMetrics(BaseModel):
+    active_connections: int = Field(..., description="Currently active checked-out connections")
+    idle_connections: int = Field(..., description="Available idle connections in pool")
+    max_connections: int = Field(..., description="Maximum connection pool ceiling")
+
+
+class PrometheusSampleItem(BaseModel):
+    name: str = Field(..., description="Prometheus metric name")
+    type: str = Field(..., description="Metric type: counter, gauge, histogram, summary")
+    help: str = Field(..., description="Prometheus HELP description")
+    labels: dict[str, str] = Field(default_factory=dict, description="Metric label key-value pairs")
+    value: float = Field(..., description="Current observed numeric value")
+
+
+class MetricSummaryReport(BaseModel):
+    golden_signals: GoldenSignalsMetrics = Field(..., description="Primary SRE Golden Signals")
+    stream_lag: dict[str, int] = Field(default_factory=dict, description="Redis Streams consumer lag by stream name")
+    cache_telemetry: CacheTelemetryMetrics = Field(..., description="Distributed cache hit/miss telemetry")
+    circuit_breaker_status: dict[str, str] = Field(default_factory=dict, description="Circuit breaker states: CLOSED | HALF_OPEN | OPEN")
+    db_pool_status: DbPoolTelemetryMetrics = Field(..., description="Database connection pool telemetry")
+    active_metrics_count: int = Field(..., description="Total registered Prometheus metric samples")
+    samples: list[PrometheusSampleItem] = Field(default_factory=list, description="Top active Prometheus metric samples")
+    timestamp_iso: str = Field(..., description="Observation timestamp")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
+
+class TrafficSimulationRequest(BaseModel):
+    count: int = Field(default=25, ge=1, le=200, description="Number of synthetic requests to generate (1-200)")
+
+
+class TrafficSimulationResponse(BaseModel):
+    simulated_requests: int = Field(..., description="Number of requests simulated")
+    status: str = Field(default="SUCCESS", description="Simulation status: SUCCESS | FAILED")
+    message: str = Field(..., description="Simulation outcome summary")
+    timestamp_iso: str = Field(..., description="Execution timestamp")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
+
+# ==================================================
+# GRAFANA DASHBOARD & SLI/SLO SPECIFICATIONS (DAY 97)
+# ==================================================
+
+
+class GrafanaPanelSpec(BaseModel):
+    id: int = Field(..., description="Panel identifier")
+    title: str = Field(..., description="Panel title")
+    type: str = Field(..., description="Panel visual type: timeseries | stat | gauge")
+    gridPos: dict[str, int] = Field(..., description="Panel grid layout position (h, w, x, y)")
+    targets: list[dict[str, Any]] = Field(..., description="PromQL query expressions")
+    options: dict[str, Any] = Field(default_factory=dict, description="Panel formatting options")
+
+
+class GrafanaDashboardSpec(BaseModel):
+    title: str = Field(..., description="Dashboard title")
+    uid: str = Field(..., description="Unique dashboard slug")
+    description: str = Field(..., description="Dashboard purpose summary")
+    tags: list[str] = Field(default_factory=list, description="Categorization tags")
+    timezone: str = Field(default="utc", description="Timezone setting")
+    schemaVersion: int = Field(default=38, description="Grafana schema version")
+    version: int = Field(default=1, description="Dashboard revision number")
+    refresh: str = Field(default="10s", description="Auto-refresh cadence")
+    time: dict[str, str] = Field(default_factory=dict, description="Default time window")
+    panels: list[GrafanaPanelSpec] = Field(default_factory=list, description="List of dashboard panels")
+    timestamp_iso: str = Field(..., description="Export timestamp")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
+
+class PrometheusAlertRule(BaseModel):
+    alert: str = Field(..., description="Alert rule identifier")
+    expr: str = Field(..., description="PromQL evaluation expression")
+    for_duration: str = Field(..., alias="for", description="Pending duration before firing")
+    severity: str = Field(..., description="Alert severity: CRITICAL | WARNING | INFO")
+    summary: str = Field(..., description="Brief alert summary")
+    description: str = Field(..., description="Detailed explanation of breach")
+    action: str = Field(..., description="SRE remediation runbook action")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class SloItem(BaseModel):
+    name: str = Field(..., description="Service Level Objective identifier")
+    target: str = Field(..., description="Agreed objective target threshold")
+    current_value: str = Field(..., description="Live observed metric measurement")
+    error_budget_remaining_pct: float = Field(..., description="Percentage of error budget available")
+    burn_rate_1h: float = Field(..., description="1-hour error budget burn rate velocity")
+    status: str = Field(..., description="Compliance state: COMPLIANT | WARNING | BREACHED")
+    description: str = Field(..., description="SLO business justification")
+
+
+class SloStatusReport(BaseModel):
+    overall_compliance_score: float = Field(..., description="Overall institutional compliance percentage (0-100)")
+    active_slos_count: int = Field(..., description="Total active SLO agreements")
+    slos: list[SloItem] = Field(default_factory=list, description="Evaluated SLO agreements")
+    alert_rules_count: int = Field(..., description="Total active Prometheus alerting rules")
+    alert_rules: list[PrometheusAlertRule] = Field(default_factory=list, description="Active Prometheus alerting rules")
+    timestamp_iso: str = Field(..., description="Evaluation timestamp")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
+
+class AlertDispatchTestRequest(BaseModel):
+    alert_name: str = Field(default="P99LatencyBreach", description="Target alert rule name to test")
+    severity: str = Field(default="WARNING", description="Alert severity: CRITICAL | WARNING")
+    message: Optional[str] = Field(None, description="Optional custom test message")
+
+
+class AlertDispatchTestResponse(BaseModel):
+    status: str = Field(default="DISPATCHED", description="Dispatch outcome")
+    alert_name: str = Field(..., description="Tested alert name")
+    severity: str = Field(..., description="Alert severity level")
+    message: str = Field(..., description="Alert notification payload")
+    dispatched_to: list[str] = Field(default_factory=list, description="Webhook dispatch endpoints")
+    timestamp_iso: str = Field(..., description="Dispatch timestamp")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
+
+# ==============================================================================
+# DAY 98: DISTRIBUTED TRACING & W3C SPAN WATERFALL SCHEMAS
+# ==============================================================================
+
+class WaterfallSpanItem(BaseModel):
+    span_id: str = Field(..., description="16-character hexadecimal span identifier")
+    parent_span_id: Optional[str] = Field(None, description="Parent span identifier or None if root")
+    name: str = Field(..., description="Operation / span descriptor")
+    service: str = Field(..., description="Service boundary generating the span")
+    kind: str = Field(default="INTERNAL", description="Span kind: SERVER | CLIENT | INTERNAL | PRODUCER | CONSUMER")
+    status: str = Field(default="OK", description="Execution status: OK | ERROR | SLOW")
+    start_time_iso: str = Field(..., description="ISO 8601 start timestamp")
+    end_time_iso: str = Field(..., description="ISO 8601 end timestamp")
+    duration_ms: float = Field(..., description="Span execution duration in milliseconds")
+    relative_offset_ms: float = Field(..., description="Offset relative to trace root start in milliseconds")
+    offset_percent: float = Field(..., description="Percentage offset along trace timeline (0.0 - 100.0)")
+    width_percent: float = Field(..., description="Percentage width along trace timeline (0.0 - 100.0)")
+    depth: int = Field(default=0, description="Hierarchical tree depth for visual indentation")
+    is_critical_path: bool = Field(default=False, description="Flag indicating span lies on latency critical path")
+    tags: dict[str, Union[str, int, float, bool]] = Field(default_factory=dict, description="Span attributes and metadata")
+    traceparent: str = Field(..., description="W3C traceparent header serialization")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TraceWaterfallDetail(BaseModel):
+    trace_id: str = Field(..., description="32-character hexadecimal W3C trace identifier")
+    root_span_name: str = Field(..., description="Entrypoint root operation name")
+    service_name: str = Field(..., description="Root entrypoint service")
+    status: str = Field(default="OK", description="Overall trace status: OK | ERROR | SLOW")
+    total_duration_ms: float = Field(..., description="End-to-end trace latency in milliseconds")
+    critical_path_duration_ms: float = Field(..., description="Sum duration of critical path execution")
+    span_count: int = Field(..., description="Total spans captured within this trace")
+    error_count: int = Field(default=0, description="Total spans with non-zero or error status")
+    root_start_iso: str = Field(..., description="Trace origin timestamp")
+    root_end_iso: str = Field(..., description="Trace completion timestamp")
+    spans: list[WaterfallSpanItem] = Field(default_factory=list, description="Ordered waterfall spans")
+    w3c_traceparent: str = Field(..., description="Root W3C traceparent header")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TraceSummaryItem(BaseModel):
+    trace_id: str = Field(..., description="32-character hexadecimal W3C trace identifier")
+    root_span_name: str = Field(..., description="Entrypoint operation name")
+    service_name: str = Field(..., description="Root service")
+    status: str = Field(default="OK", description="Trace status: OK | ERROR | SLOW")
+    status_code: int = Field(default=200, description="HTTP status code if applicable")
+    duration_ms: float = Field(..., description="Total duration in milliseconds")
+    span_count: int = Field(..., description="Total spans in trace")
+    error_count: int = Field(default=0, description="Count of error spans")
+    timestamp_iso: str = Field(..., description="Start timestamp")
+    ticker: Optional[str] = Field(None, description="Associated asset ticker if applicable")
+    tags: dict[str, Union[str, int, float, bool]] = Field(default_factory=dict, description="Summary attributes")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TraceQueryResponse(BaseModel):
+    total: int = Field(..., description="Total traces matching query filter")
+    traces: list[TraceSummaryItem] = Field(default_factory=list, description="Paginated or top traces")
+    active_trace_id: Optional[str] = Field(None, description="Trace ID selected for immediate waterfall viewing")
+    timestamp_iso: str = Field(..., description="Query timestamp")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
+
+class TraceSimulationRequest(BaseModel):
+    ticker: str = Field(default="AAPL", description="Asset symbol to simulate trace lifecycle for")
+    scenario: str = Field(default="SUCCESS", description="Execution scenario: SUCCESS | CACHE_MISS | SLOW_LLM | VECTOR_ERROR")
+    error_injected: bool = Field(default=False, description="Whether to inject synthetic failure")
+
+
+class TraceSimulationResponse(BaseModel):
+    status: str = Field(default="SIMULATED", description="Simulation status")
+    trace_id: str = Field(..., description="Generated W3C trace identifier")
+    ticker: str = Field(..., description="Asset symbol analyzed")
+    span_count: int = Field(..., description="Total spans generated across distributed hops")
+    total_duration_ms: float = Field(..., description="Simulated end-to-end duration")
+    waterfall: TraceWaterfallDetail = Field(..., description="Full simulated waterfall detail")
+
+
+# ==============================================================================
+# DAY 99: PRODUCTION INGRESS, DOMAINS & TLS 1.3 TERMINATION SCHEMAS
+# ==============================================================================
+
+class SecurityHeaderSpec(BaseModel):
+    header_name: str = Field(..., description="HTTP Security Response Header name")
+    directive_value: str = Field(..., description="Enforced header configuration value")
+    category: str = Field(default="HARDENING", description="Security category: TRANSPORT | FRAMING | CONTENT | PERMISSIONS")
+    is_compliant: bool = Field(default=True, description="Compliance verification state")
+    description: str = Field(..., description="Institutional rationale for header enforcement")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class TlsCertificateSpec(BaseModel):
+    domain: str = Field(..., description="Primary Subject Alternative Name (SAN)")
+    issuer: str = Field(..., description="Certificate Authority (e.g. Let's Encrypt / Cloudflare)")
+    tls_version: str = Field(default="TLSv1.3", description="Enforced TLS minimum protocol")
+    cipher_suite: str = Field(..., description="Negotiated strong elliptic curve cipher suite")
+    key_type: str = Field(default="ECDSA P-384", description="Cryptographic key type and curve size")
+    valid_from_iso: str = Field(..., description="Certificate valid from timestamp")
+    valid_until_iso: str = Field(..., description="Certificate expiration timestamp")
+    days_until_expiry: int = Field(..., description="Countdown days before automated renewal")
+    ocsp_stapling_enabled: bool = Field(default=True, description="Whether OCSP stapling is active")
+    hsts_preload_ready: bool = Field(default=True, description="Whether domain meets HSTS preload requirements")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class DomainRouteSpec(BaseModel):
+    hostname: str = Field(..., description="Fully Qualified Domain Name (FQDN)")
+    target_cluster: str = Field(..., description="Upstream service cluster")
+    routing_tier: str = Field(..., description="Tier: EDGE_API | WEB_APP | WEBSOCKET_STREAM")
+    port: int = Field(..., description="Upstream internal listening port")
+    protocols: list[str] = Field(default_factory=list, description="Supported protocol versions (e.g. HTTP/2, WSS)")
+    rate_limit: str = Field(..., description="Edge rate limit rule")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class RateLimitRuleSpec(BaseModel):
+    zone_name: str = Field(..., description="Edge token bucket zone name")
+    rate_expression: str = Field(..., description="Rate limit (e.g. 100r/m, 1000r/m)")
+    burst_capacity: int = Field(..., description="Burst capacity buffer")
+    target_tier: str = Field(..., description="Target traffic class: PUBLIC_API | AUTH_M2M | WEBSOCKET")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class ProductionIngressSpec(BaseModel):
+    ingress_controller: str = Field(default="nginx", description="Edge reverse proxy controller")
+    ssl_grade: str = Field(default="A+", description="SSL Labs benchmark rating")
+    security_score: int = Field(default=100, description="Overall edge security benchmark (0-100)")
+    certificate: TlsCertificateSpec = Field(..., description="Active TLS certificate specification")
+    security_headers: list[SecurityHeaderSpec] = Field(default_factory=list, description="Mandatory edge security headers")
+    routes: list[DomainRouteSpec] = Field(default_factory=list, description="Custom domain routing rules")
+    rate_limits: list[RateLimitRuleSpec] = Field(default_factory=list, description="Edge rate limiting rules")
+    raw_nginx_config: str = Field(..., description="Sanitized production Nginx reverse proxy configuration")
+    timestamp_iso: str = Field(..., description="Ingress spec evaluation timestamp")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class IngressVerificationItem(BaseModel):
+    check_name: str = Field(..., description="Ingress verification checkpoint name")
+    category: str = Field(..., description="Category: TLS | HEADERS | ROUTING | RATELIMIT")
+    status: str = Field(default="PASSED", description="Result: PASSED | WARNING | FAILED")
+    details: str = Field(..., description="Technical verification findings")
+
+
+class IngressVerificationReport(BaseModel):
+    status: str = Field(default="CERTIFIED", description="Overall verification outcome: CERTIFIED | DEGRADED")
+    ssl_grade: str = Field(default="A+", description="Assessed SSL Labs grade")
+    overall_score: int = Field(default=100, description="Overall compliance score (0-100)")
+    checks_total: int = Field(..., description="Total checkpoints evaluated")
+    checks_passed: int = Field(..., description="Total passing checkpoints")
+    checkpoints: list[IngressVerificationItem] = Field(default_factory=list, description="Detailed check breakdown")
+    timestamp_iso: str = Field(..., description="Verification timestamp")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
+
+# ==============================================================================
+# DAY 100: PHASE 3 CAPSTONE SEAL & PRODUCTION GO-LIVE SCHEMAS
+# ==============================================================================
+
+class ReadinessCheckItem(BaseModel):
+    day: int = Field(..., description="Associated milestone roadmap day (91-100)")
+    criterion_name: str = Field(..., description="Readiness checkpoint title")
+    subsystem: str = Field(..., description="Subsystem domain (DATABASE | CONTAINERS | IAAC | TELEMETRY | INGRESS)")
+    status: str = Field(default="CERTIFIED", description="Verification status: CERTIFIED | PENDING | FAILED")
+    details: str = Field(..., description="Verified technical outcome and invariant evidence")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class ProductionReadinessReport(BaseModel):
+    status: str = Field(default="CERTIFIED_FOR_PRODUCTION", description="Overall readiness certification status")
+    readiness_score: int = Field(default=100, description="Readiness compliance score (0-100)")
+    version: str = Field(default="v1.0.0-rc1", description="Release version candidate")
+    checks_passed: int = Field(..., description="Passing criteria count")
+    checks_total: int = Field(..., description="Total criteria evaluated")
+    criteria: list[ReadinessCheckItem] = Field(default_factory=list, description="Detailed 10-point checklist")
+    timestamp_iso: str = Field(..., description="Certification evaluation timestamp")
+    trace_id: str = Field(..., description="W3C trace context identifier")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class SmokeTestStep(BaseModel):
+    step_number: int = Field(..., description="Chronological sequence number")
+    name: str = Field(..., description="Step descriptor")
+    service: str = Field(..., description="Service boundary executed")
+    status: str = Field(default="SUCCESS", description="Step outcome: SUCCESS | FAILED")
+    duration_ms: float = Field(..., description="Execution latency in milliseconds")
+    details: str = Field(..., description="Step verification payload or result summary")
+
+
+class SmokeTestResult(BaseModel):
+    status: str = Field(default="SUCCESS", description="Overall smoke test outcome: SUCCESS | FAILED")
+    ticker: str = Field(..., description="Asset symbol analyzed during live test")
+    total_duration_ms: float = Field(..., description="End-to-end synthetic execution latency")
+    steps_passed: int = Field(..., description="Total passing smoke test steps")
+    steps_total: int = Field(..., description="Total executed steps")
+    steps: list[SmokeTestStep] = Field(default_factory=list, description="Ordered verification steps")
+    trace_id: str = Field(..., description="W3C trace identifier linking the synthetic test")
+    timestamp_iso: str = Field(..., description="Smoke test completion timestamp")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class GoLiveCertificate(BaseModel):
+    certificate_id: str = Field(..., description="Cryptographically unique certificate identifier")
+    title: str = Field(default="120-Day Automated Equity Research Engine • Production Go-Live Certificate", description="Certificate title")
+    phase: str = Field(default="Phase 3 Milestone 2: Live Cloud Orchestration & Production Observability", description="Certified milestone")
+    release_tag: str = Field(default="v1.0.0-rc1", description="Target release tag")
+    status: str = Field(default="PRODUCTION_READY", description="Certification state")
+    readiness_percentage: float = Field(default=100.0, description="Readiness score")
+    signed_by: str = Field(default="Antigravity 1% Systems Architect & Lead Engineer", description="Digital signatory")
+    total_days_certified: int = Field(default=100, description="Cumulative roadmap days completed")
+    codebase_metrics: dict[str, Union[str, int, float, bool]] = Field(default_factory=dict, description="Certified system metrics")
+    issued_at_iso: str = Field(..., description="Issuance timestamp")
+    signature_hash: str = Field(..., description="SHA-256 integrity signature hash")
+
+
+
+
+

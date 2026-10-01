@@ -22,8 +22,28 @@ import { ArchitectureDiagramViewer } from "./ArchitectureDiagramViewer";
 import { CodeQualityPanel } from "./CodeQualityPanel";
 import { ApiDocsBrowser } from "./ApiDocsBrowser";
 import { Phase2CapstoneReportPanel } from "./Phase2CapstoneReport";
+import { ContainerSpecViewer } from "./ContainerSpecViewer";
+import { CloudTopologyMap } from "./CloudTopologyMap";
+import { CloudHealthMatrix } from "./CloudHealthMatrix";
+import { EnvironmentProfileCard } from "./EnvironmentProfileCard";
+import { ProductionSeedingConsole } from "./ProductionSeedingConsole";
+import { PrometheusMetricsConsole } from "./PrometheusMetricsConsole";
+import { GrafanaDashboardSpecPanel } from "./GrafanaDashboardSpecPanel";
+import { TraceWaterfallExplorer } from "./TraceWaterfallExplorer";
+import { ProductionIngressPanel } from "./ProductionIngressPanel";
+import { ProductionSmokeTestPanel } from "./ProductionSmokeTestPanel";
 
 export type OpsTab =
+  | "capstone3"
+  | "metrics"
+  | "grafana"
+  | "waterfall"
+  | "ingress"
+  | "seeding"
+  | "env"
+  | "probes"
+  | "topology"
+  | "containers"
   | "capstone"
   | "docs"
   | "codequality"
@@ -62,6 +82,16 @@ interface TabConfig {
 }
 
 const OPS_TABS: TabConfig[] = [
+  { id: "capstone3", label: "Phase 3 Capstone", shortLabel: "Go-Live", icon: "🏆" },
+  { id: "metrics", label: "Prometheus Metrics", shortLabel: "Metrics", icon: "📊" },
+  { id: "grafana", label: "Grafana & SLOs", shortLabel: "Grafana", icon: "📈" },
+  { id: "waterfall", label: "Trace Waterfall", shortLabel: "Waterfall", icon: "🌊" },
+  { id: "ingress", label: "Production Ingress", shortLabel: "Ingress", icon: "🌐" },
+  { id: "seeding", label: "Production Seed", shortLabel: "Seed", icon: "🌱" },
+  { id: "env", label: "Env Profile", shortLabel: "Env", icon: "🛡️" },
+  { id: "probes", label: "Health Probes", shortLabel: "Probes", icon: "🩺" },
+  { id: "topology", label: "Cloud Topology", shortLabel: "Topology", icon: "☁️" },
+  { id: "containers", label: "Container Specs", shortLabel: "Containers", icon: "🐳" },
   { id: "capstone", label: "Phase 2 Capstone", shortLabel: "Capstone", icon: "🏆" },
   { id: "docs", label: "API Docs Explorer", shortLabel: "API Docs", icon: "📖" },
   { id: "codequality", label: "Code Quality", shortLabel: "Quality", icon: "🧹" },
@@ -132,7 +162,27 @@ export default function OperationsConsole({
       </div>
 
       {/* Active Operational Telemetry View */}
-      {activeOpsTab === "capstone" ? (
+      {activeOpsTab === "capstone3" ? (
+        <ProductionSmokeTestPanel />
+      ) : activeOpsTab === "metrics" ? (
+        <PrometheusMetricsConsole />
+      ) : activeOpsTab === "grafana" ? (
+        <GrafanaDashboardSpecPanel />
+      ) : activeOpsTab === "waterfall" ? (
+        <TraceWaterfallExplorer />
+      ) : activeOpsTab === "ingress" ? (
+        <ProductionIngressPanel />
+      ) : activeOpsTab === "seeding" ? (
+        <ProductionSeedingConsole />
+      ) : activeOpsTab === "env" ? (
+        <EnvironmentProfileCard />
+      ) : activeOpsTab === "probes" ? (
+        <CloudHealthMatrix />
+      ) : activeOpsTab === "topology" ? (
+        <CloudTopologyMap />
+      ) : activeOpsTab === "containers" ? (
+        <ContainerSpecViewer />
+      ) : activeOpsTab === "capstone" ? (
         <Phase2CapstoneReportPanel />
       ) : activeOpsTab === "docs" ? (
         <ApiDocsBrowser />
