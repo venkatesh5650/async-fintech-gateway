@@ -12,6 +12,10 @@ import asyncio
 import json
 import logging
 import sys
+from pathlib import Path
+
+# Ensure backend root is on sys.path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from fastapi.testclient import TestClient
 

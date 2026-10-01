@@ -229,13 +229,23 @@ async def get_market_history(
     Fetches real OHLCV timeframe candles from Yahoo Finance (5m, 15m, 1h, 4h, 1d)
     and merges with local database records.
     """
+    tf_sec_map = {
+        "5m": 300,
+        "15m": 900,
+        "1h": 3600,
+        "4h": 14400,
+        "1d": 86400,
+    }
+    step_sec = tf_sec_map.get(interval.lower(), 300)
+    raw_db_records: list[dict] = []
+    db_records: list[dict] = []
+
     try:
         yf_records = await asyncio.to_thread(_fetch_yfinance_history_sync, ticker, interval)
     except Exception as e:
         logging.warning(f"⚠️ [YFINANCE HISTORY WARN] Could not fetch {interval} history for {ticker}: {e}")
         yf_records = []
 
-    db_records = []
     try:
         async with AsyncSessionLocal() as session:
             ticker_stmt = select(Ticker).where(Ticker.symbol == ticker.upper())
@@ -262,16 +272,6 @@ async def get_market_history(
                     for item in pricing_list
                     if not math.isnan(float(item.close_price)) and float(item.close_price) > 5.0
                 ]
-
-                # Group DB records into the active timeframe interval buckets
-                tf_sec_map = {
-                    "5m": 300,
-                    "15m": 900,
-                    "1h": 3600,
-                    "4h": 14400,
-                    "1d": 86400,
-                }
-                step_sec = tf_sec_map.get(interval.lower(), 300)
 
                 buckets = {}
                 for r in raw_db_records:
@@ -304,7 +304,7 @@ async def get_market_history(
     latest_yf_time = yf_records[-1]["time"]
 
     # Only apply DB live telemetry to update/append the SINGLE active live candle
-    if raw_db_records:
+    if raw_db_records and step_sec:
         latest_db = raw_db_records[-1]
         live_bucket_time = latest_db["time"] - (latest_db["time"] % step_sec)
 

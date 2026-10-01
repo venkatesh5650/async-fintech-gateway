@@ -74,10 +74,10 @@ export default function DynamicDashboardPage() {
         setChartData(history);
       } else {
         const errPayload = await res.json().catch(() => ({}));
-        console.error("Failed to fetch historical market data:", res.status, errPayload);
+        console.warn("Failed to fetch historical market data:", res.status, errPayload);
       }
     } catch (err) {
-      console.error("Error fetching historical market data:", err);
+      console.warn("Error fetching historical market data:", err);
     }
   }, [ticker, timeframe]);
 
