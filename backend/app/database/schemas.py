@@ -569,7 +569,7 @@ class ChaosSystemOverview(BaseModel):
 
 
 # ==================================================
-# MASTER REGRESSION AUDIT CONTRACTS (DAY 86)
+# SPEC-REGRESSION: MASTER REGRESSION AUDIT CONTRACTS
 # ==================================================
 
 
@@ -607,7 +607,7 @@ class MasterRegressionReport(BaseModel):
 
 
 # ==================================================
-# ARCHITECTURE BLUEPRINT CONTRACTS (DAY 87)
+# SPEC-ARCHITECTURE: ARCHITECTURE BLUEPRINT CONTRACTS
 # ==================================================
 
 
@@ -648,7 +648,7 @@ class SystemArchitectureTopology(BaseModel):
 
 
 # ==================================================
-# CODE QUALITY & STATIC ANALYSIS CONTRACTS (DAY 88)
+# SPEC-CODE-QUALITY: CODE QUALITY & STATIC ANALYSIS CONTRACTS
 # ==================================================
 
 
@@ -677,7 +677,7 @@ class CodeQualityReport(BaseModel):
 
 
 # ==================================================
-# PHASE 2 CAPSTONE CERTIFICATION CONTRACTS (DAY 90)
+# SPEC-PHASE2-CAPSTONE: PHASE 2 CAPSTONE CERTIFICATION CONTRACTS
 # ==================================================
 
 
@@ -945,7 +945,7 @@ class SeedExecutionResponse(BaseModel):
 
 
 # ==================================================
-# PROMETHEUS METRIC EXPORTERS & TELEMETRY CONTRACTS (DAY 96)
+# SPEC-TELEMETRY-METRICS: PROMETHEUS METRIC EXPORTERS & TELEMETRY CONTRACTS
 # ==================================================
 
 
@@ -1005,7 +1005,7 @@ class TrafficSimulationResponse(BaseModel):
 
 
 # ==================================================
-# GRAFANA DASHBOARD & SLI/SLO SPECIFICATIONS (DAY 97)
+# SPEC-GRAFANA-OBSERVABILITY: GRAFANA DASHBOARD & SLI/SLO SPECIFICATIONS
 # ==================================================
 
 
@@ -1082,7 +1082,7 @@ class AlertDispatchTestResponse(BaseModel):
 
 
 # ==============================================================================
-# DAY 98: DISTRIBUTED TRACING & W3C SPAN WATERFALL SCHEMAS
+# SPEC-DISTRIBUTED-TRACING: DISTRIBUTED TRACING & W3C SPAN WATERFALL SCHEMAS
 # ==============================================================================
 
 class WaterfallSpanItem(BaseModel):
@@ -1163,7 +1163,7 @@ class TraceSimulationResponse(BaseModel):
 
 
 # ==============================================================================
-# DAY 99: PRODUCTION INGRESS, DOMAINS & TLS 1.3 TERMINATION SCHEMAS
+# SPEC-PRODUCTION-INGRESS: PRODUCTION INGRESS, DOMAINS & TLS 1.3 TERMINATION SCHEMAS
 # ==============================================================================
 
 class SecurityHeaderSpec(BaseModel):
@@ -1245,11 +1245,11 @@ class IngressVerificationReport(BaseModel):
 
 
 # ==============================================================================
-# DAY 100: PHASE 3 CAPSTONE SEAL & PRODUCTION GO-LIVE SCHEMAS
+# SPEC-PHASE3-CAPSTONE: PHASE 3 CAPSTONE SEAL & PRODUCTION GO-LIVE SCHEMAS
 # ==============================================================================
 
 class ReadinessCheckItem(BaseModel):
-    day: int = Field(..., description="Associated milestone roadmap day (91-100)")
+    day: int = Field(..., description="Associated milestone checkpoint index")
     criterion_name: str = Field(..., description="Readiness checkpoint title")
     subsystem: str = Field(..., description="Subsystem domain (DATABASE | CONTAINERS | IAAC | TELEMETRY | INGRESS)")
     status: str = Field(default="CERTIFIED", description="Verification status: CERTIFIED | PENDING | FAILED")

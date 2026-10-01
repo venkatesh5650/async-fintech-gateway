@@ -926,7 +926,7 @@ export interface SeedExecutionResponse {
 }
 
 // ==================================================
-// PROMETHEUS METRIC EXPORTERS & TELEMETRY TYPES (DAY 96)
+// SPEC-TELEMETRY-METRICS: PROMETHEUS METRIC EXPORTERS & TELEMETRY TYPES
 // ==================================================
 
 export interface GoldenSignalsMetrics {
@@ -985,7 +985,7 @@ export interface TrafficSimulationResponse {
 }
 
 // ==================================================
-// GRAFANA DASHBOARD & SLI/SLO TYPES (DAY 97)
+// SPEC-GRAFANA-OBSERVABILITY: GRAFANA DASHBOARD & SLI/SLO TYPES
 // ==================================================
 
 export interface GrafanaPanelSpec {

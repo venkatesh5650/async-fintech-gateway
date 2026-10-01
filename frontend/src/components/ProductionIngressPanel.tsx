@@ -89,7 +89,7 @@ export function ProductionIngressPanel() {
               Production Ingress, Custom Domains & TLS 1.3 Termination
             </h2>
             <span className="px-2.5 py-0.5 text-xs font-mono font-semibold rounded-full bg-emerald-900/40 border border-emerald-700/60 text-emerald-300">
-              Day 99 • Production Observability
+              SPEC-PRODUCTION-INGRESS • Production Ingress & TLS
             </span>
           </div>
           <p className="text-xs text-gray-400 mt-1">

@@ -1,6 +1,6 @@
 """
 Distributed Tracing Aggregator & W3C Span Waterfall Telemetry Engine.
-Day 98 - Production Observability & Live Capstone Seal.
+SPEC-DISTRIBUTED-TRACING - Production Observability & Distributed Systems Trace Telemetry.
 
 Provides hierarchical span collection, Gantt timeline relative offset/width calculations,
 critical path detection, W3C traceparent lineage serialization, and multi-hop distributed trace querying.

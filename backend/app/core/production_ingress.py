@@ -1,6 +1,6 @@
 """
 Production Ingress, Custom Domains, and TLS/SSL Termination Manager.
-Day 99 - Production Observability & Live Capstone Seal.
+SPEC-PRODUCTION-INGRESS - Edge Reverse Proxy, TLS 1.3 Termination & Domain Hardening.
 
 Manages zero-trust edge reverse proxy contracts, TLS 1.3 cryptographic termination,
 HSTS preload enforcement, mandatory HTTP security headers, and domain routing topologies.

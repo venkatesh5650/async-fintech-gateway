@@ -97,7 +97,7 @@ export function ProductionSmokeTestPanel() {
                   Phase 3 Capstone Seal • Production Go-Live Certification
                 </h2>
                 <span className="px-2.5 py-0.5 text-xs font-mono font-bold rounded-full bg-amber-900/40 border border-amber-700/60 text-amber-300">
-                  Day 100 • v1.0.0-rc1
+                  SPEC-PHASE3-CAPSTONE • v1.0.0-rc1
                 </span>
               </div>
               <p className="text-xs text-gray-400 mt-1">
@@ -277,7 +277,7 @@ export function ProductionSmokeTestPanel() {
                 <span>📋</span> Phase 3 Institutional Go-Live Verification Criteria
               </h3>
               <p className="text-xs text-gray-400 mt-0.5">
-                Every technical milestone from Day 91 to Day 100 evaluated against strict production invariants.
+                Evaluated against strict production readiness invariants across microservices.
               </p>
             </div>
             <span className="px-3 py-1 text-xs font-mono font-bold rounded-lg bg-emerald-950 border border-emerald-600 text-emerald-300">

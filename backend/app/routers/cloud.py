@@ -260,7 +260,7 @@ async def run_production_seed(
 
 
 # ------------------------------------------------------------------------------
-# Prometheus Metric Exporters & Latency Telemetry (Day 96)
+# SPEC-TELEMETRY-METRICS: Prometheus Metric Exporters & Latency Telemetry
 # ------------------------------------------------------------------------------
 
 
@@ -315,7 +315,7 @@ async def simulate_traffic_endpoint(
 
 
 # ------------------------------------------------------------------------------
-# Grafana Dashboard Specifications & SLI/SLO Alerts (Day 97)
+# SPEC-GRAFANA-OBSERVABILITY: Grafana Dashboard Specifications & SLI/SLO Alerts
 # ------------------------------------------------------------------------------
 
 
@@ -397,7 +397,7 @@ async def test_alert_dispatch(
 
 
 # ==============================================================================
-# DAY 98: DISTRIBUTED TRACING & W3C SPAN WATERFALL ENDPOINTS
+# SPEC-DISTRIBUTED-TRACING: DISTRIBUTED TRACING & W3C SPAN WATERFALL ENDPOINTS
 # ==============================================================================
 
 @router.get(
@@ -465,7 +465,7 @@ async def simulate_distributed_trace(
 
 
 # ==============================================================================
-# DAY 99: PRODUCTION INGRESS, DOMAINS & TLS 1.3 TERMINATION ENDPOINTS
+# SPEC-PRODUCTION-INGRESS: PRODUCTION INGRESS, DOMAINS & TLS 1.3 TERMINATION ENDPOINTS
 # ==============================================================================
 
 @router.get(
@@ -501,7 +501,7 @@ async def verify_production_ingress_security(
 
 
 # ==============================================================================
-# DAY 100: PHASE 3 CAPSTONE SEAL & PRODUCTION GO-LIVE ENDPOINTS
+# SPEC-PHASE3-CAPSTONE: PHASE 3 CAPSTONE SEAL & PRODUCTION GO-LIVE ENDPOINTS
 # ==============================================================================
 
 @router.get(
@@ -509,7 +509,7 @@ async def verify_production_ingress_security(
     response_model=ProductionReadinessReport,
     status_code=status.HTTP_200_OK,
     summary="Evaluate Production Go-Live Readiness (10-Point Checklist)",
-    description="Aggregates verified criteria across Days 91-100 including Docker, IaC, health probes, secrets, pgvector, metrics, SLOs, tracing, and ingress.",
+    description="Aggregates verified criteria across foundational cloud infrastructure including Docker, IaC, health probes, secrets, pgvector, metrics, SLOs, tracing, and ingress.",
 )
 async def get_production_readiness_report(
     traceparent: Optional[str] = Header(None, alias="traceparent"),

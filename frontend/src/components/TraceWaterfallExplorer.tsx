@@ -171,7 +171,7 @@ export function TraceWaterfallExplorer() {
               W3C Distributed Trace Waterfall & Span Explorer
             </h2>
             <span className="px-2.5 py-0.5 text-xs font-mono font-semibold rounded-full bg-cyan-900/40 border border-cyan-700/60 text-cyan-300">
-              Day 98 • Production Observability
+              SPEC-DISTRIBUTED-TRACING • Production Observability
             </span>
           </div>
           <p className="text-xs text-gray-400 mt-1">
