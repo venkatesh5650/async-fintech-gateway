@@ -12,9 +12,6 @@ services:
     dockerfilePath: Dockerfile.api
     healthCheckPath: /health
     autoDeploy: true
-    domains:
-      - api.fintech-gateway.live
-      - ws.fintech-gateway.live
     envVars:
       - key: DATABASE_URL
         fromDatabase:
