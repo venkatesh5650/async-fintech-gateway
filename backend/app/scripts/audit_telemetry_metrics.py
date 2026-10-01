@@ -1,4 +1,4 @@
-"""Audit Suite: Day 96 Prometheus Metric Exporters & Latency Histogram Telemetry.
+"""System Audit Suite: Prometheus Metric Exporters & Latency Histogram Telemetry (SPEC-TELEMETRY-METRICS).
 
 Validates OpenMetrics /metrics scrape target, latency histogram distributions,
 multi-subsystem gauges (Redis streams, cache hit rate, circuit breakers),
@@ -14,14 +14,14 @@ from app.core.telemetry_metrics import MetricsRegistryManager
 from app.database.schemas import MetricSummaryReport
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] [PROMETHEUS-AUDIT] %(message)s")
-logger = logging.getLogger("audit_metrics")
+logger = logging.getLogger("audit_telemetry_metrics")
 
 client = TestClient(app)
 
 
-def audit_day96_metrics():
+def run_audit() -> bool:
     logger.info("=" * 80)
-    logger.info("[DAY 96 AUDIT] PROMETHEUS METRIC EXPORTERS & LATENCY HISTOGRAM TELEMETRY")
+    logger.info("[SYSTEM AUDIT: SPEC-TELEMETRY-METRICS] PROMETHEUS METRIC EXPORTERS & LATENCY HISTOGRAMS")
     logger.info("=" * 80)
 
     # --------------------------------------------------------------------------
@@ -77,7 +77,6 @@ def audit_day96_metrics():
     # Assertion 3: Multi-Subsystem Gauges (Stream Lag, Cache, Circuit Breakers)
     # --------------------------------------------------------------------------
     logger.info("\n[3/5] Testing Multi-Subsystem Gauges & Distributed Cache Counters...")
-    # Mutate subsystem telemetry
     mgr.update_stream_lag("intel_stream", 7)
     mgr.record_cache_event(hit=True, cache_domain="market_analytics")
     mgr.record_cache_event(hit=True, cache_domain="market_analytics")
@@ -144,14 +143,18 @@ def audit_day96_metrics():
     )
 
     logger.info("=" * 80)
-    logger.info("🏁 DAY 96 PROMETHEUS TELEMETRY AUDIT COMPLETE: 5/5 ASSERTIONS PASSED (100%)")
+    logger.info("🏁 AUDIT SPEC-TELEMETRY-METRICS COMPLETE: 5/5 ASSERTIONS PASSED (100%)")
     logger.info("=" * 80)
     return True
 
 
+# Backward compatibility alias
+audit_telemetry_metrics = run_audit
+
+
 if __name__ == "__main__":
     try:
-        success = audit_day96_metrics()
+        success = run_audit()
         if not success:
             sys.exit(1)
     except AssertionError as ae:

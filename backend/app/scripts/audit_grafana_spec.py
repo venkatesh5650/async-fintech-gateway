@@ -1,4 +1,4 @@
-"""Audit Suite: Day 97 Grafana Dashboard Specifications & SLI/SLO Alert Thresholds.
+"""System Audit Suite: Grafana Dashboard Specifications & SLI/SLO Alert Thresholds (SPEC-GRAFANA-OBSERVABILITY).
 
 Validates declarative Grafana Dashboard JSON models, Prometheus alerting rules,
 real-time SRE SLI/SLO error budget and burn rate evaluation, and alert dispatch triggers.
@@ -13,14 +13,14 @@ from app.core.grafana_spec import GrafanaSpecManager, SloThresholdEvaluator
 from app.database.schemas import GrafanaDashboardSpec, SloStatusReport, AlertDispatchTestResponse
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] [GRAFANA-AUDIT] %(message)s")
-logger = logging.getLogger("audit_grafana")
+logger = logging.getLogger("audit_grafana_spec")
 
 client = TestClient(app)
 
 
-def audit_day97_grafana():
+def run_audit() -> bool:
     logger.info("=" * 80)
-    logger.info("[DAY 97 AUDIT] GRAFANA DASHBOARD SPECIFICATIONS & SLI/SLO ALERT THRESHOLDS")
+    logger.info("[SYSTEM AUDIT: SPEC-GRAFANA-OBSERVABILITY] GRAFANA DASHBOARD SPECS & SLI/SLO ALERTS")
     logger.info("=" * 80)
 
     test_trace_id = "7bf92f3577b34da6a3ce929d0e0e9797"
@@ -149,14 +149,18 @@ def audit_day97_grafana():
     )
 
     logger.info("=" * 80)
-    logger.info("🏁 DAY 97 GRAFANA & SLI/SLO AUDIT COMPLETE: 5/5 ASSERTIONS PASSED (100%)")
+    logger.info("🏁 AUDIT SPEC-GRAFANA-OBSERVABILITY COMPLETE: 5/5 ASSERTIONS PASSED (100%)")
     logger.info("=" * 80)
     return True
 
 
+# Backward compatibility alias
+audit_grafana_spec = run_audit
+
+
 if __name__ == "__main__":
     try:
-        success = audit_day97_grafana()
+        success = run_audit()
         if not success:
             sys.exit(1)
     except AssertionError as ae:

@@ -1,5 +1,4 @@
-"""
-Day 98 Certification Audit: Distributed Tracing UI Visualization & W3C Span Waterfall Explorer.
+"""System Audit Suite: Distributed Tracing & W3C Span Waterfall Explorer (SPEC-DISTRIBUTED-TRACING).
 
 Validates:
 1. Synthetic Distributed Trace Generation & W3C Traceparent Header Compliance.
@@ -9,20 +8,19 @@ Validates:
 5. REST API Endpoints GET /v1/cloud/traces/{trace_id}/waterfall and POST /v1/cloud/traces/simulate.
 """
 
-import sys
 import logging
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.core.trace_aggregator import trace_aggregator, TraceAggregator
+from app.core.trace_aggregator import TraceAggregator
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] [DAY98_AUDIT] %(message)s")
-logger = logging.getLogger("audit_day98_tracing")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] [TRACING-AUDIT] %(message)s")
+logger = logging.getLogger("audit_trace_waterfall")
 
 
-def run_audit() -> None:
+def run_audit() -> bool:
     logger.info("=" * 80)
-    logger.info("[DAY 98 AUDIT] DISTRIBUTED TRACING & W3C SPAN WATERFALL EXPLORER")
+    logger.info("[SYSTEM AUDIT: SPEC-DISTRIBUTED-TRACING] DISTRIBUTED TRACING & W3C WATERFALL EXPLORER")
     logger.info("=" * 80)
 
     client = TestClient(app)
@@ -119,8 +117,13 @@ def run_audit() -> None:
     )
 
     logger.info("=" * 80)
-    logger.info("🏁 DAY 98 DISTRIBUTED TRACING AUDIT COMPLETE: 5/5 ASSERTIONS PASSED (100%)")
+    logger.info("🏁 AUDIT SPEC-DISTRIBUTED-TRACING COMPLETE: 5/5 ASSERTIONS PASSED (100%)")
     logger.info("=" * 80)
+    return True
+
+
+# Backward compatibility alias
+audit_trace_waterfall = run_audit
 
 
 if __name__ == "__main__":
