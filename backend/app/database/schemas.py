@@ -1362,6 +1362,23 @@ class GraphTopologyResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+# ==============================================================================
+# SPEC-GRAPH-STREAMING: REAL-TIME STREAMING & LLM TOKEN TELEMETRY SCHEMAS
+# ==============================================================================
+
+class LLMNodeTokenCostSpec(BaseModel):
+    model_name: str = Field(default="llama-3.3-70b-versatile", description="Underlying LLM or embedding model descriptor")
+    prompt_tokens: int = Field(default=0, description="Input prompt token count")
+    completion_tokens: int = Field(default=0, description="Generated response token count")
+    total_tokens: int = Field(default=0, description="Sum of prompt and completion tokens")
+    prompt_cost_usd: float = Field(default=0.0, description="Calculated input cost ($0.59 / 1M tokens)")
+    completion_cost_usd: float = Field(default=0.0, description="Calculated generation cost ($0.79 / 1M tokens)")
+    total_cost_usd: float = Field(default=0.0, description="Total node operational cost in USD")
+    cache_hit: bool = Field(default=False, description="Whether prompt prefix cache hit was achieved")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class AgentNodeExecutionStep(BaseModel):
     step_number: int = Field(..., description="Ordered execution sequence (1-indexed)")
     node_id: str = Field(..., description="Node invoked during this step")
@@ -1372,6 +1389,7 @@ class AgentNodeExecutionStep(BaseModel):
     output_state_delta: dict[str, Any] = Field(default_factory=dict, description="State channels mutated by node")
     messages_added_count: int = Field(default=0, description="New message objects appended to history")
     tokens_estimated: int = Field(default=0, description="LLM prompt + completion token usage")
+    token_cost: Optional[LLMNodeTokenCostSpec] = Field(default=None, description="Granular LLM token and cost breakdown")
     timestamp_iso: str = Field(..., description="Step execution timestamp")
 
     model_config = ConfigDict(populate_by_name=True)
@@ -1383,6 +1401,8 @@ class GraphExecutionTraceResponse(BaseModel):
     scenario: str = Field(..., description="Simulation scenario: NOMINAL | RETRY_LOOP | TOOL_EXPEDITION | RAG_FAILURE")
     status: str = Field(default="SUCCESS", description="Final run status: SUCCESS | DEGRADED | FAILED")
     total_duration_ms: float = Field(..., description="End-to-end multi-agent execution duration")
+    total_tokens_consumed: int = Field(default=0, description="Cumulative tokens consumed across all steps")
+    total_cost_usd: float = Field(default=0.0, description="Cumulative operational cost in USD")
     final_signal: str = Field(..., description="Deterministic signal outcome: BUY | SELL | HOLD | INVALID")
     steps_count: int = Field(..., description="Total execution steps traversed")
     steps: list[AgentNodeExecutionStep] = Field(default_factory=list, description="Chronological execution trace")
@@ -1399,7 +1419,32 @@ class GraphSimulationRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class GraphStreamingEvent(BaseModel):
+    event_type: str = Field(..., description="Stream frame kind: step_start | step_complete | trace_complete")
+    execution_id: str = Field(..., description="Unique LangGraph execution run identifier")
+    step_number: int = Field(..., description="Current step index within execution sequence")
+    node_id: str = Field(..., description="Executing node identifier: agent | tools | reporting | gatekeeper | __end__")
+    node_label: str = Field(..., description="Human-readable node label")
+    status: str = Field(default="SUCCESS", description="Step execution status: RUNNING | SUCCESS | RETRY | FAILED")
+    duration_ms: float = Field(default=0.0, description="Elapsed latency in milliseconds for step")
+    token_cost: Optional[LLMNodeTokenCostSpec] = Field(default=None, description="Granular token consumption and USD cost")
+    state_delta: dict[str, Any] = Field(default_factory=dict, description="State channels mutated during this step")
+    timestamp_iso: str = Field(..., description="Event generation timestamp")
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
+class AgentTokenSummaryReport(BaseModel):
+    total_runs_analyzed: int = Field(..., description="Count of buffered runs included in calculation")
+    total_prompt_tokens: int = Field(..., description="Cumulative input tokens consumed")
+    total_completion_tokens: int = Field(..., description="Cumulative output tokens generated")
+    total_tokens: int = Field(..., description="Cumulative total tokens across all agents and tools")
+    total_cost_usd: float = Field(..., description="Aggregate monetary cost in USD")
+    avg_tokens_per_run: float = Field(..., description="Mean tokens consumed per investment thesis")
+    avg_cost_per_run_usd: float = Field(..., description="Mean USD cost per thesis generation")
+    model_distribution: dict[str, int] = Field(default_factory=dict, description="Token breakdown by model architecture")
+    by_node: dict[str, LLMNodeTokenCostSpec] = Field(default_factory=dict, description="Per-node cumulative token and cost allocation")
+    timestamp_iso: str = Field(..., description="Report generation timestamp")
+    trace_id: str = Field(..., description="W3C trace context identifier")
 
-
+    model_config = ConfigDict(populate_by_name=True)

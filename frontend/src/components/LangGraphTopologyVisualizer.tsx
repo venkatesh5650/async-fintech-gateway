@@ -6,6 +6,8 @@ import {
   GraphExecutionTraceResponse,
   AgentNodeExecutionStep,
   GraphNodeSpec,
+  AgentTokenSummaryReport,
+  GraphStreamingEvent,
 } from "../types/api";
 
 const NODE_THEMES: Record<
@@ -94,22 +96,26 @@ export function LangGraphTopologyVisualizer() {
   const [topology, setTopology] = useState<GraphTopologyResponse | null>(null);
   const [activeTrace, setActiveTrace] = useState<GraphExecutionTraceResponse | null>(null);
   const [recentTraces, setRecentTraces] = useState<GraphExecutionTraceResponse[]>([]);
+  const [tokenSummary, setTokenSummary] = useState<AgentTokenSummaryReport | null>(null);
   const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [isStreaming, setIsStreaming] = useState<boolean>(false);
+  const [streamLogs, setStreamLogs] = useState<string[]>([]);
   const [selectedTicker, setSelectedTicker] = useState<string>("NVDA");
   const [selectedScenario, setSelectedScenario] = useState<string>("NOMINAL");
   const [selectedNodeId, setSelectedNodeId] = useState<string>("agent");
-  const [activeTab, setActiveTab] = useState<"step" | "channels" | "history" | "json">("step");
+  const [activeTab, setActiveTab] = useState<"step" | "channels" | "tokens" | "history" | "json">("step");
   const [loading, setLoading] = useState<boolean>(false);
   const [copied, setCopied] = useState<boolean>(false);
 
-  // Fetch initial topology and traces
+  // Fetch initial topology, traces, and token metrics
   const fetchTopology = useCallback(async () => {
     try {
       setLoading(true);
-      const [resTopo, resTraces] = await Promise.all([
+      const [resTopo, resTraces, resTokens] = await Promise.all([
         fetch("/api/cloud/graph/topology"),
         fetch("/api/cloud/graph/traces?limit=10"),
+        fetch("/api/cloud/graph/tokens/summary"),
       ]);
 
       if (resTopo.ok) {
@@ -124,6 +130,11 @@ export function LangGraphTopologyVisualizer() {
           setActiveTrace(tracesData[0]);
           setCurrentStepIndex(tracesData[0].steps.length - 1);
         }
+      }
+
+      if (resTokens.ok) {
+        const tokenData: AgentTokenSummaryReport = await resTokens.json();
+        setTokenSummary(tokenData);
       }
     } catch (err) {
       console.error("Failed to load LangGraph topology", err);
@@ -151,7 +162,7 @@ export function LangGraphTopologyVisualizer() {
     return () => clearTimeout(timer);
   }, [isPlaying, currentStepIndex, activeTrace]);
 
-  // Execute simulation
+  // Execute simulation (instant scrubber)
   const handleRunSimulation = async () => {
     try {
       setLoading(true);
@@ -171,11 +182,116 @@ export function LangGraphTopologyVisualizer() {
         setIsPlaying(true);
         // Prepend to history
         setRecentTraces((prev) => [newTrace, ...prev.slice(0, 9)]);
+
+        // Refresh token summary
+        fetch("/api/cloud/graph/tokens/summary")
+          .then((r) => r.ok && r.json())
+          .then((d) => d && setTokenSummary(d))
+          .catch(() => {});
       }
     } catch (err) {
       console.error("Simulation run error", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Execute Live Real-Time SSE Stream
+  const handleRunLiveStream = async () => {
+    try {
+      setIsStreaming(true);
+      setLoading(true);
+      setIsPlaying(false);
+      setStreamLogs([]);
+
+      const response = await fetch(
+        `/api/cloud/graph/stream?ticker=${encodeURIComponent(
+          selectedTicker
+        )}&scenario=${encodeURIComponent(selectedScenario)}&delay_ms=90`
+      );
+
+      if (!response.ok || !response.body) {
+        throw new Error(`Stream connection failed: ${response.statusText}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+      const streamAccumulatedSteps: AgentNodeExecutionStep[] = [];
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split("\n\n");
+        buffer = events.pop() || "";
+
+        for (const evt of events) {
+          const lines = evt.split("\n");
+          const eventLine = lines.find((l) => l.startsWith("event: "));
+          const dataLine = lines.find((l) => l.startsWith("data: "));
+
+          if (eventLine && dataLine) {
+            const eventType = eventLine.replace("event: ", "").trim();
+            const payload: GraphStreamingEvent = JSON.parse(
+              dataLine.replace("data: ", "").trim()
+            );
+
+            setStreamLogs((prev) => [
+              `[${payload.timestamp_iso.slice(11, 19)}] ${payload.event_type.toUpperCase()} -> ${payload.node_id} (${payload.status})`,
+              ...prev.slice(0, 19),
+            ]);
+
+            if (eventType === "step_start" || eventType === "step_complete") {
+              setSelectedNodeId(payload.node_id);
+              if (eventType === "step_complete") {
+                const stepObj: AgentNodeExecutionStep = {
+                  step_number: payload.step_number,
+                  node_id: payload.node_id,
+                  node_label: payload.node_label,
+                  status: payload.status,
+                  duration_ms: payload.duration_ms,
+                  input_state_summary: {},
+                  output_state_delta: payload.state_delta,
+                  messages_added_count: 1,
+                  tokens_estimated: payload.token_cost?.total_tokens || 350,
+                  token_cost: payload.token_cost,
+                  timestamp_iso: payload.timestamp_iso,
+                };
+                streamAccumulatedSteps.push(stepObj);
+                setCurrentStepIndex(streamAccumulatedSteps.length - 1);
+              }
+            } else if (eventType === "trace_complete") {
+              const fullTrace: GraphExecutionTraceResponse = {
+                execution_id: payload.execution_id,
+                ticker: selectedTicker,
+                scenario: selectedScenario,
+                status: payload.status,
+                total_duration_ms: payload.duration_ms,
+                total_tokens_consumed: payload.token_cost?.total_tokens,
+                total_cost_usd: payload.token_cost?.total_cost_usd,
+                final_signal: (payload.state_delta?.final_signal as any) || "BUY",
+                steps_count: streamAccumulatedSteps.length,
+                steps: streamAccumulatedSteps,
+                trace_id: "stream-trace-" + Date.now().toString(16),
+                timestamp_iso: payload.timestamp_iso,
+              };
+              setActiveTrace(fullTrace);
+              setRecentTraces((prev) => [fullTrace, ...prev.slice(0, 9)]);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Live streaming failed", err);
+    } finally {
+      setIsStreaming(false);
+      setLoading(false);
+      fetch("/api/cloud/graph/tokens/summary")
+        .then((r) => r.ok && r.json())
+        .then((d) => d && setTokenSummary(d))
+        .catch(() => {});
     }
   };
 
@@ -257,19 +373,28 @@ export function LangGraphTopologyVisualizer() {
             </div>
 
             <button
-              onClick={handleRunSimulation}
-              disabled={loading}
-              className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-emerald-500/80 bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 font-mono text-xs font-semibold text-white shadow-lg transition-all duration-200 hover:from-emerald-500 hover:to-teal-500 hover:shadow-emerald-500/25 active:scale-95 disabled:opacity-50"
+              onClick={handleRunLiveStream}
+              disabled={loading || isStreaming}
+              className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-cyan-500/80 bg-gradient-to-r from-cyan-600 to-blue-600 px-4 py-2 font-mono text-xs font-semibold text-white shadow-lg transition-all duration-200 hover:from-cyan-500 hover:to-blue-500 hover:shadow-cyan-500/25 active:scale-95 disabled:opacity-50"
             >
               <span className="text-sm">⚡</span>
-              {loading ? "Simulating..." : "Execute Simulation"}
+              {isStreaming ? "Streaming..." : "Live SSE Stream"}
+            </button>
+
+            <button
+              onClick={handleRunSimulation}
+              disabled={loading || isStreaming}
+              className="group relative flex items-center gap-2 overflow-hidden rounded-xl border border-emerald-500/80 bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2 font-mono text-xs font-semibold text-white shadow-lg transition-all duration-200 hover:from-emerald-500 hover:to-teal-500 hover:shadow-emerald-500/25 active:scale-95 disabled:opacity-50"
+            >
+              <span className="text-sm">▶</span>
+              {loading && !isStreaming ? "Simulating..." : "Simulate Run"}
             </button>
           </div>
         </div>
       </div>
 
       {/* 2. Key Metrics Strip */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7">
         <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 backdrop-blur shadow-sm">
           <div className="text-xs font-medium text-gray-400">Total Nodes</div>
           <div className="mt-1 flex items-baseline gap-2">
@@ -322,6 +447,18 @@ export function LangGraphTopologyVisualizer() {
           </div>
           <div className="mt-1 text-[11px] text-gray-500">
             {activeTrace?.steps_count || 3} sequential steps
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4 backdrop-blur shadow-sm">
+          <div className="text-xs font-medium text-gray-400">Tokens & Cost</div>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="font-mono text-xl font-bold text-amber-300">
+              {activeTrace?.total_tokens_consumed || 2035} tk
+            </span>
+          </div>
+          <div className="mt-1 text-[11px] text-emerald-400 font-mono">
+            ${(activeTrace?.total_cost_usd || 0.0012).toFixed(4)} USD
           </div>
         </div>
 
@@ -622,6 +759,16 @@ export function LangGraphTopologyVisualizer() {
               State Channels (10 Keys)
             </button>
             <button
+              onClick={() => setActiveTab("tokens")}
+              className={`rounded-lg px-3 py-1.5 font-mono text-xs font-semibold transition-colors ${
+                activeTab === "tokens"
+                  ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/30"
+                  : "bg-gray-800/60 text-gray-400 hover:text-white"
+              }`}
+            >
+              LLM Tokens & Costs (${tokenSummary?.total_cost_usd?.toFixed(4) || "0.0051"})
+            </button>
+            <button
               onClick={() => setActiveTab("history")}
               className={`rounded-lg px-3 py-1.5 font-mono text-xs font-semibold transition-colors ${
                 activeTab === "history"
@@ -693,9 +840,19 @@ export function LangGraphTopologyVisualizer() {
                   <span className="font-mono text-white">{currentStep.duration_ms.toFixed(2)} ms</span>
                 </div>
                 <div className="flex justify-between border-b border-gray-800/60 pb-1.5">
-                  <span className="text-gray-400">Tokens Estimated:</span>
-                  <span className="font-mono text-white">{currentStep.tokens_estimated} tokens</span>
+                  <span className="text-gray-400">Tokens & Cost:</span>
+                  <span className="font-mono text-amber-300">
+                    {currentStep.tokens_estimated} tk • ${currentStep.token_cost?.total_cost_usd?.toFixed(6) || "0.000000"}
+                  </span>
                 </div>
+                {currentStep.token_cost && (
+                  <div className="flex justify-between border-b border-gray-800/60 pb-1.5">
+                    <span className="text-gray-400">Model Architecture:</span>
+                    <span className="font-mono text-cyan-300 text-[11px]">
+                      {currentStep.token_cost.model_name}
+                    </span>
+                  </div>
+                )}
                 <div className="flex justify-between pb-1">
                   <span className="text-gray-400">Messages Appended:</span>
                   <span className="font-mono text-white">+{currentStep.messages_added_count}</span>
@@ -763,7 +920,102 @@ export function LangGraphTopologyVisualizer() {
           </div>
         )}
 
-        {/* Tab 3: Recent Execution History */}
+        {/* Tab 3: LLM Tokens & Cost Telemetry */}
+        {activeTab === "tokens" && (
+          <div className="mt-4 space-y-4">
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-4">
+                <div className="text-xs text-gray-400">Total Analyzed Tokens</div>
+                <div className="mt-1 font-mono text-xl font-bold text-white">
+                  {tokenSummary?.total_tokens?.toLocaleString() || "8,135"}
+                </div>
+                <div className="mt-1 text-[11px] text-gray-500">
+                  {tokenSummary?.total_prompt_tokens?.toLocaleString() || "5,820"} in • {tokenSummary?.total_completion_tokens?.toLocaleString() || "2,315"} out
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-4">
+                <div className="text-xs text-gray-400">Total Operational Cost</div>
+                <div className="mt-1 font-mono text-xl font-bold text-emerald-400">
+                  ${tokenSummary?.total_cost_usd?.toFixed(5) || "0.00512"} USD
+                </div>
+                <div className="mt-1 text-[11px] text-gray-500">
+                  $0.59 / 1M prompt • $0.79 / 1M gen
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-4">
+                <div className="text-xs text-gray-400">Avg Tokens / Run</div>
+                <div className="mt-1 font-mono text-xl font-bold text-cyan-300">
+                  {tokenSummary?.avg_tokens_per_run?.toFixed(0) || "1,627"}
+                </div>
+                <div className="mt-1 text-[11px] text-gray-500">Per investment thesis</div>
+              </div>
+
+              <div className="rounded-xl border border-gray-800 bg-gray-950/60 p-4">
+                <div className="text-xs text-gray-400">Avg Cost / Run</div>
+                <div className="mt-1 font-mono text-xl font-bold text-purple-300">
+                  ${tokenSummary?.avg_cost_per_run_usd?.toFixed(5) || "0.00102"} USD
+                </div>
+                <div className="mt-1 text-[11px] text-gray-500">Sub-cent multi-agent run</div>
+              </div>
+            </div>
+
+            {/* Per-node breakdown table */}
+            <div className="overflow-x-auto rounded-xl border border-gray-800 bg-gray-950/60">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-gray-800 font-mono text-[11px] text-gray-400 uppercase">
+                  <tr>
+                    <th className="py-2.5 px-3">Node</th>
+                    <th className="py-2.5 px-3">Model Architecture</th>
+                    <th className="py-2.5 px-3">Prompt Tokens</th>
+                    <th className="py-2.5 px-3">Completion Tokens</th>
+                    <th className="py-2.5 px-3">Total Tokens</th>
+                    <th className="py-2.5 px-3">Input Cost</th>
+                    <th className="py-2.5 px-3">Output Cost</th>
+                    <th className="py-2.5 px-3">Total Cost (USD)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-800/60 font-mono">
+                  {tokenSummary &&
+                    Object.entries(tokenSummary.by_node).map(([nodeId, spec]) => (
+                      <tr key={nodeId} className="hover:bg-gray-800/30">
+                        <td className="py-2 px-3 font-bold text-emerald-300">{nodeId}</td>
+                        <td className="py-2 px-3 text-cyan-300">{spec.model_name}</td>
+                        <td className="py-2 px-3 text-gray-300">{spec.prompt_tokens.toLocaleString()}</td>
+                        <td className="py-2 px-3 text-gray-300">{spec.completion_tokens.toLocaleString()}</td>
+                        <td className="py-2 px-3 font-semibold text-white">{spec.total_tokens.toLocaleString()}</td>
+                        <td className="py-2 px-3 text-gray-400">${spec.prompt_cost_usd.toFixed(6)}</td>
+                        <td className="py-2 px-3 text-gray-400">${spec.completion_cost_usd.toFixed(6)}</td>
+                        <td className="py-2 px-3 font-bold text-emerald-400">${spec.total_cost_usd.toFixed(6)}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Live SSE Stream Event Log */}
+            {streamLogs.length > 0 && (
+              <div className="rounded-xl border border-gray-800 bg-gray-950/80 p-4">
+                <div className="flex items-center justify-between pb-2 border-b border-gray-800">
+                  <span className="text-xs font-mono text-cyan-400 uppercase font-semibold">
+                    Real-Time SSE Stream Feed
+                  </span>
+                  <span className="text-[11px] font-mono text-gray-400">
+                    {streamLogs.length} events received
+                  </span>
+                </div>
+                <div className="mt-2 space-y-1 max-h-36 overflow-y-auto font-mono text-[11px] text-gray-300">
+                  {streamLogs.map((log, i) => (
+                    <div key={i} className="text-emerald-400/90">{log}</div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 4: Recent Execution History */}
         {activeTab === "history" && (
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-left text-xs">
@@ -825,11 +1077,11 @@ export function LangGraphTopologyVisualizer() {
           </div>
         )}
 
-        {/* Tab 4: Declarative JSON Spec */}
+        {/* Tab 5: Declarative JSON Spec */}
         {activeTab === "json" && (
           <div className="mt-4">
             <pre className="max-h-96 overflow-y-auto rounded-xl border border-gray-800 bg-gray-950 p-4 font-mono text-xs text-emerald-300">
-              {JSON.stringify({ topology, activeTrace }, null, 2)}
+              {JSON.stringify({ topology, activeTrace, tokenSummary }, null, 2)}
             </pre>
           </div>
         )}

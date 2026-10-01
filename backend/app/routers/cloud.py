@@ -10,7 +10,7 @@ import logging
 from typing import Any, Optional
 
 from fastapi import APIRouter, Header, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.core.cloud_topology import CloudTopologyRegistry
 from app.core.docker_spec import ContainerBuildDiagnosticsManager
@@ -26,6 +26,7 @@ from app.core.telemetry_metrics import MetricsRegistryManager
 from app.core.telemetry import generate_trace_id, parse_traceparent
 from app.core.trace_aggregator import trace_aggregator
 from app.database.schemas import (
+    AgentTokenSummaryReport,
     AlertDispatchTestRequest,
     AlertDispatchTestResponse,
     CloudTopologyReport,
@@ -628,8 +629,44 @@ async def simulate_langgraph_execution(
     )
 
 
+@router.get(
+    "/graph/stream",
+    status_code=status.HTTP_200_OK,
+    summary="Stream Real-Time Multi-Agent Node Execution Events",
+    description="Streams Server-Sent Events (SSE) as each node executes, transitions, and mutates state channels.",
+)
+async def stream_langgraph_execution(
+    ticker: str = "AAPL",
+    scenario: str = "NOMINAL",
+    delay_ms: float = 80.0,
+) -> StreamingResponse:
+    delay_sec = max(0.01, min(delay_ms / 1000.0, 1.0))
+    return StreamingResponse(
+        langgraph_topology_manager.stream_execution_steps(
+            ticker=ticker,
+            scenario=scenario,
+            delay_seconds=delay_sec,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
-
-
-
+@router.get(
+    "/graph/tokens/summary",
+    response_model=AgentTokenSummaryReport,
+    status_code=status.HTTP_200_OK,
+    summary="Get Multi-Agent LLM Token & Cost Telemetry",
+    description="Returns aggregate prompt tokens, completion tokens, USD operational costs, and per-node token attribution.",
+)
+async def get_langgraph_token_summary(
+    traceparent: Optional[str] = Header(None, alias="traceparent"),
+) -> AgentTokenSummaryReport:
+    trace_id = None
+    if traceparent:
+        trace_id, _ = parse_traceparent(traceparent)
+    return langgraph_topology_manager.get_token_summary(trace_id=trace_id)

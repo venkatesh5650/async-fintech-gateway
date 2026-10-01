@@ -6,18 +6,22 @@ nodes/edges, tracks state channel mutations, and records deterministic multi-age
 
 from __future__ import annotations
 
+import asyncio
 import datetime
 import uuid
-from typing import Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from app.core.telemetry import generate_trace_id
 from app.database.schemas import (
     AgentNodeExecutionStep,
+    AgentTokenSummaryReport,
     GraphEdgeSpec,
     GraphExecutionTraceResponse,
     GraphNodeSpec,
     GraphStateChannelSpec,
+    GraphStreamingEvent,
     GraphTopologyResponse,
+    LLMNodeTokenCostSpec,
 )
 
 
@@ -31,6 +35,46 @@ class LangGraphTopologyManager:
         self._max_buffer = max_traces_buffer
         self._traces_buffer: Dict[str, GraphExecutionTraceResponse] = {}
         self._seed_default_traces()
+
+    @staticmethod
+    def _calculate_token_cost(node_id: str, tokens_estimated: int) -> LLMNodeTokenCostSpec:
+        """Calculates institutional token breakdown and USD cost ($0.59 / 1M prompt, $0.79 / 1M completion)."""
+        if node_id == "tools":
+            model_name = "tool-executor-native"
+            prompt_tokens = int(tokens_estimated * 0.5)
+            completion_tokens = tokens_estimated - prompt_tokens
+            prompt_cost = 0.0
+            completion_cost = 0.0
+        elif node_id == "agent":
+            model_name = "llama-3.3-70b-versatile"
+            prompt_tokens = int(tokens_estimated * 0.72)
+            completion_tokens = tokens_estimated - prompt_tokens
+            prompt_cost = (prompt_tokens / 1_000_000.0) * 0.59
+            completion_cost = (completion_tokens / 1_000_000.0) * 0.79
+        elif node_id == "reporting":
+            model_name = "llama-3.3-70b-versatile"
+            prompt_tokens = int(tokens_estimated * 0.58)
+            completion_tokens = tokens_estimated - prompt_tokens
+            prompt_cost = (prompt_tokens / 1_000_000.0) * 0.59
+            completion_cost = (completion_tokens / 1_000_000.0) * 0.79
+        else:  # gatekeeper / system
+            model_name = "llama-3.3-70b-versatile"
+            prompt_tokens = int(tokens_estimated * 0.85)
+            completion_tokens = tokens_estimated - prompt_tokens
+            prompt_cost = (prompt_tokens / 1_000_000.0) * 0.59
+            completion_cost = (completion_tokens / 1_000_000.0) * 0.79
+
+        total_cost = prompt_cost + completion_cost
+        return LLMNodeTokenCostSpec(
+            model_name=model_name,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=tokens_estimated,
+            prompt_cost_usd=round(prompt_cost, 6),
+            completion_cost_usd=round(completion_cost, 6),
+            total_cost_usd=round(total_cost, 6),
+            cache_hit=False,
+        )
 
     def get_topology_spec(self, trace_id: Optional[str] = None) -> GraphTopologyResponse:
         """Constructs comprehensive declarative topology response matching the compiled
@@ -482,12 +526,21 @@ class LangGraphTopologyManager:
             total_duration = 117.0
             final_signal = "BUY"
 
+        for step in steps:
+            if step.token_cost is None:
+                step.token_cost = self._calculate_token_cost(step.node_id, step.tokens_estimated)
+
+        total_tokens_consumed = sum(s.tokens_estimated for s in steps)
+        total_cost_usd = round(sum(s.token_cost.total_cost_usd for s in steps if s.token_cost), 6)
+
         trace_response = GraphExecutionTraceResponse(
             execution_id=exec_id,
             ticker=clean_ticker,
             scenario=scenario,
             status=status,
             total_duration_ms=total_duration,
+            total_tokens_consumed=total_tokens_consumed,
+            total_cost_usd=total_cost_usd,
             final_signal=final_signal,
             steps_count=len(steps),
             steps=steps,
@@ -502,6 +555,133 @@ class LangGraphTopologyManager:
             del self._traces_buffer[oldest_key]
 
         return trace_response
+
+    def get_token_summary(self, trace_id: Optional[str] = None) -> AgentTokenSummaryReport:
+        """Aggregates multi-agent token consumption and operational cost metrics across all buffered runs."""
+        t_id = trace_id or generate_trace_id()
+        now = datetime.datetime.now(datetime.timezone.utc)
+        traces = list(self._traces_buffer.values())
+        if not traces:
+            nominal = self.simulate_execution(ticker="NVDA", scenario="NOMINAL")
+            traces = [nominal]
+
+        total_prompt = 0
+        total_completion = 0
+        total_tokens = 0
+        total_cost = 0.0
+        model_distribution: Dict[str, int] = {}
+        node_stats: Dict[str, Dict[str, Any]] = {
+            "agent": {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0, "model": "llama-3.3-70b-versatile"},
+            "tools": {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0, "model": "tool-executor-native"},
+            "reporting": {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0, "model": "llama-3.3-70b-versatile"},
+            "gatekeeper": {"prompt": 0, "completion": 0, "total": 0, "cost": 0.0, "model": "llama-3.3-70b-versatile"},
+        }
+
+        for trace in traces:
+            for step in trace.steps:
+                tc = step.token_cost or self._calculate_token_cost(step.node_id, step.tokens_estimated)
+                total_prompt += tc.prompt_tokens
+                total_completion += tc.completion_tokens
+                total_tokens += tc.total_tokens
+                total_cost += tc.total_cost_usd
+
+                model_distribution[tc.model_name] = model_distribution.get(tc.model_name, 0) + tc.total_tokens
+
+                if step.node_id in node_stats:
+                    node_stats[step.node_id]["prompt"] += tc.prompt_tokens
+                    node_stats[step.node_id]["completion"] += tc.completion_tokens
+                    node_stats[step.node_id]["total"] += tc.total_tokens
+                    node_stats[step.node_id]["cost"] += tc.total_cost_usd
+
+        runs_count = max(len(traces), 1)
+        by_node_specs: Dict[str, LLMNodeTokenCostSpec] = {}
+        for nid, data in node_stats.items():
+            by_node_specs[nid] = LLMNodeTokenCostSpec(
+                model_name=data["model"],
+                prompt_tokens=data["prompt"],
+                completion_tokens=data["completion"],
+                total_tokens=data["total"],
+                prompt_cost_usd=round((data["prompt"] / 1_000_000.0) * 0.59, 6),
+                completion_cost_usd=round((data["completion"] / 1_000_000.0) * 0.79, 6),
+                total_cost_usd=round(data["cost"], 6),
+                cache_hit=False,
+            )
+
+        return AgentTokenSummaryReport(
+            total_runs_analyzed=len(traces),
+            total_prompt_tokens=total_prompt,
+            total_completion_tokens=total_completion,
+            total_tokens=total_tokens,
+            total_cost_usd=round(total_cost, 6),
+            avg_tokens_per_run=round(total_tokens / runs_count, 1),
+            avg_cost_per_run_usd=round(total_cost / runs_count, 6),
+            model_distribution=model_distribution,
+            by_node=by_node_specs,
+            timestamp_iso=now.isoformat(),
+            trace_id=t_id,
+        )
+
+    async def stream_execution_steps(
+        self,
+        ticker: str = "AAPL",
+        scenario: str = "NOMINAL",
+        delay_seconds: float = 0.05,
+    ) -> AsyncGenerator[str, None]:
+        """Asynchronously streams step transition events over SSE text/event-stream."""
+        trace = self.simulate_execution(ticker=ticker, scenario=scenario)
+
+        for step in trace.steps:
+            start_event = GraphStreamingEvent(
+                event_type="step_start",
+                execution_id=trace.execution_id,
+                step_number=step.step_number,
+                node_id=step.node_id,
+                node_label=step.node_label,
+                status="RUNNING",
+                duration_ms=0.0,
+                token_cost=step.token_cost,
+                state_delta={},
+                timestamp_iso=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            )
+            yield f"event: step_start\ndata: {start_event.model_dump_json()}\n\n"
+            await asyncio.sleep(delay_seconds)
+
+            complete_event = GraphStreamingEvent(
+                event_type="step_complete",
+                execution_id=trace.execution_id,
+                step_number=step.step_number,
+                node_id=step.node_id,
+                node_label=step.node_label,
+                status=step.status,
+                duration_ms=step.duration_ms,
+                token_cost=step.token_cost,
+                state_delta=step.output_state_delta,
+                timestamp_iso=step.timestamp_iso,
+            )
+            yield f"event: step_complete\ndata: {complete_event.model_dump_json()}\n\n"
+            await asyncio.sleep(delay_seconds)
+
+        total_prompt = sum(s.token_cost.prompt_tokens for s in trace.steps if s.token_cost)
+        total_comp = sum(s.token_cost.completion_tokens for s in trace.steps if s.token_cost)
+        trace_complete = GraphStreamingEvent(
+            event_type="trace_complete",
+            execution_id=trace.execution_id,
+            step_number=len(trace.steps),
+            node_id="__end__",
+            node_label="Certified Decision Artifact",
+            status=trace.status,
+            duration_ms=trace.total_duration_ms,
+            token_cost=LLMNodeTokenCostSpec(
+                model_name="llama-3.3-70b-versatile",
+                prompt_tokens=total_prompt,
+                completion_tokens=total_comp,
+                total_tokens=trace.total_tokens_consumed,
+                total_cost_usd=trace.total_cost_usd,
+            ),
+            state_delta={"final_signal": trace.final_signal},
+            timestamp_iso=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        )
+        yield f"event: trace_complete\ndata: {trace_complete.model_dump_json()}\n\n"
 
     def get_execution_trace(self, execution_id: str) -> Optional[GraphExecutionTraceResponse]:
         """Retrieves execution trace by execution_id or returns latest if execution_id == 'latest'."""

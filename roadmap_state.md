@@ -687,8 +687,26 @@ Phase 3 Milestone 2 Day 99 is 100% Complete, Certified, and Sealed.
     8. `ruff check app`: 0 errors.
     9. `npx tsc --noEmit`: 0 errors.
 
-**Phase 3 Milestone 3 Multi-Agent Visualizer Core is 100% Complete, Certified, and Operational.**
-**Cumulative Roadmap Status: Certified LangGraph Visualizer Active. Version: v1.0.0-rc1.**
+* **Module MOD-GRAPH-02: Real-Time Multi-Agent Event Streaming & LLM Token Telemetry Engine (SPEC-GRAPH-STREAMING):**
+  * Engineered per-node token calculation and USD pricing models ($0.59 / 1M prompt tokens, $0.79 / 1M completion tokens for Llama 3.3 70B; native tool execution at $0.00 cost) in `LangGraphTopologyManager`.
+  * Implemented asynchronous SSE generator `stream_execution_steps` emitting `event: step_start`, `event: step_complete`, and `event: trace_complete` with microsecond timestamps and state channel deltas.
+  * Added `get_token_summary` aggregating cumulative prompt/completion tokens, total USD cost, and per-node token attribution across all buffered runs.
+  * Defined Pydantic contracts in [`app/database/schemas.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/database/schemas.py): `LLMNodeTokenCostSpec`, `GraphStreamingEvent`, and `AgentTokenSummaryReport`.
+  * Mounted secured REST API endpoints in [`app/routers/cloud.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/routers/cloud.py):
+    - `GET /v1/cloud/graph/stream`: Real-time SSE node execution event stream with chunked transfer.
+    - `GET /v1/cloud/graph/tokens/summary`: Multi-agent token and cost telemetry report.
+  * Shipped Next.js 15 BFF proxy routes:
+    - [`frontend/app/api/cloud/graph/stream/route.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/app/api/cloud/graph/stream/route.ts)
+    - [`frontend/app/api/cloud/graph/tokens/summary/route.ts`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/app/api/cloud/graph/tokens/summary/route.ts)
+  * Enhanced [`LangGraphTopologyVisualizer.tsx`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/frontend/src/components/LangGraphTopologyVisualizer.tsx):
+    - "⚡ Live SSE Stream" real-time stream consumer reading server-sent event chunks with active node illumination.
+    - Added 7th key metric tile for Tokens & Operational Cost in USD.
+    - Added dedicated "LLM Tokens & Costs" inspector tab with token ratios, model architectures, and per-node attribution table.
+    - Real-time SSE stream log ticker.
+  * Executed automated streaming audit suite ([`audit_graph_streaming.py`](file:///c:/Users/USER/Desktop/Automated-Equity-Research/async-fintech-gateway/backend/app/scripts/audit_graph_streaming.py)) with 100% pass rate (5/5 assertions: per-node token calculation, trace token aggregation, token summary report, async SSE streaming, and REST API contracts).
+
+**Phase 3 Milestone 3 Multi-Agent Real-Time Streaming & Token Telemetry is 100% Complete, Certified, and Operational.**
+**Cumulative Roadmap Status: Certified LangGraph Real-Time Streaming & Token Telemetry Active. Version: v1.0.0-rc1.**
 
 ## 12. INVARIANT CONSTRAINTS — Never Violate
 

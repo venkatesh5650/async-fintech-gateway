@@ -1289,6 +1289,17 @@ export interface GraphTopologyResponse {
   trace_id: string;
 }
 
+export interface LLMNodeTokenCostSpec {
+  model_name: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  prompt_cost_usd: number;
+  completion_cost_usd: number;
+  total_cost_usd: number;
+  cache_hit: boolean;
+}
+
 export interface AgentNodeExecutionStep {
   step_number: number;
   node_id: string;
@@ -1299,6 +1310,7 @@ export interface AgentNodeExecutionStep {
   output_state_delta: Record<string, unknown>;
   messages_added_count: number;
   tokens_estimated: number;
+  token_cost?: LLMNodeTokenCostSpec | null;
   timestamp_iso: string;
 }
 
@@ -1308,6 +1320,8 @@ export interface GraphExecutionTraceResponse {
   scenario: "NOMINAL" | "RETRY_LOOP" | "TOOL_EXPEDITION" | "RAG_FAILURE" | string;
   status: "SUCCESS" | "DEGRADED" | "FAILED" | string;
   total_duration_ms: number;
+  total_tokens_consumed?: number;
+  total_cost_usd?: number;
   final_signal: "BUY" | "SELL" | "HOLD" | "INVALID" | string;
   steps_count: number;
   steps: AgentNodeExecutionStep[];
@@ -1320,8 +1334,29 @@ export interface GraphSimulationRequest {
   scenario: "NOMINAL" | "RETRY_LOOP" | "TOOL_EXPEDITION" | "RAG_FAILURE" | string;
 }
 
+export interface GraphStreamingEvent {
+  event_type: "step_start" | "step_complete" | "trace_complete" | string;
+  execution_id: string;
+  step_number: number;
+  node_id: string;
+  node_label: string;
+  status: string;
+  duration_ms: number;
+  token_cost?: LLMNodeTokenCostSpec | null;
+  state_delta: Record<string, unknown>;
+  timestamp_iso: string;
+}
 
-
-
-
-
+export interface AgentTokenSummaryReport {
+  total_runs_analyzed: number;
+  total_prompt_tokens: number;
+  total_completion_tokens: number;
+  total_tokens: number;
+  total_cost_usd: number;
+  avg_tokens_per_run: number;
+  avg_cost_per_run_usd: number;
+  model_distribution: Record<string, number>;
+  by_node: Record<string, LLMNodeTokenCostSpec>;
+  timestamp_iso: string;
+  trace_id: string;
+}
