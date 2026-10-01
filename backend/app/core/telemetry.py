@@ -9,7 +9,7 @@ from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
 # Paths that must never emit log lines — avoids drowning signal in liveness probe noise.
-SILENT_PATHS: frozenset[str] = frozenset({"/health", "/healthz"})
+SILENT_PATHS: frozenset[str] = frozenset({"/health", "/healthz", "/metrics"})
 
 
 # ======================================================================
@@ -98,7 +98,17 @@ class StructuredLoggingMiddleware(BaseHTTPMiddleware):
         # Measure request execution latency
         start = time.perf_counter()
         response = await call_next(request)
-        latency_ms = round((time.perf_counter() - start) * 1000, 2)
+        duration_seconds = time.perf_counter() - start
+        latency_ms = round(duration_seconds * 1000, 2)
+
+        # Record OpenMetrics Prometheus Telemetry
+        try:
+            from app.core.telemetry_metrics import MetricsRegistryManager
+            MetricsRegistryManager.get_instance().record_http_request(
+                request.method, path, response.status_code, duration_seconds
+            )
+        except Exception:
+            pass
 
         # --- Route Classification ---
         if "/intelligence" in path:

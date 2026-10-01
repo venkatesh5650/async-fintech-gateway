@@ -1,6 +1,8 @@
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from prometheus_client import CONTENT_TYPE_LATEST
+from app.core.telemetry_metrics import MetricsRegistryManager
 import logging
 import time
 import random
@@ -19,6 +21,7 @@ from app.core.openapi import (
     TAGS_METADATA,
     custom_openapi,
 )
+from app.core.health_probes import CloudReadinessProbeManager
 from app.core.telemetry import StructuredLoggingMiddleware
 from app.routers import (
     analytics,
@@ -26,6 +29,7 @@ from app.routers import (
     auth,
     capstone,
     chaos,
+    cloud,
     code_quality,
     documents,
     intelligence,
@@ -250,6 +254,7 @@ app.include_router(regression.router)
 app.include_router(architecture.router)
 app.include_router(code_quality.router)
 app.include_router(capstone.router)
+app.include_router(cloud.router)
 
 # Perimeter Defense: Rate Limiter Configuration
 limiter = RateLimiter(requests_per_minute=5)
@@ -274,11 +279,47 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 
+_cloud_probe_manager = CloudReadinessProbeManager()
+
+
+@app.get("/health/liveness", tags=["System Telemetry & Health Probes"])
+async def health_liveness_probe():
+    """Sub-5ms process liveness probe for orchestrators (Kubernetes / Render)."""
+    res = await _cloud_probe_manager.check_liveness()
+    return JSONResponse(status_code=status.HTTP_200_OK, content=res.model_dump())
+
+
+@app.get("/health/readiness", tags=["System Telemetry & Health Probes"])
+async def health_readiness_probe():
+    """Deep dependency readiness probe checking PostgreSQL, Redis, and pgvector."""
+    res = await _cloud_probe_manager.check_readiness()
+    code = status.HTTP_200_OK if res.overall_healthy else status.HTTP_503_SERVICE_UNAVAILABLE
+    return JSONResponse(status_code=code, content=res.model_dump())
+
+
+@app.get("/health/startup", tags=["System Telemetry & Health Probes"])
+async def health_startup_probe():
+    """Cold-start schema verification probe."""
+    res = await _cloud_probe_manager.check_startup()
+    code = status.HTTP_200_OK if res.schema_ready else status.HTTP_503_SERVICE_UNAVAILABLE
+    return JSONResponse(status_code=code, content=res.model_dump())
+
+
+@app.get("/metrics", tags=["System Telemetry & Health Probes"])
+async def prometheus_metrics_export():
+    """
+    Standard Prometheus / OpenMetrics scrape target endpoint.
+    Exposes counters, gauges, and latency histograms for Prometheus scrapers.
+    """
+    registry_mgr = MetricsRegistryManager.get_instance()
+    return Response(content=registry_mgr.generate_metrics_text(), media_type=CONTENT_TYPE_LATEST)
+
+
 @app.get("/health", tags=["System Telemetry"])
 @app.get("/healthz", tags=["System Telemetry"])
 async def liveness_probe():
     """
-    Cloud Load Balancer Liveness Probe.
+    Cloud Load Balancer Liveness Probe (Backward-Compatible Alias).
     Returns 200 OK if the ASGI event loop and runtime container are operational.
     """
     uptime_seconds = round(time.time() - START_TIME, 2)
