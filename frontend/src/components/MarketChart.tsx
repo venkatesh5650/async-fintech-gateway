@@ -144,8 +144,12 @@ export default function MarketChart({
         alignLabels: true,
         autoScale: true,
       },
-      width: containerRef.current.clientWidth || 600,
-      height: 420,
+      width: Math.min(
+        containerRef.current.clientWidth ||
+          (typeof window !== "undefined" ? window.innerWidth - 32 : 320),
+        1200
+      ),
+      height: typeof window !== "undefined" && window.innerWidth < 640 ? 320 : 420,
     });
 
     // Add Volume Histogram Series with overlay margins
@@ -227,7 +231,8 @@ export default function MarketChart({
       if (!entries || entries.length === 0) return;
       const { width } = entries[0].contentRect;
       if (width > 0 && chartRef.current) {
-        chartRef.current.resize(width, 420);
+        const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
+        chartRef.current.resize(Math.floor(width), isMobile ? 320 : 420);
       }
     });
 
@@ -441,9 +446,9 @@ export default function MarketChart({
         </div>
 
         {/* Toolbar Controls */}
-        <div className="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-end">
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
           {/* Timeframe Selector Pills */}
-          <div className="flex bg-slate-900/90 border border-slate-800 rounded-lg p-0.5 text-xs">
+          <div className="flex bg-slate-900/90 border border-slate-800 rounded-lg p-0.5 text-xs overflow-x-auto max-w-full">
             {timeframes.map((tf) => (
               <button
                 key={tf.value}
@@ -452,7 +457,7 @@ export default function MarketChart({
                   playClick();
                   onTimeframeChange?.(tf.value);
                 }}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition ${
+                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition shrink-0 ${
                   selectedTimeframe === tf.value
                     ? "bg-cyan-500 text-black shadow-[0_0_10px_rgba(0,240,255,0.4)]"
                     : "text-slate-400 hover:text-white"
@@ -466,21 +471,21 @@ export default function MarketChart({
           <div className="h-4 w-[1px] bg-slate-800 hidden sm:block" />
 
           {/* Chart Style Toggle */}
-          <div className="flex bg-slate-900/90 border border-slate-800 rounded-lg p-0.5 text-xs">
+          <div className="flex bg-slate-900/90 border border-slate-800 rounded-lg p-0.5 text-xs shrink-0">
             <button
               type="button"
               onClick={() => {
                 playBlip();
                 setChartType("candlestick");
               }}
-              className={`px-3 py-1 rounded-md text-[11px] font-bold flex items-center space-x-1.5 transition ${
+              className={`px-2.5 sm:px-3 py-1 rounded-md text-[11px] font-bold flex items-center space-x-1 sm:space-x-1.5 transition ${
                 chartType === "candlestick"
                   ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm"
                   : "text-slate-400 hover:text-white"
               }`}
             >
               <span>🕯️</span>
-              <span>Candles</span>
+              <span className="hidden xs:inline">Candles</span>
             </button>
             <button
               type="button"
@@ -488,49 +493,49 @@ export default function MarketChart({
                 playBlip();
                 setChartType("area");
               }}
-              className={`px-3 py-1 rounded-md text-[11px] font-bold flex items-center space-x-1.5 transition ${
+              className={`px-2.5 sm:px-3 py-1 rounded-md text-[11px] font-bold flex items-center space-x-1 sm:space-x-1.5 transition ${
                 chartType === "area"
                   ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm"
                   : "text-slate-400 hover:text-white"
               }`}
             >
               <span>📈</span>
-              <span>Area</span>
+              <span className="hidden xs:inline">Area</span>
             </button>
           </div>
         </div>
       </div>
 
       {/* Chart Canvas Area with Floating TradingView Top-Left Legend */}
-      <div className="relative w-full bg-slate-950/80 rounded-xl overflow-hidden border border-slate-800/80">
+      <div className="relative w-full max-w-full bg-slate-950/80 rounded-xl overflow-hidden border border-slate-800/80">
         {/* Floating TradingView Top-Left Crosshair OHLCV Tooltip Overlay */}
         {legendData && (
-          <div className="absolute top-3 left-3 z-10 pointer-events-none bg-[#161b22]/90 backdrop-blur-md border border-[#30363d] px-3 py-1.5 rounded-lg text-xs space-x-3 flex items-center shadow-lg font-mono">
-            <span className="text-[#8b949e]">{legendData.timeStr}</span>
-            <span className="text-[#8b949e]">
+          <div className="absolute top-2 left-2 z-10 pointer-events-none bg-[#161b22]/90 backdrop-blur-md border border-[#30363d] px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg text-[10px] sm:text-xs flex flex-wrap sm:flex-nowrap gap-x-2.5 gap-y-0.5 sm:space-x-3 items-center shadow-lg font-mono max-w-[calc(100%-1rem)] overflow-hidden">
+            <span className="text-[#8b949e] shrink-0">{legendData.timeStr}</span>
+            <span className="text-[#8b949e] shrink-0">
               O: <strong className="text-white">${formatNum(legendData.open)}</strong>
             </span>
-            <span className="text-[#8b949e]">
+            <span className="text-[#8b949e] shrink-0">
               H: <strong className="text-[#26a69a]">${formatNum(legendData.high)}</strong>
             </span>
-            <span className="text-[#8b949e]">
+            <span className="text-[#8b949e] shrink-0">
               L: <strong className="text-[#ef5350]">${formatNum(legendData.low)}</strong>
             </span>
-            <span className="text-[#8b949e]">
+            <span className="text-[#8b949e] shrink-0">
               C: <strong className="text-white">${formatNum(legendData.close)}</strong>
             </span>
-            <span className="text-[#8b949e]">
+            <span className="text-[#8b949e] shrink-0">
               V: <strong className="text-blue-400">{formatVol(legendData.volume)}</strong>
             </span>
           </div>
         )}
 
         {/* Chart Canvas Mount Point */}
-        <div ref={containerRef} className="w-full h-[420px]" />
+        <div ref={containerRef} className="w-full h-[320px] sm:h-[420px]" />
       </div>
 
       {/* Chart Footer Telemetry Legend */}
-      <div className="flex flex-col sm:flex-row justify-between text-[10px] text-[#8b949e] border-t border-[#21262d] pt-2 gap-2">
+      <div className="flex flex-col sm:flex-row justify-between text-[10px] text-[#8b949e] border-t border-[#21262d] pt-2 gap-2 flex-wrap">
         <div>
           <span>Drag to pan | Scroll to zoom | Double click canvas to reset scale</span>
         </div>

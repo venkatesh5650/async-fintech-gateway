@@ -86,19 +86,19 @@ export function CorrelationHeatmap({ initialSymbols, activeTicker }: Correlation
           </h3>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           <input
             type="text"
             value={symbolsInput}
             onChange={(e) => setSymbolsInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && fetchCorrelation()}
             placeholder="e.g. AAPL, MSFT, NVDA, TSLA"
-            className="bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded px-2.5 py-1 focus:outline-none focus:border-cyan-500 font-mono w-48 sm:w-64"
+            className="bg-slate-950 border border-slate-700 text-slate-200 text-xs rounded px-2.5 py-1 focus:outline-none focus:border-cyan-500 font-mono flex-1 sm:w-64 min-w-[140px]"
           />
           <select
             value={days}
             onChange={(e) => setDays(Number(e.target.value))}
-            className="bg-slate-950 border border-slate-700 text-slate-300 text-xs rounded px-2 py-1 font-mono focus:outline-none focus:border-cyan-500"
+            className="bg-slate-950 border border-slate-700 text-slate-300 text-xs rounded px-2 py-1 font-mono focus:outline-none focus:border-cyan-500 shrink-0"
           >
             <option value={15}>15 Days</option>
             <option value={30}>30 Days</option>
@@ -108,9 +108,9 @@ export function CorrelationHeatmap({ initialSymbols, activeTicker }: Correlation
           <button
             onClick={fetchCorrelation}
             disabled={loading}
-            className="px-3 py-1 bg-cyan-600 hover:bg-cyan-500 text-black text-xs font-bold rounded transition-colors disabled:opacity-50"
+            className="px-3 py-1 bg-cyan-600 hover:bg-cyan-500 text-black text-xs font-bold rounded transition-colors disabled:opacity-50 shrink-0"
           >
-            {loading ? "Calculating..." : "Compute"}
+            {loading ? "..." : "Compute"}
           </button>
         </div>
       </div>
@@ -124,8 +124,8 @@ export function CorrelationHeatmap({ initialSymbols, activeTicker }: Correlation
           {error}
         </div>
       ) : symbols.length > 0 ? (
-        <div className="space-y-4">
-          <div className="overflow-x-auto">
+        <div className="space-y-4 w-full max-w-full">
+          <div className="w-full max-w-full overflow-x-auto scrollbar-none">
             <table className="w-full text-center border-collapse font-mono text-xs">
               <thead>
                 <tr>

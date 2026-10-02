@@ -74,12 +74,12 @@ export function ConfidenceDialMeter({
       />
 
       {/* Header telemetry badge */}
-      <div className="w-full flex items-center justify-between text-xs text-slate-400 border-b border-slate-800/80 pb-2.5 mb-3">
+      <div className="w-full flex flex-wrap items-center justify-between gap-1.5 text-xs text-slate-400 border-b border-slate-800/80 pb-2.5 mb-3">
         <span className="flex items-center space-x-1.5 text-slate-300 font-bold tracking-wider">
-          <Target className="w-3.5 h-3.5 text-cyan-400" />
-          <span>SWARM CONVICTION GAUGE</span>
+          <Target className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+          <span className="text-[11px] sm:text-xs">SWARM CONVICTION GAUGE</span>
         </span>
-        <span className={`text-[10px] px-2 py-0.5 rounded border uppercase tracking-widest ${theme.badgeBg}`}>
+        <span className={`text-[9px] sm:text-[10px] px-2 py-0.5 rounded border uppercase tracking-widest ${theme.badgeBg}`}>
           {theme.label}
         </span>
       </div>
