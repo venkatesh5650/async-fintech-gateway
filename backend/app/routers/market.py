@@ -5,6 +5,7 @@ import logging
 import yfinance as yf
 from datetime import datetime, timezone
 from sqlalchemy.future import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from app.database.database import AsyncSessionLocal
 from app.database.models import Ticker, MarketPricing
 from app.database.schemas import MarketDataPayload
@@ -25,6 +26,13 @@ def _fetch_yfinance_data_sync(ticker: str) -> dict:
     t = yf.Ticker(ticker.upper())
     # Fetch the last 5 days to ensure we always have at least 1 valid trading day
     hist = t.history(period="5d").dropna(subset=["Close"])
+
+    if hist.empty and "." not in ticker:
+        # Smart international fallback (e.g. TCS -> TCS.NS, RELIANCE -> RELIANCE.NS)
+        t_ns = yf.Ticker(f"{ticker.upper()}.NS")
+        hist_ns = t_ns.history(period="5d").dropna(subset=["Close"])
+        if not hist_ns.empty:
+            hist = hist_ns
 
     if hist.empty:
         raise ValueError(f"yfinance returned no data for ticker: {ticker.upper()}")
@@ -171,6 +179,13 @@ def _fetch_yfinance_history_sync(ticker: str, interval: str = "5m") -> list:
     t = yf.Ticker(ticker.upper())
     hist = t.history(period=period, interval=inv).dropna(subset=["Close"])
 
+    if hist.empty and "." not in ticker:
+        # Smart international fallback (e.g. TCS -> TCS.NS, RELIANCE -> RELIANCE.NS)
+        t_ns = yf.Ticker(f"{ticker.upper()}.NS")
+        hist_ns = t_ns.history(period=period, interval=inv).dropna(subset=["Close"])
+        if not hist_ns.empty:
+            hist = hist_ns
+
     raw_records = []
     for idx, row in hist.iterrows():
         ts = int(idx.timestamp())
@@ -223,6 +238,7 @@ def _fetch_yfinance_history_sync(ticker: str, interval: str = "5m") -> list:
 async def get_market_history(
     ticker: str,
     interval: str = "5m",
+    background_tasks: BackgroundTasks = None,
 ):
     """
     CQRS Query Edge: Retrieve public time-series historical pricing data for a ticker symbol.
@@ -324,4 +340,69 @@ async def get_market_history(
             }
 
     merged = sorted(by_time.values(), key=lambda x: x["time"])
+
+    # Auto-bootstrap DB historical time-series if this ticker is unseeded or has insufficient bars
+    if background_tasks is not None and (not ticker_obj or len(raw_db_records) < 15) and yf_records:
+        background_tasks.add_task(auto_bootstrap_ticker_pricing, ticker, yf_records)
+
     return merged
+
+
+async def auto_bootstrap_ticker_pricing(ticker: str, candles: list):
+    """
+    Asynchronously backfills historical pricing records for unseeded or newly searched tickers
+    into PostgreSQL so that QuantitativeAnalyticsEngine (SQL CTEs) can compute RSI, SMA, and Sharpe ratio.
+    """
+    if not candles:
+        return
+    try:
+        async with AsyncSessionLocal() as session:
+            async with session.begin():
+                ticker_stmt = select(Ticker).where(Ticker.symbol == ticker.upper())
+                result = await session.execute(ticker_stmt)
+                ticker_obj = result.scalars().first()
+
+                if not ticker_obj:
+                    ticker_obj = Ticker(
+                        symbol=ticker.upper(),
+                        company_name=f"{ticker.upper()} Corp",
+                        is_active=True,
+                    )
+                    session.add(ticker_obj)
+                    await session.flush()
+
+                for c in candles[-60:]:
+                    candle_dt = datetime.fromtimestamp(c["time"], timezone.utc)
+                    stmt = pg_insert(MarketPricing).values(
+                        ticker_id=ticker_obj.id,
+                        timestamp=candle_dt,
+                        open_price=c["open"],
+                        high_price=c["high"],
+                        low_price=c["low"],
+                        close_price=c["close"],
+                        volume=c["volume"],
+                    ).on_conflict_do_nothing(
+                        index_elements=["ticker_id", "timestamp"]
+                    )
+                    await session.execute(stmt)
+            await session.commit()
+            logging.info(f"✅ [AUTO-BOOTSTRAP] Persisted {len(candles[-60:])} historical bars for {ticker.upper()} into PostgreSQL.")
+    except Exception as exc:
+        logging.warning(f"⚠️ [AUTO-BOOTSTRAP WARN] Failed to backfill candles for {ticker}: {exc}")
+
+
+@router.post("/bootstrap/{ticker}", status_code=status.HTTP_200_OK)
+async def bootstrap_ticker(ticker: str, background_tasks: BackgroundTasks):
+    """
+    Explicit on-demand bootstrapping endpoint. Fetches real daily candles
+    from Yahoo Finance and seeds PostgreSQL for the requested ticker.
+    """
+    yf_candles = await asyncio.to_thread(_fetch_yfinance_history_sync, ticker, "1d")
+    background_tasks.add_task(auto_bootstrap_ticker_pricing, ticker, yf_candles)
+    return {
+        "status": "bootstrapping_initiated",
+        "ticker": ticker.upper(),
+        "candles_found": len(yf_candles),
+        "source": "Yahoo_Finance_yfinance",
+    }
+

@@ -262,8 +262,8 @@ async def run_batch_intelligence_orchestrator(batch_id: str, jobs: list[tuple[st
 @router.post("/jobs/{ticker}", status_code=status.HTTP_202_ACCEPTED)
 async def submit_analysis_job(
     request: Request,
-    # Strict Pattern Boundary to prevent numeric/malformed ticker drains
-    ticker: str = Path(..., pattern="^[a-zA-Z]{1,5}$", description="US Equity Ticker Symbol"),
+    # Allow global financial tickers (e.g. AAPL, TCS.NS, BTC-USD, BRK.B, 0221.KL)
+    ticker: str = Path(..., pattern=r"^[a-zA-Z0-9.\-=^]{1,16}$", description="Global Financial Ticker Symbol"),
     _: None = Depends(limiter),
     auth_verified: dict = Security(verify_m2m_or_user),
 ):
@@ -888,7 +888,7 @@ async def get_distributed_trace_waterfall(trace_id: str):
 @router.get("/results/{ticker}", status_code=status.HTTP_200_OK)
 async def get_intelligence_result(
     request: Request,
-    ticker: str = Path(..., pattern="^[a-zA-Z]{1,5}$", description="US Equity Ticker Symbol"),
+    ticker: str = Path(..., pattern=r"^[a-zA-Z0-9.\-=^]{1,16}$", description="Global Financial Ticker Symbol"),
     refresh: bool = False,
 ):
     """
@@ -915,7 +915,7 @@ async def get_intelligence_result(
 
 @router.post("/cache/invalidate/{ticker}", status_code=status.HTTP_200_OK)
 async def invalidate_intelligence_cache(
-    ticker: str = Path(..., pattern="^[a-zA-Z]{1,5}$", description="US Equity Ticker Symbol"),
+    ticker: str = Path(..., pattern=r"^[a-zA-Z0-9.\-=^]{1,16}$", description="Global Financial Ticker Symbol"),
     auth_verified: dict = Security(verify_m2m_or_user),
 ):
     """
@@ -942,7 +942,7 @@ async def get_cache_health():
 
 @router.get("/cache-inspector/{ticker}", response_model=CacheInspectorResponse, status_code=status.HTTP_200_OK)
 async def inspect_cache_ticker(
-    ticker: str = Path(..., pattern="^[a-zA-Z]{1,5}$", description="US Equity Ticker Symbol"),
+    ticker: str = Path(..., pattern=r"^[a-zA-Z0-9.\-=^]{1,16}$", description="Global Financial Ticker Symbol"),
 ):
     """
     CQRS Read Route: Granular inspection of an equity symbol's cached footprint in Redis.
@@ -955,7 +955,7 @@ async def inspect_cache_ticker(
 @router.get("/rag-context/{ticker}", status_code=status.HTTP_200_OK)
 async def get_ticker_rag_context(
     request: Request,
-    ticker: str = Path(..., pattern="^[a-zA-Z]{1,5}$", description="US Equity Ticker Symbol"),
+    ticker: str = Path(..., pattern=r"^[a-zA-Z0-9.\-=^]{1,16}$", description="Global Financial Ticker Symbol"),
 ):
     from app.core.document_search import search_document_chunks
     from app.core.telemetry import generate_trace_id
