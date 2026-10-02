@@ -982,6 +982,7 @@ export default function DynamicDashboardPage() {
                 data={jobState.result}
                 onRefresh={fetchCachedIntelligence}
                 isRefreshing={isCacheRefreshing}
+                onNavigateSection={scrollToSection}
               />
             </div>
 
