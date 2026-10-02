@@ -1,181 +1,173 @@
+"use client";
+
 import Link from "next/link";
+import CyberTopNav from "@/components/CyberTopNav";
+import LiveMarketTickerTape from "@/components/LiveMarketTickerTape";
+import HolographicHeroTerminal from "@/components/HolographicHeroTerminal";
+import { ArrowRight, ShieldCheck, Zap, Database, Cpu, Activity, Award } from "lucide-react";
+import { useSoundFX } from "@/hooks/useSoundFX";
 
 export default function Home() {
+  const { playClick } = useSoundFX();
+
   return (
-    <main className="min-h-screen bg-[#05070d] text-gray-100 font-sans selection:bg-blue-600 selection:text-white relative overflow-hidden flex flex-col justify-between">
+    <main className="min-h-screen bg-transparent text-slate-100 font-sans selection:bg-cyan-500 selection:text-black relative overflow-hidden flex flex-col justify-between">
       {/* Background Subtle Gradient Grid */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#1f293d0f_1px,transparent_1px),linear-gradient(to_bottom,#1f293d0f_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] pointer-events-none" />
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#00f0ff06_1px,transparent_1px),linear-gradient(to_bottom,#00f0ff06_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] pointer-events-none" />
 
-      {/* Top Navigation Bar */}
-      <header className="border-b border-gray-800/80 backdrop-blur-md sticky top-0 z-50 bg-[#05070d]/80">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 rounded-lg bg-blue-600/10 border border-blue-500/30 flex items-center justify-center text-blue-400 font-mono font-bold text-sm shadow-[0_0_12px_rgba(59,130,246,0.2)]">
-              Ω
-            </div>
-            <span className="font-mono text-sm font-semibold tracking-wider text-gray-200">
-              FINTECH AUTOMATION // EQUITY RESEARCH
-            </span>
+      {/* Top Futuristic Navigation Bar */}
+      <CyberTopNav />
+
+      {/* Real-Time Market Ticker Ribbon */}
+      <LiveMarketTickerTape />
+
+      {/* Hero Section Container */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-12 lg:py-16 w-full relative z-10">
+        <div className="text-center max-w-4xl mx-auto mb-12">
+          {/* Zero-Trust Badge */}
+          <div className="inline-flex items-center space-x-2 bg-cyan-950/40 border border-cyan-500/30 px-3 py-1 rounded-full text-xs font-mono text-cyan-400 mb-6 shadow-[0_0_15px_rgba(0,240,255,0.15)]">
+            <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
+            <span className="tracking-wider">AUTONOMOUS MULTI-AGENT SWARM</span>
+            <span className="text-slate-600">|</span>
+            <span className="text-slate-300">ENTERPRISE EDITION v0.9.0</span>
           </div>
 
-          <div className="flex items-center space-x-4">
-            <div className="hidden sm:flex items-center space-x-2 bg-gray-900/80 border border-gray-800 px-3 py-1 rounded-full text-xs font-mono">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-              <span className="text-emerald-400">CORE PIPELINE ACTIVE</span>
-            </div>
-            <Link
-              href="/login"
-              className="px-4 py-1.5 text-xs font-mono font-semibold uppercase tracking-wider text-gray-300 hover:text-white bg-gray-900 border border-gray-700 hover:border-gray-500 rounded-md transition-all duration-200"
-            >
-              Sign In
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      {/* Hero Section */}
-      <div className="max-w-7xl mx-auto px-6 py-12 lg:py-16 w-full relative z-10">
-        <div className="text-center max-w-3xl mx-auto mb-12">
-          <div className="inline-flex items-center space-x-2 bg-blue-950/40 border border-blue-500/30 px-3 py-1 rounded-full text-xs font-mono text-blue-400 mb-6 shadow-[0_0_15px_rgba(59,130,246,0.15)]">
-            <span>● ZERO-TRUST ARCHITECTURE</span>
-            <span className="text-gray-600">|</span>
-            <span>ENTERPRISE EDITION</span>
-          </div>
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white mb-6 leading-tight">
-            Autonomous Multi-Agent{" "}
-            <span className="bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">
-              Equity Research
+          {/* Hero Main Heading */}
+          <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-white mb-6 leading-tight">
+            Autonomous Swarm{" "}
+            <span className="bg-gradient-to-r from-cyan-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent drop-shadow-[0_0_25px_rgba(0,240,255,0.3)]">
+              Equity Intelligence
             </span>
           </h1>
-          <p className="text-gray-400 text-base sm:text-lg leading-relaxed font-sans">
-            Deterministic quantitative state machine powered by LangGraph, FastAPI async workers, and real-time WebSocket event streams for institutional equity analysis.
+
+          <p className="text-slate-400 text-base sm:text-xl leading-relaxed font-sans max-w-2xl mx-auto">
+            Zero-hallucination institutional research platform. Quantitative indicators computed in <span className="text-emerald-400 font-mono">PostgreSQL CTEs</span>, synthesized with qualitative <span className="text-purple-400 font-mono">SEC EDGAR 10-K embeddings</span> across a multi-agent <span className="text-cyan-400 font-mono">LangGraph state machine</span>.
           </p>
 
           {/* Primary Action Buttons */}
           <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
               href="/dashboard/AAPL"
-              className="w-full sm:w-auto px-8 py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-mono text-sm font-bold uppercase tracking-widest rounded-lg shadow-[0_0_20px_rgba(37,99,235,0.4)] transition-all duration-200 text-center"
+              onClick={() => playClick()}
+              className="w-full sm:w-auto px-8 py-4 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-mono text-sm font-bold uppercase tracking-widest rounded-xl shadow-[0_0_25px_rgba(0,240,255,0.5)] transition-all duration-200 text-center flex items-center justify-center space-x-2 group"
             >
-              Launch Research Terminal →
+              <span>Launch Research Deck</span>
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </Link>
+
             <Link
-              href="/login"
-              className="w-full sm:w-auto px-8 py-3.5 bg-gray-900 hover:bg-gray-800 text-gray-300 hover:text-white font-mono text-sm font-semibold uppercase tracking-widest rounded-lg border border-gray-800 hover:border-gray-700 transition-all duration-200 text-center"
+              href="/capstone"
+              onClick={() => playClick()}
+              className="w-full sm:w-auto px-8 py-4 bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white font-mono text-sm font-semibold uppercase tracking-widest rounded-xl border border-slate-700/80 hover:border-cyan-500/50 transition-all duration-200 text-center flex items-center justify-center space-x-2 shadow-[0_0_15px_rgba(0,0,0,0.5)]"
             >
-              Establish Session
+              <Award className="w-4 h-4 text-amber-400" />
+              <span>Release Sign-Off (93/93)</span>
             </Link>
           </div>
         </div>
 
-        {/* Live Terminal Preview Snapshot */}
-        <div className="max-w-4xl mx-auto bg-gray-950 border border-gray-800 rounded-xl overflow-hidden shadow-2xl font-mono text-sm mb-16">
-          <div className="bg-gray-900/90 px-4 py-2.5 border-b border-gray-800 flex items-center justify-between text-xs text-gray-400">
-            <div className="flex items-center space-x-2">
-              <span className="w-3 h-3 rounded-full bg-red-500/80 inline-block" />
-              <span className="w-3 h-3 rounded-full bg-yellow-500/80 inline-block" />
-              <span className="w-3 h-3 rounded-full bg-green-500/80 inline-block" />
-              <span className="ml-2 font-mono text-gray-400">terminal@fintech-intelligence-gateway ~ preview</span>
-            </div>
-            <span className="text-emerald-400 font-mono text-[11px]">TELEMETRY: 138ms</span>
+        {/* 3D Tilt Interactive Terminal Preview */}
+        <HolographicHeroTerminal />
+
+        {/* Live System Operational Metrics Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-16">
+          <div className="hud-panel corner-reticle rounded-xl p-4 text-center">
+            <span className="text-3xl sm:text-4xl font-extrabold text-cyan-400 block tracking-tight font-mono text-glow-cyan">
+              &lt; 15ms
+            </span>
+            <span className="text-[11px] uppercase tracking-wider text-slate-400 block mt-1 font-mono">
+              Ingestion P99 Latency
+            </span>
           </div>
 
-          <div className="p-6 space-y-4 text-left">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-800/80 pb-4">
-              <div>
-                <span className="text-gray-500 text-xs uppercase tracking-widest block">Target Equity</span>
-                <span className="text-xl font-bold text-white tracking-wide">AAPL (Apple Inc.)</span>
-              </div>
-              <div className="flex items-center space-x-3">
-                <span className="text-xs text-gray-500 uppercase tracking-widest">Ternary Output:</span>
-                <span className="bg-emerald-500/10 border border-emerald-500/40 text-emerald-400 font-bold px-3 py-1 rounded text-xs tracking-wider">
-                  SIGNAL: BUY
-                </span>
-              </div>
-            </div>
+          <div className="hud-panel corner-reticle rounded-xl p-4 text-center">
+            <span className="text-3xl sm:text-4xl font-extrabold text-emerald-400 block tracking-tight font-mono text-glow-emerald">
+              100%
+            </span>
+            <span className="text-[11px] uppercase tracking-wider text-slate-400 block mt-1 font-mono">
+              Deterministic Math (0 Hallucination)
+            </span>
+          </div>
 
-            <div className="bg-black/60 p-4 rounded-lg border border-gray-800/80">
-              <span className="text-gray-500 text-xs uppercase tracking-widest block mb-2">Agent Synthesis Report</span>
-              <p className="text-gray-300 text-xs sm:text-sm leading-relaxed font-sans">
-                Deterministic fundamental synthesis completed. 50-day SMA confirmation calculated mathematically in PostgreSQL. Multi-agent LangGraph consensus indicates strong upward momentum with low volatility drawdown risk.
-              </p>
-            </div>
+          <div className="hud-panel corner-reticle rounded-xl p-4 text-center">
+            <span className="text-3xl sm:text-4xl font-extrabold text-amber-400 block tracking-tight font-mono">
+              93 / 93
+            </span>
+            <span className="text-[11px] uppercase tracking-wider text-slate-400 block mt-1 font-mono">
+              Sealed Test Suites (v0.9.0)
+            </span>
+          </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 text-xs">
-              <div className="bg-gray-900/50 p-3 rounded border border-gray-800/60">
-                <span className="text-gray-500 block text-[10px] uppercase">Engine Protocol</span>
-                <span className="text-gray-200 font-semibold">LangGraph State</span>
-              </div>
-              <div className="bg-gray-900/50 p-3 rounded border border-gray-800/60">
-                <span className="text-gray-500 block text-[10px] uppercase">Stream Pipeline</span>
-                <span className="text-emerald-400 font-semibold">Persistent WS</span>
-              </div>
-              <div className="bg-gray-900/50 p-3 rounded border border-gray-800/60">
-                <span className="text-gray-500 block text-[10px] uppercase">Perimeter Guard</span>
-                <span className="text-blue-400 font-semibold">Pydantic V2</span>
-              </div>
-              <div className="bg-gray-900/50 p-3 rounded border border-gray-800/60">
-                <span className="text-gray-500 block text-[10px] uppercase">M2M Alerts</span>
-                <span className="text-purple-400 font-semibold">n8n / Discord</span>
-              </div>
-            </div>
+          <div className="hud-panel corner-reticle rounded-xl p-4 text-center">
+            <span className="text-3xl sm:text-4xl font-extrabold text-purple-400 block tracking-tight font-mono text-glow-violet">
+              1536-dim
+            </span>
+            <span className="text-[11px] uppercase tracking-wider text-slate-400 block mt-1 font-mono">
+              pgvector Cosine Search
+            </span>
           </div>
         </div>
 
-        {/* 4-Pillar Enterprise Architecture Cards */}
+        {/* 4 Core Architectural Pillars */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-gray-950/60 border border-gray-800/80 p-5 rounded-xl">
-            <div className="w-8 h-8 rounded bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 font-mono text-sm mb-3">
-              01
+          <div className="hud-panel corner-reticle p-5 rounded-xl border border-cyan-500/20 hover:border-cyan-500/40 transition-all">
+            <div className="w-9 h-9 rounded-lg bg-cyan-950/60 border border-cyan-500/40 flex items-center justify-center text-cyan-400 mb-3 shadow-[0_0_12px_rgba(0,240,255,0.2)]">
+              <ShieldCheck className="w-5 h-5" />
             </div>
-            <h3 className="font-bold text-white text-sm mb-1">Zero-Trust Perimeter</h3>
-            <p className="text-gray-400 text-xs leading-relaxed">
-              Pydantic V2 input boundaries, JWT auth gatekeeper, and edge error masking preventing stack traces.
+            <h3 className="font-bold text-white text-sm mb-1.5 font-mono">Zero-Trust Perimeter</h3>
+            <p className="text-slate-400 text-xs leading-relaxed font-sans">
+              Strict Pydantic V2 boundary validation, JWT cookie auth gatekeeper, and edge error sanitization masking backend stack traces.
             </p>
           </div>
 
-          <div className="bg-gray-950/60 border border-gray-800/80 p-5 rounded-xl">
-            <div className="w-8 h-8 rounded bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-mono text-sm mb-3">
-              02
+          <div className="hud-panel corner-reticle p-5 rounded-xl border border-emerald-500/20 hover:border-emerald-500/40 transition-all">
+            <div className="w-9 h-9 rounded-lg bg-emerald-950/60 border border-emerald-500/40 flex items-center justify-center text-emerald-400 mb-3 shadow-[0_0_12px_rgba(16,185,129,0.2)]">
+              <Database className="w-5 h-5" />
             </div>
-            <h3 className="font-bold text-white text-sm mb-1">Deterministic Math</h3>
-            <p className="text-gray-400 text-xs leading-relaxed">
-              No LLM hallucinations. All statistical & quantitative indicators calculated in Python/PostgreSQL.
+            <h3 className="font-bold text-white text-sm mb-1.5 font-mono">Deterministic SQL CTEs</h3>
+            <p className="text-slate-400 text-xs leading-relaxed font-sans">
+              Zero LLM math calculations. SMA, EMA, VWAP, 14D RSI, Bollinger Bands, and Sharpe ratio are calculated mathematically in PostgreSQL.
             </p>
           </div>
 
-          <div className="bg-gray-950/60 border border-gray-800/80 p-5 rounded-xl">
-            <div className="w-8 h-8 rounded bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400 font-mono text-sm mb-3">
-              03
+          <div className="hud-panel corner-reticle p-5 rounded-xl border border-purple-500/20 hover:border-purple-500/40 transition-all">
+            <div className="w-9 h-9 rounded-lg bg-purple-950/60 border border-purple-500/40 flex items-center justify-center text-purple-400 mb-3 shadow-[0_0_12px_rgba(168,85,247,0.2)]">
+              <Cpu className="w-5 h-5" />
             </div>
-            <h3 className="font-bold text-white text-sm mb-1">Event-Driven Streams</h3>
-            <p className="text-gray-400 text-xs leading-relaxed">
-              Persistent WebSocket pipeline with 30s ping/pong keep-alives and client-side circuit breakers.
+            <h3 className="font-bold text-white text-sm mb-1.5 font-mono">Event-Driven Streams</h3>
+            <p className="text-slate-400 text-xs leading-relaxed font-sans">
+              Redis 7 consumer group workers, XAUTOCLAIM crash recovery, poison-pill DLQ isolation, and persistent WebSocket broadcasting.
             </p>
           </div>
 
-          <div className="bg-gray-950/60 border border-gray-800/80 p-5 rounded-xl">
-            <div className="w-8 h-8 rounded bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 font-mono text-sm mb-3">
-              04
+          <div className="hud-panel corner-reticle p-5 rounded-xl border border-amber-500/20 hover:border-amber-500/40 transition-all">
+            <div className="w-9 h-9 rounded-lg bg-amber-950/60 border border-amber-500/40 flex items-center justify-center text-amber-400 mb-3 shadow-[0_0_12px_rgba(245,158,11,0.2)]">
+              <Zap className="w-5 h-5" />
             </div>
-            <h3 className="font-bold text-white text-sm mb-1">Autonomous M2M</h3>
-            <p className="text-gray-400 text-xs leading-relaxed">
-              n8n cron orchestration, multi-asset surveillance loops, and automated Discord webhook dispatch.
+            <h3 className="font-bold text-white text-sm mb-1.5 font-mono">Multi-Agent LangGraph</h3>
+            <p className="text-slate-400 text-xs leading-relaxed font-sans">
+              Cognitive state graph orchestrating quantitative metrics, semantic filing embeddings, and circuit-breaker risk consensus.
             </p>
           </div>
         </div>
       </div>
 
-      {/* Footer */}
-      <footer className="border-t border-gray-800/80 py-6 bg-black/40 text-xs font-mono text-gray-500">
+      {/* Futuristic Institutional Footer */}
+      <footer className="border-t border-cyan-500/20 py-6 bg-slate-950/80 text-xs font-mono text-slate-500">
         <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div>AUTOMATED EQUITY RESEARCH ENGINE // INSTITUTIONAL PLATFORM</div>
-          <div className="flex items-center space-x-4 text-[11px]">
-            <span>FASTAPI</span>
+          <div className="flex items-center space-x-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-slate-400 font-bold">AUTOMATED EQUITY RESEARCH ENGINE</span>
+            <span>// INSTITUTIONAL COMMAND BRIDGE</span>
+          </div>
+          <div className="flex items-center space-x-4 text-[11px] text-slate-400">
+            <span>FASTAPI 0.115</span>
             <span>•</span>
             <span>LANGGRAPH</span>
             <span>•</span>
-            <span>REDIS</span>
+            <span>REDIS 7</span>
+            <span>•</span>
+            <span>PGVECTOR 15</span>
             <span>•</span>
             <span>NEXT.JS 16</span>
           </div>

@@ -318,7 +318,7 @@ export function LangGraphTopologyVisualizer() {
   return (
     <div className="space-y-6">
       {/* 1. Executive Mission Header */}
-      <div className="relative overflow-hidden rounded-2xl border border-gray-800 bg-gradient-to-r from-gray-900/90 via-emerald-950/30 to-gray-900/90 p-6 backdrop-blur-xl shadow-2xl">
+      <div className="hud-panel corner-reticle rounded-2xl border border-cyan-500/30 p-6 shadow-2xl relative overflow-hidden">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="flex items-center gap-3">

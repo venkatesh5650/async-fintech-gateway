@@ -11,6 +11,7 @@ import {
   AreaSeries,
   CrosshairMode,
 } from "lightweight-charts";
+import { useSoundFX } from "@/hooks/useSoundFX";
 
 export interface ChartDataPoint {
   time: number; // Unix timestamp in seconds
@@ -47,6 +48,7 @@ export default function MarketChart({
   selectedTimeframe = "5m",
   onTimeframeChange,
 }: MarketChartProps) {
+  const { playClick, playBlip } = useSoundFX();
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
 
@@ -416,18 +418,18 @@ export default function MarketChart({
   };
 
   return (
-    <div className="w-full bg-[#0d1117] border border-[#21262d] rounded-xl p-4 sm:p-5 shadow-2xl font-mono text-left space-y-3 mb-6">
+    <div className="w-full hud-panel corner-reticle rounded-2xl p-4 sm:p-5 shadow-2xl font-mono text-left space-y-3 mb-6 border border-cyan-500/25">
       {/* TradingView Top Control Bar */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-[#21262d] pb-3 gap-3">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-cyan-500/20 pb-3 gap-3">
         {/* Ticker & Price Telemetry Badge */}
         <div className="flex items-center space-x-3 flex-wrap gap-y-1">
           <span className="text-white text-xl font-extrabold tracking-tight">{ticker}</span>
           {priceTelemetry.current > 0 && (
-            <div className="flex items-center space-x-2 bg-[#161b22] px-2.5 py-1 rounded-md border border-[#30363d]">
+            <div className="flex items-center space-x-2 bg-slate-900/80 px-2.5 py-1 rounded-md border border-cyan-500/30">
               <span className="text-white text-sm font-semibold">${formatNum(priceTelemetry.current)}</span>
               <span
                 className={`text-xs font-bold ${
-                  priceTelemetry.isUp ? "text-[#26a69a]" : "text-[#ef5350]"
+                  priceTelemetry.isUp ? "text-emerald-400" : "text-rose-400"
                 }`}
               >
                 {priceTelemetry.isUp ? "+" : ""}
@@ -441,16 +443,19 @@ export default function MarketChart({
         {/* Toolbar Controls */}
         <div className="flex items-center space-x-3 w-full sm:w-auto justify-between sm:justify-end">
           {/* Timeframe Selector Pills */}
-          <div className="flex bg-[#161b22] border border-[#30363d] rounded-lg p-0.5 text-xs">
+          <div className="flex bg-slate-900/90 border border-slate-800 rounded-lg p-0.5 text-xs">
             {timeframes.map((tf) => (
               <button
                 key={tf.value}
                 type="button"
-                onClick={() => onTimeframeChange?.(tf.value)}
+                onClick={() => {
+                  playClick();
+                  onTimeframeChange?.(tf.value);
+                }}
                 className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition ${
                   selectedTimeframe === tf.value
-                    ? "bg-[#2962ff] text-white shadow-sm"
-                    : "text-[#8b949e] hover:text-white"
+                    ? "bg-cyan-500 text-black shadow-[0_0_10px_rgba(0,240,255,0.4)]"
+                    : "text-slate-400 hover:text-white"
                 }`}
               >
                 {tf.label}
@@ -458,17 +463,20 @@ export default function MarketChart({
             ))}
           </div>
 
-          <div className="h-4 w-[1px] bg-[#30363d] hidden sm:block" />
+          <div className="h-4 w-[1px] bg-slate-800 hidden sm:block" />
 
           {/* Chart Style Toggle */}
-          <div className="flex bg-[#161b22] border border-[#30363d] rounded-lg p-0.5 text-xs">
+          <div className="flex bg-slate-900/90 border border-slate-800 rounded-lg p-0.5 text-xs">
             <button
               type="button"
-              onClick={() => setChartType("candlestick")}
+              onClick={() => {
+                playBlip();
+                setChartType("candlestick");
+              }}
               className={`px-3 py-1 rounded-md text-[11px] font-bold flex items-center space-x-1.5 transition ${
                 chartType === "candlestick"
-                  ? "bg-[#238636] text-white shadow-sm"
-                  : "text-[#8b949e] hover:text-white"
+                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-sm"
+                  : "text-slate-400 hover:text-white"
               }`}
             >
               <span>🕯️</span>
@@ -476,11 +484,14 @@ export default function MarketChart({
             </button>
             <button
               type="button"
-              onClick={() => setChartType("area")}
+              onClick={() => {
+                playBlip();
+                setChartType("area");
+              }}
               className={`px-3 py-1 rounded-md text-[11px] font-bold flex items-center space-x-1.5 transition ${
                 chartType === "area"
-                  ? "bg-[#2962ff] text-white shadow-sm"
-                  : "text-[#8b949e] hover:text-white"
+                  ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm"
+                  : "text-slate-400 hover:text-white"
               }`}
             >
               <span>📈</span>
@@ -491,7 +502,7 @@ export default function MarketChart({
       </div>
 
       {/* Chart Canvas Area with Floating TradingView Top-Left Legend */}
-      <div className="relative w-full bg-[#0d1117] rounded-lg overflow-hidden border border-[#161b22]">
+      <div className="relative w-full bg-slate-950/80 rounded-xl overflow-hidden border border-slate-800/80">
         {/* Floating TradingView Top-Left Crosshair OHLCV Tooltip Overlay */}
         {legendData && (
           <div className="absolute top-3 left-3 z-10 pointer-events-none bg-[#161b22]/90 backdrop-blur-md border border-[#30363d] px-3 py-1.5 rounded-lg text-xs space-x-3 flex items-center shadow-lg font-mono">

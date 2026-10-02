@@ -43,11 +43,11 @@ export default function AgentSignalDebugger({
     (recommendation.includes("NEUTRAL") && (llmSignal || "").includes("HOLD"));
 
   return (
-    <div className="w-full bg-black/60 border border-cyan-900/40 rounded-xl overflow-hidden font-mono mt-4 shadow-lg backdrop-blur-md">
+    <div className="w-full hud-panel corner-reticle rounded-xl overflow-hidden font-mono mt-4 shadow-lg border border-cyan-500/25">
       {/* Header */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-gray-950/80 border-b border-cyan-900/30 text-left hover:bg-gray-900/50 transition-colors"
+        className="w-full flex items-center justify-between px-4 py-3 bg-slate-950/80 border-b border-cyan-500/20 text-left hover:bg-slate-900/60 transition-colors"
       >
         <div className="flex items-center space-x-3">
           <div

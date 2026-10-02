@@ -14,6 +14,8 @@ import BatchCommandCenter from "@/components/BatchCommandCenter";
 import TraceWaterfallModal from "@/components/TraceWaterfallModal";
 import OperationsConsole, { OpsTab } from "@/components/OperationsConsole";
 import MarketChart, { Timeframe } from "@/components/MarketChart";
+import { AgentSwarmDeck } from "@/components/AgentSwarmDeck";
+import { AgentThoughtStream } from "@/components/AgentThoughtStream";
 import useWebSocket from "@/hooks/useWebSocket";
 import { BatchAssetStatus, BatchJobAcceptedResponse } from "@/types/api";
 
@@ -748,17 +750,12 @@ export default function DynamicDashboardPage() {
             />
           )}
 
-          <div className="p-4 sm:p-8 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl flex flex-col items-center justify-center space-y-4 font-mono text-center">
-            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-gray-400 text-sm">
-              AI Quantitative Agents analyzing{" "}
-              <span className="text-blue-400 font-bold">{ticker || "Asset"}</span>{" "}
-              via LangGraph pipeline...
-            </p>
-            <p className="text-gray-600 text-xs">
-              Streaming distributed state machine updates over WebSocket.
-            </p>
-          </div>
+          {/* Living Swarm Persona Deck & Real-Time Thought Stream */}
+          <AgentSwarmDeck />
+          <AgentThoughtStream
+            ticker={ticker || "EQUITY"}
+            traceId={traceId || "w3c_sync_pending"}
+          />
 
           <ActionTriggers
             ticker={ticker || ""}

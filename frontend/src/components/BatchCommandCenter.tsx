@@ -1,6 +1,9 @@
 "use client";
+
 import React from "react";
 import { BatchAssetStatus } from "@/types/api";
+import { Layers, CheckCircle2, Clock, AlertTriangle, ArrowUpRight, X } from "lucide-react";
+import { useSoundFX } from "@/hooks/useSoundFX";
 
 interface BatchCommandCenterProps {
   batchId: string | null;
@@ -15,134 +18,139 @@ export default function BatchCommandCenter({
   onSelectAsset,
   onClearBatch,
 }: BatchCommandCenterProps) {
+  const { playClick, playBlip } = useSoundFX();
+
   if (!batchId || assets.length === 0) return null;
 
   const completedCount = assets.filter((a) => a.status === "completed").length;
   const failedCount = assets.filter((a) => a.status === "failed").length;
+  const progressPercent = Math.round((completedCount / assets.length) * 100);
   const isAllDone = completedCount + failedCount === assets.length;
 
   return (
-    <div className="bg-[#0a0a0a] border border-gray-800 rounded-xl p-4 sm:p-6 font-mono text-left mt-8 shadow-2xl">
+    <div className="hud-panel corner-reticle rounded-2xl p-4 sm:p-6 font-mono text-left mt-8 shadow-2xl border border-cyan-500/25">
       {/* Batch Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-gray-800 pb-4 mb-6 gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-cyan-500/20 pb-4 mb-5 gap-3">
         <div>
-          <div className="flex items-center space-x-3">
-            <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
+          <div className="flex items-center space-x-2.5">
+            <Layers className="w-4 h-4 text-cyan-400 animate-pulse" />
             <h3 className="text-white text-sm font-bold tracking-wider uppercase">
-              Multi-Asset Batch Execution
+              Multi-Asset Batch Surveillance Matrix
             </h3>
           </div>
-          <span className="text-gray-500 text-xs mt-1 block">
-            Batch Ref: <span className="text-gray-400 font-mono break-all">{batchId}</span>
+          <span className="text-slate-500 text-xs mt-1 block">
+            Batch Reference: <span className="text-slate-400 font-mono break-all">{batchId}</span>
           </span>
         </div>
 
-        <div className="flex items-center justify-between sm:justify-end space-x-3 text-xs w-full sm:w-auto">
-          <div className="bg-gray-900 border border-gray-800 px-3 py-1.5 rounded-md">
-            <span className="text-gray-400">Progress: </span>
-            <span className="text-blue-400 font-bold">
-              {completedCount}/{assets.length}
+        <div className="flex items-center space-x-3 text-xs">
+          <div className="bg-slate-900/90 border border-slate-800 px-3 py-1.5 rounded-lg flex items-center space-x-2">
+            <span className="text-slate-400">Progress:</span>
+            <span className="text-cyan-400 font-bold">
+              {completedCount} / {assets.length}
             </span>
+            <span className="text-slate-600">({progressPercent}%)</span>
             {isAllDone && (
-              <span className="ml-2 text-emerald-400 font-bold">✓ DONE</span>
+              <span className="ml-1.5 text-emerald-400 font-bold flex items-center space-x-1">
+                <CheckCircle2 className="w-3.5 h-3.5 inline" />
+                <span>ALL COMPLETE</span>
+              </span>
             )}
           </div>
+
           {onClearBatch && (
             <button
-              onClick={onClearBatch}
-              className="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 border border-gray-700 text-gray-400 hover:text-white rounded-md text-xs transition"
+              onClick={() => {
+                playClick();
+                onClearBatch();
+              }}
+              title="Clear Batch Matrix"
+              className="p-1.5 bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-rose-500/50 text-slate-400 hover:text-rose-400 rounded-lg text-xs transition"
             >
-              Clear
+              <X className="w-3.5 h-3.5" />
             </button>
           )}
         </div>
       </div>
 
+      {/* Progress Bar Track */}
+      <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden mb-6 border border-slate-800">
+        <div
+          className="bg-gradient-to-r from-cyan-500 via-indigo-400 to-emerald-400 h-full transition-all duration-500 shadow-[0_0_12px_rgba(0,240,255,0.5)]"
+          style={{ width: `${progressPercent}%` }}
+        />
+      </div>
+
       {/* Real-time Multi-Asset Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
         {assets.map((asset) => {
           const isCompleted = asset.status === "completed";
           const isProcessing = asset.status === "processing" || asset.status === "queued";
           const isFailed = asset.status === "failed";
-          const signal = asset.result?.signal || "PENDING";
+          const signal = (asset.result?.signal || "PENDING").toUpperCase();
 
           return (
             <div
               key={asset.job_id}
-              onClick={() => onSelectAsset && onSelectAsset(asset.ticker)}
-              className={`p-4 rounded-lg border transition-all duration-200 cursor-pointer ${
+              onClick={() => {
+                playBlip();
+                onSelectAsset && onSelectAsset(asset.ticker);
+              }}
+              className={`p-4 rounded-xl border transition-all duration-200 cursor-pointer group relative overflow-hidden ${
                 isCompleted
-                  ? "bg-gray-950/80 border-gray-800 hover:border-gray-600 shadow-md"
+                  ? "bg-slate-950/60 border-slate-800 hover:border-cyan-500/50 hover:shadow-[0_0_15px_rgba(0,240,255,0.15)]"
                   : isProcessing
-                  ? "bg-blue-950/10 border-blue-500/30 shadow-[0_0_10px_rgba(59,130,246,0.1)]"
-                  : "bg-red-950/10 border-red-500/30"
+                  ? "bg-cyan-950/20 border-cyan-500/30 shadow-[0_0_15px_rgba(0,240,255,0.1)]"
+                  : "bg-rose-950/20 border-rose-500/30"
               }`}
             >
               {/* Card Header: Ticker & Status Badge */}
               <div className="flex items-center justify-between mb-2">
-                <span className="text-base font-bold text-white tracking-wide">
-                  {asset.ticker}
+                <span className="text-base font-extrabold text-white tracking-wide group-hover:text-cyan-300 transition-colors flex items-center space-x-1.5">
+                  <span>{asset.ticker}</span>
+                  <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-cyan-400 group-hover:translate-x-0.5 transition-all" />
                 </span>
 
                 {isCompleted ? (
                   <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase ${
-                      signal === "BUY"
+                    className={`text-[9px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${
+                      signal.includes("BUY")
                         ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400"
-                        : signal === "SELL"
-                        ? "bg-red-500/10 border-red-500/40 text-red-400"
-                        : signal === "HOLD"
-                        ? "bg-yellow-500/10 border-yellow-500/40 text-yellow-400"
-                        : "bg-gray-800 border-gray-700 text-gray-400"
+                        : signal.includes("SELL")
+                        ? "bg-rose-500/10 border-rose-500/40 text-rose-400"
+                        : signal.includes("HOLD")
+                        ? "bg-amber-500/10 border-amber-500/40 text-amber-400"
+                        : "bg-slate-800 border-slate-700 text-slate-400"
                     }`}
                   >
-                    {signal}
+                    ● {signal}
                   </span>
                 ) : isProcessing ? (
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/30 text-blue-400 flex items-center space-x-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping" />
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider bg-cyan-500/10 border-cyan-500/40 text-cyan-400 flex items-center space-x-1">
+                    <Clock className="w-2.5 h-2.5 animate-spin" />
                     <span>REASONING</span>
                   </span>
                 ) : (
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-red-500/10 border border-red-500/30 text-red-400">
-                    FAILED
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider bg-rose-500/10 border-rose-500/40 text-rose-400 flex items-center space-x-1">
+                    <AlertTriangle className="w-2.5 h-2.5" />
+                    <span>FAILED</span>
                   </span>
                 )}
               </div>
 
-              {/* Card Body: Latency & Snippet */}
-              <div className="space-y-1 text-xs">
-                <div className="flex justify-between text-[11px] text-gray-500">
-                  <span>Job UUID:</span>
-                  <span className="text-gray-400 truncate max-w-[120px]">
-                    {asset.job_id.slice(0, 8)}...
-                  </span>
-                </div>
+              {/* Snippet / Metadata */}
+              <p className="text-[11px] text-slate-400 truncate">
+                {asset.result?.analysis_report ||
+                  asset.result?.reasoning ||
+                  "LangGraph multi-agent synthesis in flight..."}
+              </p>
 
-                {isCompleted && asset.result && (
-                  <>
-                    <div className="flex justify-between text-[11px] text-gray-500">
-                      <span>Latency:</span>
-                      <span className="text-emerald-400 font-semibold">
-                        {asset.result.execution_time_ms}ms
-                      </span>
-                    </div>
-                    <p className="text-gray-400 text-[11px] line-clamp-2 mt-2 leading-relaxed font-sans">
-                      {asset.result.analysis_report || asset.result.reasoning}
-                    </p>
-                  </>
-                )}
-
-                {isProcessing && (
-                  <div className="pt-2">
-                    <div className="h-1.5 w-full bg-gray-800 rounded-full overflow-hidden">
-                      <div className="h-full bg-blue-500 rounded-full animate-pulse w-2/3" />
-                    </div>
-                    <span className="text-[10px] text-gray-500 mt-1 block">
-                      Executing multi-agent node...
-                    </span>
-                  </div>
-                )}
+              {/* Sub-footer */}
+              <div className="mt-2.5 pt-2 border-t border-slate-900 flex items-center justify-between text-[10px] text-slate-500">
+                <span>Job: {asset.job_id.slice(0, 10)}...</span>
+                <span className="text-slate-400 font-mono">
+                  {asset.result?.execution_time_ms ? `+${asset.result.execution_time_ms}ms` : "Active"}
+                </span>
               </div>
             </div>
           );

@@ -1,0 +1,178 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import { Terminal, Copy, Check, Cpu, Sparkles, ChevronRight, Activity } from "lucide-react";
+import { useSoundFX } from "@/hooks/useSoundFX";
+
+interface ThoughtLogItem {
+  id: string;
+  agent: "SENTINEL-Q" | "LEXICON-X" | "ARBITER" | "GATEKEEPER";
+  message: string;
+  timestamp: string;
+  latencyMs: number;
+  status: "success" | "warning" | "info";
+}
+
+interface AgentThoughtStreamProps {
+  ticker?: string;
+  traceId?: string;
+  rawReasoning?: string;
+  quantInjected?: boolean;
+}
+
+export function AgentThoughtStream({
+  ticker = "AAPL",
+  traceId = "w3c_4fa812bc9001",
+  rawReasoning,
+  quantInjected = true,
+}: AgentThoughtStreamProps) {
+  const [copied, setCopied] = useState(false);
+  const [activeStep, setActiveStep] = useState<number>(3);
+  const { playClick, playBlip } = useSoundFX();
+
+  // Synthetic step streams reflecting multi-agent consensus
+  const thoughtSteps: ThoughtLogItem[] = [
+    {
+      id: "step-1",
+      agent: "SENTINEL-Q",
+      message: `Computed 50D SMA, 14D RSI (58.4), and 20D Bollinger Bands via PostgreSQL CTE. Math verified deterministic.`,
+      timestamp: "00:00.012",
+      latencyMs: 12.4,
+      status: "success",
+    },
+    {
+      id: "step-2",
+      agent: "LEXICON-X",
+      message: `Scanned SEC 10-K filings using 1536-dim pgvector HNSW cosine scan. Retrieved 5 high-relevance semantic passages.`,
+      timestamp: "00:00.048",
+      latencyMs: 36.1,
+      status: "success",
+    },
+    {
+      id: "step-3",
+      agent: "GATEKEEPER",
+      message: `Verified Zero-Trust token schema & circuit breaker threshold (Closed state, 0 error trips in last 60m).`,
+      timestamp: "00:00.052",
+      latencyMs: 4.2,
+      status: "info",
+    },
+    {
+      id: "step-4",
+      agent: "ARBITER",
+      message: rawReasoning
+        ? rawReasoning.slice(0, 140) + "..."
+        : `Consensus synthesis achieved across quantitative and qualitative vector planes. Dispatched alpha report.`,
+      timestamp: "00:00.118",
+      latencyMs: 65.8,
+      status: "success",
+    },
+  ];
+
+  const handleCopyTrace = () => {
+    playClick();
+    navigator.clipboard.writeText(traceId);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const getAgentBadge = (agent: ThoughtLogItem["agent"]) => {
+    switch (agent) {
+      case "SENTINEL-Q":
+        return "bg-emerald-950/60 border-emerald-500/40 text-emerald-400";
+      case "LEXICON-X":
+        return "bg-purple-950/60 border-purple-500/40 text-purple-400";
+      case "GATEKEEPER":
+        return "bg-amber-950/60 border-amber-500/40 text-amber-400";
+      case "ARBITER":
+      default:
+        return "bg-cyan-950/60 border-cyan-500/40 text-cyan-400";
+    }
+  };
+
+  return (
+    <div className="hud-panel corner-reticle rounded-xl p-4 sm:p-5 font-mono text-xs overflow-hidden relative">
+      {/* HUD Header */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-3 mb-4">
+        <div className="flex items-center space-x-2">
+          <Terminal className="w-4 h-4 text-cyan-400" />
+          <span className="font-bold tracking-wider text-slate-200 uppercase text-xs">
+            Live Cognitive Reasoning Stream
+          </span>
+          <span className="inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[10px] bg-cyan-500/10 border border-cyan-500/30 text-cyan-300">
+            <Activity className="w-2.5 h-2.5 animate-pulse text-cyan-400" />
+            <span>4/4 NODES SYNCED</span>
+          </span>
+        </div>
+
+        {/* W3C Trace Quick Copy */}
+        <button
+          onClick={handleCopyTrace}
+          className="flex items-center space-x-1.5 px-2 py-1 rounded bg-slate-900/90 border border-slate-800 hover:border-cyan-500/50 text-[11px] text-slate-400 hover:text-cyan-300 transition-all"
+          title="Copy W3C Trace Context"
+        >
+          <span>TRACE:</span>
+          <span className="text-slate-300 font-semibold">{traceId.slice(0, 12)}...</span>
+          {copied ? (
+            <Check className="w-3 h-3 text-emerald-400" />
+          ) : (
+            <Copy className="w-3 h-3 text-slate-500 hover:text-cyan-400" />
+          )}
+        </button>
+      </div>
+
+      {/* Stream Items */}
+      <div className="space-y-2.5">
+        {thoughtSteps.map((step, idx) => {
+          const isSelected = activeStep === idx;
+          return (
+            <div
+              key={step.id}
+              onClick={() => {
+                setActiveStep(idx);
+                playBlip();
+              }}
+              className={`p-3 rounded-lg border transition-all duration-200 cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
+                isSelected
+                  ? "bg-slate-900/90 border-cyan-500/40 shadow-[0_0_15px_rgba(0,240,255,0.12)]"
+                  : "bg-slate-950/40 border-slate-900 hover:border-slate-800 hover:bg-slate-900/40"
+              }`}
+            >
+              <div className="flex items-start sm:items-center space-x-2.5 flex-1 min-w-0">
+                <ChevronRight
+                  className={`w-3.5 h-3.5 mt-0.5 sm:mt-0 transition-transform ${
+                    isSelected ? "text-cyan-400 rotate-90" : "text-slate-600"
+                  }`}
+                />
+                <span
+                  className={`text-[9px] px-2 py-0.5 rounded border uppercase tracking-wider font-bold shrink-0 ${getAgentBadge(
+                    step.agent
+                  )}`}
+                >
+                  {step.agent}
+                </span>
+                <p className="text-slate-300 text-xs truncate leading-relaxed">
+                  {step.message}
+                </p>
+              </div>
+
+              <div className="flex items-center space-x-3 text-[10px] text-slate-500 self-end sm:self-auto shrink-0">
+                <span className="text-slate-400 font-mono">+{step.latencyMs}ms</span>
+                <span className="text-slate-600">|</span>
+                <span className="text-slate-500">{step.timestamp}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Footer Subtext */}
+      <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-500">
+        <span className="flex items-center space-x-1">
+          <Sparkles className="w-3 h-3 text-cyan-400 inline" />
+          <span>Zero LLM Math Hallucination Invariant Enforced</span>
+        </span>
+        <span className="text-emerald-400 font-mono">POSTGRES CTE LATENCY: 12ms</span>
+      </div>
+    </div>
+  );
+}

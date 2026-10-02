@@ -1,1 +1,180 @@
 @import "tailwindcss";
+
+@layer base {
+  :root {
+    --void-bg: #030712;
+    --hud-glass: rgba(15, 23, 42, 0.72);
+    --hud-border: rgba(56, 189, 248, 0.2);
+    --neon-cyan: #00f0ff;
+    --neon-emerald: #10b981;
+    --neon-violet: #a855f7;
+    --neon-amber: #f59e0b;
+    --neon-rose: #f43f5e;
+  }
+
+  body {
+    background-color: var(--void-bg);
+    color: #e2e8f0;
+    overflow-x: hidden;
+  }
+
+  /* Custom Cyber Scrollbars */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #050b14;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #1e293b;
+    border-radius: 3px;
+    border: 1px solid rgba(56, 189, 248, 0.2);
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #334155;
+    border-color: rgba(0, 240, 255, 0.5);
+  }
+}
+
+/* Sci-Fi HUD Glassmorphism & Cybernetic Panels */
+.hud-panel {
+  background: radial-gradient(130% 100% at 50% 0%, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.75) 100%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6), inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+}
+
+.hud-panel:hover {
+  border-color: rgba(56, 189, 248, 0.35);
+  box-shadow: 0 12px 40px 0 rgba(0, 240, 255, 0.08), inset 0 1px 0 0 rgba(0, 240, 255, 0.15);
+}
+
+/* Neon Glow Accents */
+.glow-cyan {
+  box-shadow: 0 0 20px -2px rgba(0, 240, 255, 0.45);
+}
+
+.glow-emerald {
+  box-shadow: 0 0 20px -2px rgba(16, 185, 129, 0.45);
+}
+
+.glow-violet {
+  box-shadow: 0 0 20px -2px rgba(168, 85, 247, 0.45);
+}
+
+.glow-rose {
+  box-shadow: 0 0 20px -2px rgba(244, 63, 94, 0.45);
+}
+
+.glow-amber {
+  box-shadow: 0 0 20px -2px rgba(245, 158, 11, 0.45);
+}
+
+.text-glow-cyan {
+  text-shadow: 0 0 12px rgba(0, 240, 255, 0.75);
+}
+
+.text-glow-emerald {
+  text-shadow: 0 0 12px rgba(16, 185, 129, 0.75);
+}
+
+.text-glow-violet {
+  text-shadow: 0 0 12px rgba(168, 85, 247, 0.75);
+}
+
+/* Sci-Fi Corner Crosshairs & Precision Reticles */
+.corner-reticle {
+  position: relative;
+}
+
+.corner-reticle::before,
+.corner-reticle::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  pointer-events: none;
+  transition: all 0.25s ease;
+}
+
+.corner-reticle::before {
+  top: -1px;
+  left: -1px;
+  border-top: 2px solid #00f0ff;
+  border-left: 2px solid #00f0ff;
+}
+
+.corner-reticle::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: 2px solid #00f0ff;
+  border-right: 2px solid #00f0ff;
+}
+
+.corner-reticle:hover::before,
+.corner-reticle:hover::after {
+  width: 14px;
+  height: 14px;
+  border-color: #38bdf8;
+  filter: drop-shadow(0 0 6px #00f0ff);
+}
+
+/* Animated Pulse Rings & Radar Waves */
+@keyframes radar-sweep {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-radar {
+  animation: radar-sweep 4s linear infinite;
+}
+
+@keyframes neural-pulse {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(0.98);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.02);
+  }
+}
+
+.animate-neural-pulse {
+  animation: neural-pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes laser-scan {
+  0% {
+    top: 0%;
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.8;
+  }
+  85% {
+    opacity: 0.8;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+.animate-laser-scan {
+  animation: laser-scan 2.5s ease-in-out infinite;
+}
+
+/* Subtle Sci-Fi Grid Overlay */
+.cyber-grid {
+  background-image: 
+    linear-gradient(to right, rgba(56, 189, 248, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(56, 189, 248, 0.05) 1px, transparent 1px);
+  background-size: 32px 32px;
+}

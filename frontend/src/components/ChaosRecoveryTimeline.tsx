@@ -141,7 +141,7 @@ export default function ChaosRecoveryTimeline() {
   ];
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 text-gray-100 shadow-2xl relative overflow-hidden">
+    <div className="hud-panel corner-reticle rounded-2xl p-6 text-slate-100 shadow-2xl relative overflow-hidden border border-rose-500/30">
       {/* Background Accent */}
       <div className="absolute top-0 right-0 w-96 h-96 bg-rose-500/5 rounded-full blur-3xl pointer-events-none" />
 
