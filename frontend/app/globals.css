@@ -12,10 +12,24 @@
     --neon-rose: #f43f5e;
   }
 
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: hidden;
+    position: relative;
+    -webkit-text-size-adjust: 100%;
+    touch-action: manipulation;
+  }
+
   body {
     background-color: var(--void-bg);
     color: #e2e8f0;
-    overflow-x: hidden;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
   }
 
   /* Custom Cyber Scrollbars */
