@@ -35,7 +35,7 @@ class Ticker(Base):
     __tablename__ = "tickers"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    symbol: Mapped[str] = mapped_column(String(10), unique=True, index=True, nullable=False)
+    symbol: Mapped[str] = mapped_column(String(32), unique=True, index=True, nullable=False)
     company_name: Mapped[str] = mapped_column(String(255), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 

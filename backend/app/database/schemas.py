@@ -17,10 +17,11 @@ class MarketDataPayload(BaseModel):
     @field_validator("ticker")
     @classmethod
     def validate_ticker_format(cls, value: str) -> str:
-        """Sanitize and validate equity ticker symbol format."""
+        """Sanitize and validate global financial ticker symbol format."""
+        import re
         clean_ticker = value.upper().strip()
-        if not clean_ticker.isalpha() or not (1 <= len(clean_ticker) <= 5):
-            raise ValueError("Ticker must be 1-5 alphabetic characters only.")
+        if not re.match(r"^[A-Z0-9.\-=^]{1,16}$", clean_ticker):
+            raise ValueError("Ticker must be 1-16 valid financial symbol characters (e.g. AAPL, TCS.NS, BTC-USD).")
         return clean_ticker
 
     @field_validator("asset_class")
