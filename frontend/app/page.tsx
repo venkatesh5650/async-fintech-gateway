@@ -1,14 +1,19 @@
 "use client";
 
+import React, { useState } from "react";
 import Link from "next/link";
 import CyberTopNav from "@/components/CyberTopNav";
 import LiveMarketTickerTape from "@/components/LiveMarketTickerTape";
 import HolographicHeroTerminal from "@/components/HolographicHeroTerminal";
-import { ArrowRight, ShieldCheck, Zap, Database, Cpu, Activity, Award } from "lucide-react";
+import TickerSearchModal from "@/components/TickerSearchModal";
+import { ArrowRight, ShieldCheck, Zap, Database, Cpu, Activity, Award, Search, TrendingUp } from "lucide-react";
 import { useSoundFX } from "@/hooks/useSoundFX";
+import { useBikeTransition } from "@/context/BikeTransitionContext";
 
 export default function Home() {
   const { playClick } = useSoundFX();
+  const { launchBikeTransition } = useBikeTransition();
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   return (
     <main className="min-h-screen bg-transparent text-slate-100 font-sans selection:bg-cyan-500 selection:text-black relative overflow-hidden flex flex-col justify-between">
@@ -45,24 +50,65 @@ export default function Home() {
           </p>
 
           {/* Primary Action Buttons */}
-          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link
-              href="/dashboard/AAPL"
-              onClick={() => playClick()}
-              className="w-full sm:w-auto px-8 py-4 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-mono text-sm font-bold uppercase tracking-widest rounded-xl shadow-[0_0_25px_rgba(0,240,255,0.5)] transition-all duration-200 text-center flex items-center justify-center space-x-2 group"
+          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
+            <button
+              type="button"
+              onClick={() => {
+                playClick();
+                setIsSearchOpen(true);
+              }}
+              className="w-full sm:w-auto px-7 py-4 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-mono text-sm font-bold uppercase tracking-wider rounded-xl shadow-[0_0_25px_rgba(0,240,255,0.5)] transition-all duration-200 text-center flex items-center justify-center space-x-2.5 group"
             >
-              <span>Launch Research Deck</span>
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </Link>
+              <Search className="w-4 h-4 text-slate-950 group-hover:scale-110 transition-transform" />
+              <span>Search Any Online Ticker</span>
+              <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] bg-slate-950/20 border border-slate-950/40 rounded font-bold">
+                ⌘K
+              </kbd>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => launchBikeTransition("AAPL")}
+              className="w-full sm:w-auto px-6 py-4 bg-slate-900/90 hover:bg-slate-800 text-slate-200 hover:text-white font-mono text-sm font-semibold uppercase tracking-wider rounded-xl border border-slate-700/80 hover:border-cyan-500/50 transition-all duration-200 text-center flex items-center justify-center space-x-2 shadow-[0_0_15px_rgba(0,0,0,0.5)] group active:scale-95"
+            >
+              <span>Quick Deck (AAPL)</span>
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform text-cyan-400" />
+            </button>
 
             <Link
               href="/capstone"
               onClick={() => playClick()}
-              className="w-full sm:w-auto px-8 py-4 bg-slate-900/90 hover:bg-slate-800 text-slate-300 hover:text-white font-mono text-sm font-semibold uppercase tracking-widest rounded-xl border border-slate-700/80 hover:border-cyan-500/50 transition-all duration-200 text-center flex items-center justify-center space-x-2 shadow-[0_0_15px_rgba(0,0,0,0.5)]"
+              className="w-full sm:w-auto px-6 py-4 bg-slate-950/80 hover:bg-slate-900 text-slate-400 hover:text-white font-mono text-sm font-semibold uppercase tracking-wider rounded-xl border border-slate-800 hover:border-amber-500/40 transition-all duration-200 text-center flex items-center justify-center space-x-2"
             >
               <Award className="w-4 h-4 text-amber-400" />
-              <span>Release Sign-Off (93/93)</span>
+              <span>Sign-Off (93/93)</span>
             </Link>
+          </div>
+
+          {/* Trending Ticker Quick Launch Bar */}
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-2 font-mono text-xs">
+            <span className="text-slate-500 flex items-center gap-1 text-[11px] uppercase tracking-wider mr-1">
+              <TrendingUp className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Instant Launch:</span>
+            </span>
+            {[
+              { sym: "NVDA", name: "NVIDIA" },
+              { sym: "TSLA", name: "Tesla" },
+              { sym: "MSFT", name: "Microsoft" },
+              { sym: "AAPL", name: "Apple" },
+              { sym: "AMZN", name: "Amazon" },
+              { sym: "BTC-USD", name: "Bitcoin" },
+            ].map((t) => (
+              <button
+                key={t.sym}
+                type="button"
+                onClick={() => launchBikeTransition(t.sym)}
+                className="px-2.5 py-1 rounded-lg bg-slate-950/80 hover:bg-cyan-950/60 border border-slate-800/80 hover:border-cyan-500/50 text-slate-300 hover:text-cyan-300 transition-all active:scale-95 flex items-center gap-1"
+              >
+                <span className="font-bold">{t.sym}</span>
+                <span className="text-[10px] text-slate-500 hidden xs:inline">({t.name})</span>
+              </button>
+            ))}
           </div>
         </div>
 
@@ -152,27 +198,11 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Futuristic Institutional Footer */}
-      <footer className="border-t border-cyan-500/20 py-6 bg-slate-950/80 text-xs font-mono text-slate-500">
-        <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center space-x-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-slate-400 font-bold">AUTOMATED EQUITY RESEARCH ENGINE</span>
-            <span>// INSTITUTIONAL COMMAND BRIDGE</span>
-          </div>
-          <div className="flex items-center space-x-4 text-[11px] text-slate-400">
-            <span>FASTAPI 0.115</span>
-            <span>•</span>
-            <span>LANGGRAPH</span>
-            <span>•</span>
-            <span>REDIS 7</span>
-            <span>•</span>
-            <span>PGVECTOR 15</span>
-            <span>•</span>
-            <span>NEXT.JS 16</span>
-          </div>
-        </div>
-      </footer>
+      {/* Global Interactive Ticker Search Modal */}
+      <TickerSearchModal
+        isOpen={isSearchOpen}
+        onClose={() => setIsSearchOpen(false)}
+      />
     </main>
   );
 }
