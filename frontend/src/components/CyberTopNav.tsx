@@ -35,13 +35,13 @@ export default function CyberTopNav() {
 
   return (
     <>
-      <header className="sticky top-0 z-50 border-b border-cyan-500/20 bg-[#030712]/85 backdrop-blur-xl transition-all duration-200">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-2 sm:gap-4">
+      <header className="sticky top-0 z-50 border-b border-cyan-500/20 bg-[#030712]/85 backdrop-blur-xl transition-all duration-200 w-full max-w-full overflow-x-hidden">
+        <div className="max-w-7xl mx-auto px-2.5 sm:px-6 h-16 flex items-center justify-between gap-1.5 sm:gap-4 w-full">
           {/* Brand / Swarm Core */}
           <Link
             href="/"
             onClick={() => playClick()}
-            className="flex items-center space-x-2.5 sm:space-x-3 group shrink-0"
+            className="flex items-center space-x-2 sm:space-x-3 group shrink min-w-0"
           >
             <div className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-gradient-to-br from-cyan-950/60 to-slate-900 border border-cyan-500/40 flex items-center justify-center shadow-[0_0_15px_rgba(0,240,255,0.25)] group-hover:border-cyan-400 group-hover:shadow-[0_0_20px_rgba(0,240,255,0.5)] transition-all duration-300">
               <Bot className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-400 group-hover:scale-110 transition-transform duration-300" />

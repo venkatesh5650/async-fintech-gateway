@@ -26,7 +26,7 @@ export default function LiveMarketTickerTape() {
   ];
 
   return (
-    <div className="w-full border-y border-cyan-500/20 bg-slate-950/60 backdrop-blur-md py-2 overflow-x-auto no-scrollbar font-mono text-xs">
+    <div className="w-full max-w-full border-y border-cyan-500/20 bg-slate-950/60 backdrop-blur-md py-2 overflow-x-auto no-scrollbar font-mono text-xs">
       <div className="max-w-7xl mx-auto px-4 flex items-center justify-between min-w-max space-x-6">
         <div className="flex items-center space-x-2 text-cyan-400 font-bold shrink-0">
           <Radio className="w-3.5 h-3.5 animate-pulse text-emerald-400" />
