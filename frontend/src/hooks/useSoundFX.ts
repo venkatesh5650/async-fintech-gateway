@@ -140,6 +140,67 @@ export function useSoundFX() {
     }
   }, [isMuted, getAudioContext]);
 
+  // Institutional Low-Latency Quant Pipeline Ingestion Warp (Fiber-Optic Data Pulse)
+  const playPipelineWarp = useCallback(() => {
+    if (isMuted) return;
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+
+      // 1. Tactile sub-bass quantum trigger pulse
+      const subOsc = ctx.createOscillator();
+      const subGain = ctx.createGain();
+      subOsc.type = "sine";
+      subOsc.frequency.setValueAtTime(90, now);
+      subOsc.frequency.exponentialRampToValueAtTime(32, now + 0.18);
+      subGain.gain.setValueAtTime(0.08, now);
+      subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.18);
+      subOsc.connect(subGain);
+      subGain.connect(ctx.destination);
+      subOsc.start(now);
+      subOsc.stop(now + 0.18);
+
+      // 2. High-speed fiber-optic data stream pulse (sweeping frequency harmonic)
+      const dataOsc = ctx.createOscillator();
+      const dataGain = ctx.createGain();
+      const dataFilter = ctx.createBiquadFilter();
+      dataOsc.type = "triangle";
+      dataOsc.frequency.setValueAtTime(440, now);
+      dataOsc.frequency.exponentialRampToValueAtTime(1760, now + 0.35);
+      dataOsc.frequency.exponentialRampToValueAtTime(3520, now + 0.65);
+
+      dataFilter.type = "bandpass";
+      dataFilter.frequency.setValueAtTime(800, now);
+      dataFilter.frequency.exponentialRampToValueAtTime(3200, now + 0.65);
+      dataFilter.Q.setValueAtTime(3, now);
+
+      dataGain.gain.setValueAtTime(0.01, now);
+      dataGain.gain.linearRampToValueAtTime(0.06, now + 0.25);
+      dataGain.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
+
+      dataOsc.connect(dataFilter);
+      dataFilter.connect(dataGain);
+      dataGain.connect(ctx.destination);
+      dataOsc.start(now);
+      dataOsc.stop(now + 0.7);
+
+      // 3. Crisp W3C Consensus lock chime (C6 harmonic resolution)
+      const chimeOsc = ctx.createOscillator();
+      const chimeGain = ctx.createGain();
+      chimeOsc.type = "sine";
+      chimeOsc.frequency.setValueAtTime(1046.5, now + 0.45); // C6
+      chimeGain.gain.setValueAtTime(0.03, now + 0.45);
+      chimeGain.gain.exponentialRampToValueAtTime(0.001, now + 0.78);
+      chimeOsc.connect(chimeGain);
+      chimeGain.connect(ctx.destination);
+      chimeOsc.start(now + 0.45);
+      chimeOsc.stop(now + 0.78);
+    } catch {
+      // Audio suppressed safely
+    }
+  }, [isMuted, getAudioContext]);
+
   return {
     isMuted,
     toggleMute,
@@ -147,5 +208,7 @@ export function useSoundFX() {
     playBlip,
     playConsensus,
     playAlert,
+    playPipelineWarp,
+    playBikeAcceleration: playPipelineWarp, // Alias for backwards compatibility
   };
 }

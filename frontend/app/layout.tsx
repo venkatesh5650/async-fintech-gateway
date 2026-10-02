@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import CyberBackgroundCanvas from "@/components/CyberBackgroundCanvas";
 import FounderDemoHotkeys from "@/components/FounderDemoHotkeys";
+import { BikeTransitionProvider } from "@/context/BikeTransitionContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -36,7 +37,9 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-[#030712] text-slate-100 font-sans selection:bg-cyan-500 selection:text-black relative">
         {/* Living Multi-Agent Ambient Neural Background */}
         <CyberBackgroundCanvas />
-        <div className="relative z-10 flex-1 flex flex-col">{children}</div>
+        <BikeTransitionProvider>
+          <div className="relative z-10 flex-1 flex flex-col">{children}</div>
+        </BikeTransitionProvider>
         {/* Founder Presentation Quick-Dock & Keyboard Navigation */}
         <FounderDemoHotkeys />
       </body>
