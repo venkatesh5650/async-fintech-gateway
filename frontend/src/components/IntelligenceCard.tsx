@@ -1,13 +1,13 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import CacheStatusBadge from "./CacheStatusBadge";
 import StampedeGuardBadge from "./StampedeGuardBadge";
 import AgentSignalDebugger from "./AgentSignalDebugger";
 import { ConfidenceDialMeter } from "./ConfidenceDialMeter";
 import { AgentThoughtStream } from "./AgentThoughtStream";
 import { AgentSwarmDeck } from "./AgentSwarmDeck";
-import { Sparkles, Cpu, Activity, ShieldCheck, Zap } from "lucide-react";
+import { Sparkles, Cpu, Activity, ShieldCheck, Zap, ChevronDown, ChevronUp } from "lucide-react";
 
 export interface IntelligenceData {
   ticker?: string;
@@ -68,8 +68,14 @@ export default function IntelligenceCard({
 
   const signalTheme = getSignalTheme(rawSignal);
 
+  const [isExpanded, setIsExpanded] = useState(false);
+  const reportText =
+    data.analysis_report ||
+    data.reasoning ||
+    "Autonomous state machine execution complete. Technical momentum indicators confirmed mathematically in PostgreSQL. SEC 10-K disclosures cross-referenced via pgvector cosine distance.";
+
   return (
-    <div className="w-full space-y-6 font-mono">
+    <div className="w-full space-y-6 font-mono" id="ai-intelligence-results">
       {/* 1. Autonomous Swarm Persona Deck */}
       <AgentSwarmDeck />
 
@@ -148,23 +154,58 @@ export default function IntelligenceCard({
               </div>
             </div>
 
-            {/* Cognitive Synthesis Report */}
-            <div className="hud-panel rounded-xl p-4 border border-slate-800/90 flex-1">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-3">
-                <h3 className="text-cyan-300 text-xs font-bold uppercase tracking-wider flex items-center space-x-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Cognitive Synthesis & Fundamental Brief</span>
-                </h3>
-                <span className="text-[10px] text-slate-500 font-mono">
-                  MODEL: QWEN 2.5 32B / GROQ
-                </span>
+            {/* Cognitive Synthesis Report with Controlled Scrolling */}
+            <div className="hud-panel rounded-xl p-4 border border-slate-800/90 flex-1 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-3">
+                  <h3 className="text-cyan-300 text-xs font-bold uppercase tracking-wider flex items-center space-x-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Cognitive Synthesis & Fundamental Brief</span>
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-slate-500 font-mono hidden sm:inline">
+                      MODEL: QWEN 2.5 32B / GROQ
+                    </span>
+                    {reportText.length > 200 && (
+                      <button
+                        type="button"
+                        onClick={() => setIsExpanded(!isExpanded)}
+                        className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950/70 border border-cyan-800/70 text-cyan-300 hover:text-white hover:bg-cyan-900/80 transition-all flex items-center gap-1 active:scale-95"
+                      >
+                        <span>{isExpanded ? "Compact View" : "Full View"}</span>
+                        {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div
+                  className={`text-slate-300 text-xs leading-relaxed whitespace-pre-wrap font-sans overscroll-contain pr-2 transition-all duration-200 ${
+                    isExpanded
+                      ? "max-h-none overflow-visible"
+                      : "max-h-60 sm:max-h-72 overflow-y-auto"
+                  }`}
+                  style={{
+                    scrollbarWidth: "thin",
+                    scrollbarColor: "rgba(6, 182, 212, 0.35) rgba(15, 23, 42, 0.4)",
+                  }}
+                >
+                  {reportText}
+                </div>
               </div>
 
-              <div className="text-slate-300 text-xs leading-relaxed whitespace-pre-wrap font-sans max-h-48 overflow-y-auto pr-1">
-                {data.analysis_report ||
-                  data.reasoning ||
-                  "Autonomous state machine execution complete. Technical momentum indicators confirmed mathematically in PostgreSQL. SEC 10-K disclosures cross-referenced via pgvector cosine distance."}
-              </div>
+              {!isExpanded && reportText.length > 200 && (
+                <div className="mt-3 pt-2 border-t border-slate-900/90 flex items-center justify-between text-[10px] text-slate-500 font-mono">
+                  <span>Scroll container isolated • Click to expand full text</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsExpanded(true)}
+                    className="text-cyan-400 hover:text-cyan-300 font-semibold"
+                  >
+                    Expand All ▾
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

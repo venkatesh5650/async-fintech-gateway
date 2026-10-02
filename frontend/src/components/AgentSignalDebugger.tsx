@@ -148,7 +148,13 @@ export default function AgentSignalDebugger({
               </span>
             </div>
 
-            <div className="bg-gray-900/70 p-2.5 rounded border border-gray-800/80 text-gray-300 leading-relaxed max-h-36 overflow-y-auto whitespace-pre-wrap text-[11px]">
+            <div
+              className="bg-gray-900/70 p-2.5 rounded border border-gray-800/80 text-gray-300 leading-relaxed max-h-40 overflow-y-auto whitespace-pre-wrap text-[11px] overscroll-contain pr-1.5"
+              style={{
+                scrollbarWidth: "thin",
+                scrollbarColor: "rgba(168, 85, 247, 0.3) rgba(15, 23, 42, 0.4)",
+              }}
+            >
               {llmReport || "No rationale report returned from LLM agent."}
             </div>
           </div>

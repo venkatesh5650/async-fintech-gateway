@@ -302,13 +302,18 @@ export default function OperationsConsole({
     );
   }, [searchQuery]);
 
-  // Auto-scroll active sub-tab into view horizontally on mobile
+  // Auto-scroll active sub-tab horizontally within its sub-rail without touching window scroll
   useEffect(() => {
-    if (activeSubTabRef.current) {
-      activeSubTabRef.current.scrollIntoView({
+    if (activeSubTabRef.current && subRailContainerRef.current) {
+      const container = subRailContainerRef.current;
+      const tab = activeSubTabRef.current;
+      const containerRect = container.getBoundingClientRect();
+      const tabRect = tab.getBoundingClientRect();
+      const relativeLeft = tabRect.left - containerRect.left + container.scrollLeft;
+      const scrollTarget = relativeLeft - container.clientWidth / 2 + tab.clientWidth / 2;
+      container.scrollTo({
+        left: Math.max(0, scrollTarget),
         behavior: "smooth",
-        block: "nearest",
-        inline: "center",
       });
     }
   }, [activeOpsTab]);
