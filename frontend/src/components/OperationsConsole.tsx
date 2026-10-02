@@ -509,7 +509,7 @@ export default function OperationsConsole({
           <div
             className={`${
               mobilePillarViewMode === "rail" ? "flex sm:hidden" : "hidden"
-            } items-center gap-2 overflow-x-auto scrollbar-none snap-x snap-mandatory py-1 -mx-1 px-1 touch-pan-x`}
+            } items-center gap-2 overflow-x-auto scrollbar-none snap-x snap-mandatory py-1 w-full max-w-full touch-pan-x`}
             style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
             {COMMAND_PILLARS.map((pillar) => {
@@ -635,10 +635,10 @@ export default function OperationsConsole({
           </div>
 
           {/* Sub-Rail Scroll Container with Edge Fade Indicators */}
-          <div className="relative">
+          <div className="relative w-full max-w-full">
             <div
               ref={subRailContainerRef}
-              className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-none py-1 -mx-1 px-1 touch-pan-x"
+              className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-none py-1 w-full max-w-full touch-pan-x"
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
               {activePillar.tabs.map((tab) => {

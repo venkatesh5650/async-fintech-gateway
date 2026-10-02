@@ -645,8 +645,8 @@ export default function DynamicDashboardPage() {
 
     if (isInvalidTicker) {
       return (
-        <div className="p-10 flex flex-col items-center justify-center min-h-screen bg-black font-mono">
-          <div className="max-w-md w-full bg-gray-900 border border-red-500/30 rounded-xl p-8 shadow-2xl text-center space-y-4">
+        <div className="p-4 sm:p-10 flex flex-col items-center justify-center min-h-screen bg-black font-mono w-full max-w-full overflow-x-hidden">
+          <div className="max-w-md w-full bg-gray-900 border border-red-500/30 rounded-xl p-6 sm:p-8 shadow-2xl text-center space-y-4">
             <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-red-500/10 text-red-500 mb-2 text-xl">
               ⚠️
             </div>
@@ -752,9 +752,9 @@ export default function DynamicDashboardPage() {
   // --------------------------------------------------
   if (!ticker || !jobState || jobState.status === "processing") {
     return (
-      <div className="min-h-screen bg-black flex flex-col [overflow-anchor:none]">
+      <div className="min-h-screen bg-black flex flex-col [overflow-anchor:none] w-full max-w-full overflow-x-hidden">
         <CyberTopNav />
-        <div className="px-3.5 py-4 sm:p-6 md:p-10 relative flex flex-col items-center flex-1">
+        <div className="px-2.5 py-3 sm:px-6 sm:py-6 md:p-10 relative flex flex-col items-center flex-1 w-full max-w-full overflow-x-hidden">
           {/* TCP Connection Indicator */}
           <div className="w-full max-w-4xl flex items-center justify-end mb-2 sm:mb-0 sm:absolute sm:top-8 sm:right-8 space-x-2 text-xs font-mono">
             <span
@@ -769,9 +769,9 @@ export default function DynamicDashboardPage() {
             </span>
           </div>
 
-          <div className="w-full max-w-4xl space-y-6 mt-2 sm:mt-8">
-            <h1 className="text-2xl sm:text-3xl font-bold text-white mb-6 border-b border-gray-800 pb-3 font-mono flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5 flex-wrap">
+          <div className="w-full max-w-4xl space-y-6 mt-2 sm:mt-8 min-w-0">
+            <h1 className="text-xl sm:text-3xl font-bold text-white mb-4 sm:mb-6 border-b border-gray-800 pb-3 font-mono flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
                 <span>{ticker || "Asset"} AI Analysis</span>
                 <button
                   type="button"
@@ -787,7 +787,7 @@ export default function DynamicDashboardPage() {
             </h1>
 
             {/* Quick Strategic View Navigator */}
-            <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-none py-1.5 px-2.5 bg-gray-950/70 border border-gray-800/80 rounded-xl backdrop-blur-md sticky top-16 z-30 shadow-lg">
+            <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-none py-1.5 px-2 sm:px-2.5 bg-gray-950/70 border border-gray-800/80 rounded-xl backdrop-blur-md sticky top-16 z-30 shadow-lg w-full max-w-full">
               <span className="text-[10px] text-gray-500 font-mono uppercase tracking-wider shrink-0 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
                 <span className="hidden sm:inline">QUICK NAV:</span>
@@ -898,12 +898,12 @@ export default function DynamicDashboardPage() {
   // --------------------------------------------------
   if (jobState.status === "completed") {
     return (
-      <div className="min-h-screen bg-black flex flex-col [overflow-anchor:none]">
+      <div className="min-h-screen bg-black flex flex-col [overflow-anchor:none] w-full max-w-full overflow-x-hidden">
         <CyberTopNav />
-        <div className="px-3.5 py-4 sm:p-6 md:p-10 flex-1">
-          <div className="max-w-4xl mx-auto space-y-6">
-            <h1 className="text-2xl sm:text-3xl font-bold text-white border-b border-gray-800 pb-3 font-mono flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="px-2.5 py-3 sm:px-6 sm:py-6 md:p-10 flex-1 w-full max-w-full overflow-x-hidden">
+          <div className="w-full max-w-4xl mx-auto space-y-6 min-w-0">
+            <h1 className="text-xl sm:text-3xl font-bold text-white border-b border-gray-800 pb-3 font-mono flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
                 <span>{ticker} AI Analysis</span>
                 <button
                   type="button"
@@ -925,7 +925,7 @@ export default function DynamicDashboardPage() {
             </h1>
 
             {/* Quick Strategic View Navigator */}
-            <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-none py-1.5 px-2.5 bg-gray-950/70 border border-gray-800/80 rounded-xl backdrop-blur-md sticky top-16 z-30 shadow-lg">
+            <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-none py-1.5 px-2 sm:px-2.5 bg-gray-950/70 border border-gray-800/80 rounded-xl backdrop-blur-md sticky top-16 z-30 shadow-lg w-full max-w-full">
               <span className="text-[10px] text-gray-500 font-mono uppercase tracking-wider shrink-0 flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
                 <span className="hidden sm:inline">QUICK NAV:</span>
@@ -1079,12 +1079,12 @@ export default function DynamicDashboardPage() {
   // FAILURE STATE
   // --------------------------------------------------
   return (
-    <div className="min-h-screen bg-black flex flex-col font-mono [overflow-anchor:none]">
+    <div className="min-h-screen bg-black flex flex-col font-mono [overflow-anchor:none] w-full max-w-full overflow-x-hidden">
       <CyberTopNav />
-      <div className="px-3.5 py-4 sm:p-6 md:p-10 flex-1">
-        <div className="max-w-4xl mx-auto space-y-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-white border-b border-gray-800 pb-3 font-mono flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 flex-wrap">
+      <div className="px-2.5 py-3 sm:px-6 sm:py-6 md:p-10 flex-1 w-full max-w-full overflow-x-hidden">
+        <div className="w-full max-w-4xl mx-auto space-y-6 min-w-0">
+          <h1 className="text-xl sm:text-3xl font-bold text-white border-b border-gray-800 pb-3 font-mono flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
               <span>{ticker || "Asset"} AI Analysis</span>
               <button
                 type="button"
