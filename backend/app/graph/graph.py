@@ -23,6 +23,7 @@ class AgentState(TypedDict):
     rag_context: list
     citations: list
     rag_context_injected: bool
+    stress_scenario: dict
 
 
 # Initialize Groq LLM with guaranteed model fallback chain
@@ -122,10 +123,25 @@ async def intelligence_node(state: AgentState):
             "    Incorporate relevant qualitative disclosures into your rationale, referencing the source citation.\n"
         )
 
+    stress_scenario = state.get("stress_scenario", {})
+    stress_prompt_block = ""
+    if stress_scenario:
+        stress_prompt_block = f"""
+    MACRO STRESS SCENARIO INJECTED:
+    - Fed Funds Rate Change: {stress_scenario.get('fedRate', 0)} bps
+    - VIX Spike: +{stress_scenario.get('vixSpike', 0)}%
+    - Earnings Revisions: {stress_scenario.get('earningsRevision', 0)}%
+    
+    You MUST re-evaluate the asset under these highly stressful macroeconomic conditions.
+    Adjust your final Conviction Score and signal accordingly. Explain how this specific company's 
+    balance sheet, debt structure, or business model reacts to these specific shocks.
+"""
+
     system_prompt = SystemMessage(
         content=f"""You are an elite quantitative financial analyst evaluating {current_ticker}. 
 {quant_prompt_block}
 {rag_prompt_block}
+{stress_prompt_block}
     1. You MUST use your tools to fetch live market data from the PostgreSQL database for {current_ticker}.
     2. PRIMARY STRATEGY: Synthesize both the pre-computed Quantitative Engine Analytics and live market data:
        - When Composite Technical Score is Bullish (>= 60) AND current_price > fifty_day_sma, output "SIGNAL: BUY".
