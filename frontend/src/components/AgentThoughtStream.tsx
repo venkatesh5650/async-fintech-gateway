@@ -4,6 +4,33 @@ import React, { useState, useEffect } from "react";
 import { Terminal, Copy, Check, Cpu, Sparkles, ChevronRight, Activity } from "lucide-react";
 import { useSoundFX } from "@/hooks/useSoundFX";
 
+const TypewriterText = ({ text, delay = 0, onComplete }: { text: string; delay?: number, onComplete?: () => void }) => {
+  const [displayed, setDisplayed] = useState("");
+  
+  useEffect(() => {
+    let timeout: NodeJS.Timeout;
+    const startDelay = setTimeout(() => {
+      let i = 0;
+      const interval = setInterval(() => {
+        setDisplayed(text.slice(0, i + 1));
+        i++;
+        if (i >= text.length) {
+          clearInterval(interval);
+          if (onComplete) onComplete();
+        }
+      }, 15);
+      timeout = interval;
+    }, delay);
+    
+    return () => {
+      clearTimeout(startDelay);
+      if (timeout) clearInterval(timeout);
+    };
+  }, [text, delay, onComplete]);
+
+  return <span>{displayed}{displayed.length < text.length && <span className="animate-pulse bg-cyan-400 w-1.5 h-3 inline-block ml-0.5 align-middle" />}</span>;
+};
+
 interface ThoughtLogItem {
   id: string;
   agent: "SENTINEL-Q" | "LEXICON-X" | "ARBITER" | "GATEKEEPER";
@@ -13,11 +40,18 @@ interface ThoughtLogItem {
   status: "success" | "warning" | "info";
 }
 
+interface DebateEvent {
+  agent: string;
+  message: string;
+  type: string;
+}
+
 interface AgentThoughtStreamProps {
   ticker?: string;
   traceId?: string;
   rawReasoning?: string;
   quantInjected?: boolean;
+  debateLog?: DebateEvent[];
 }
 
 export function AgentThoughtStream({
@@ -25,48 +59,61 @@ export function AgentThoughtStream({
   traceId = "w3c_4fa812bc9001",
   rawReasoning,
   quantInjected = true,
+  debateLog = [],
 }: AgentThoughtStreamProps) {
   const [copied, setCopied] = useState(false);
-  const [activeStep, setActiveStep] = useState<number>(3);
-  const { playClick, playBlip } = useSoundFX();
+  const [activeStep, setActiveStep] = useState<number>(-1);
+  const [visibleLogs, setVisibleLogs] = useState<DebateEvent[]>([]);
+  const { playClick, playBlip, playConsensus } = useSoundFX();
 
-  // Synthetic step streams reflecting multi-agent consensus
-  const thoughtSteps: ThoughtLogItem[] = [
+  // If no debate log, fallback to mock synthetic steps
+  const fallbackSteps: DebateEvent[] = [
     {
-      id: "step-1",
-      agent: "SENTINEL-Q",
-      message: `Computed 50D SMA, 14D RSI (58.4), and 20D Bollinger Bands via PostgreSQL CTE. Math verified deterministic.`,
-      timestamp: "00:00.012",
-      latencyMs: 12.4,
-      status: "success",
+      agent: "Sentinel-Q (Quant)",
+      message: `Computed 50D SMA, 14D RSI, and 20D Bollinger Bands via PostgreSQL CTE. Math verified deterministic.`,
+      type: "quant",
     },
     {
-      id: "step-2",
-      agent: "LEXICON-X",
+      agent: "Lexicon-X (Risk)",
       message: `Scanned SEC 10-K filings using 1536-dim pgvector HNSW cosine scan. Retrieved 5 high-relevance semantic passages.`,
-      timestamp: "00:00.048",
-      latencyMs: 36.1,
-      status: "success",
+      type: "rag",
     },
     {
-      id: "step-3",
-      agent: "GATEKEEPER",
-      message: `Verified Zero-Trust token schema & circuit breaker threshold (Closed state, 0 error trips in last 60m).`,
-      timestamp: "00:00.052",
-      latencyMs: 4.2,
-      status: "info",
-    },
-    {
-      id: "step-4",
-      agent: "ARBITER",
+      agent: "Arbiter Core (Consensus)",
       message: rawReasoning
         ? rawReasoning.slice(0, 140) + "..."
         : `Consensus synthesis achieved across quantitative and qualitative vector planes. Dispatched alpha report.`,
-      timestamp: "00:00.118",
-      latencyMs: 65.8,
-      status: "success",
+      type: "consensus",
     },
   ];
+
+  const activeLog = debateLog && debateLog.length > 0 ? debateLog : fallbackSteps;
+
+  useEffect(() => {
+    setVisibleLogs([]);
+    setActiveStep(-1);
+    
+    // Typewriter effect simulation for the debate log
+    let delay = 0;
+    const timeouts: NodeJS.Timeout[] = [];
+    
+    activeLog.forEach((log, index) => {
+      delay += 800; // 800ms stagger for dramatic effect
+      const t = setTimeout(() => {
+        setVisibleLogs(prev => [...prev, log]);
+        setActiveStep(index);
+        
+        if (log.type === "consensus") {
+          playConsensus();
+        } else {
+          playBlip();
+        }
+      }, delay);
+      timeouts.push(t);
+    });
+
+    return () => timeouts.forEach(clearTimeout);
+  }, [debateLog, playBlip, playConsensus]);
 
   const handleCopyTrace = () => {
     playClick();
@@ -75,15 +122,13 @@ export function AgentThoughtStream({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const getAgentBadge = (agent: ThoughtLogItem["agent"]) => {
-    switch (agent) {
-      case "SENTINEL-Q":
+  const getAgentBadge = (type: string) => {
+    switch (type) {
+      case "quant":
         return "bg-emerald-950/60 border-emerald-500/40 text-emerald-400";
-      case "LEXICON-X":
-        return "bg-purple-950/60 border-purple-500/40 text-purple-400";
-      case "GATEKEEPER":
+      case "rag":
         return "bg-amber-950/60 border-amber-500/40 text-amber-400";
-      case "ARBITER":
+      case "consensus":
       default:
         return "bg-cyan-950/60 border-cyan-500/40 text-cyan-400";
     }
@@ -121,48 +166,50 @@ export function AgentThoughtStream({
       </div>
 
       {/* Stream Items */}
-      <div className="space-y-2.5">
-        {thoughtSteps.map((step, idx) => {
+      <div className="space-y-2.5 min-h-[160px]">
+        {visibleLogs.map((step, idx) => {
           const isSelected = activeStep === idx;
           return (
             <div
-              key={step.id}
+              key={idx}
               onClick={() => {
                 setActiveStep(idx);
-                playBlip();
+                playClick();
               }}
-              className={`p-3 rounded-lg border transition-all duration-200 cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-2 ${
+              className={`p-3 rounded-lg border transition-all duration-300 cursor-pointer flex flex-col sm:flex-row sm:items-start justify-between gap-2 animate-in slide-in-from-right-4 fade-in ${
                 isSelected
                   ? "bg-slate-900/90 border-cyan-500/40 shadow-[0_0_15px_rgba(0,240,255,0.12)]"
                   : "bg-slate-950/40 border-slate-900 hover:border-slate-800 hover:bg-slate-900/40"
               }`}
             >
-              <div className="flex items-start sm:items-center space-x-2.5 flex-1 min-w-0">
+              <div className="flex items-start space-x-2.5 flex-1 min-w-0">
                 <ChevronRight
-                  className={`w-3.5 h-3.5 mt-0.5 sm:mt-0 transition-transform ${
+                  className={`w-3.5 h-3.5 mt-1 transition-transform ${
                     isSelected ? "text-cyan-400 rotate-90" : "text-slate-600"
                   }`}
                 />
-                <span
-                  className={`text-[9px] px-2 py-0.5 rounded border uppercase tracking-wider font-bold shrink-0 ${getAgentBadge(
-                    step.agent
-                  )}`}
-                >
-                  {step.agent}
-                </span>
-                <p className="text-slate-300 text-xs truncate leading-relaxed">
-                  {step.message}
-                </p>
-              </div>
-
-              <div className="flex items-center space-x-3 text-[10px] text-slate-500 self-end sm:self-auto shrink-0">
-                <span className="text-slate-400 font-mono">+{step.latencyMs}ms</span>
-                <span className="text-slate-600">|</span>
-                <span className="text-slate-500">{step.timestamp}</span>
+                <div className="flex flex-col gap-1.5 w-full">
+                  <span
+                    className={`w-fit text-[9px] px-2 py-0.5 rounded border tracking-wider font-bold shrink-0 ${getAgentBadge(
+                      step.type
+                    )}`}
+                  >
+                    {step.agent}
+                  </span>
+                  <p className="text-slate-300 text-xs leading-relaxed">
+                    <TypewriterText text={step.message} />
+                  </p>
+                </div>
               </div>
             </div>
           );
         })}
+        {visibleLogs.length < activeLog.length && (
+          <div className="flex items-center space-x-2 pl-3 pt-2">
+            <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse"></span>
+            <span className="text-[10px] text-cyan-500/70 font-mono tracking-widest">AWAITING AGENT RESPONSE...</span>
+          </div>
+        )}
       </div>
 
       {/* Footer Subtext */}
