@@ -22,6 +22,7 @@ import CyberTopNav from "@/components/CyberTopNav";
 import TickerSearchModal from "@/components/TickerSearchModal";
 import { Search } from "lucide-react";
 import { useBikeTransition } from "@/context/BikeTransitionContext";
+import MacroSimulatorPanel from "@/components/MacroSimulatorPanel";
 
 interface JobState {
   status: "processing" | "completed" | "failed";
@@ -47,6 +48,8 @@ export default function DynamicDashboardPage() {
   const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
   const [timeframe, setTimeframe] = useState<Timeframe>("5m");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [simulatedScore, setSimulatedScore] = useState<number | null>(null);
 
   const handleCloseTraceModal = useCallback(() => {
     setSelectedTraceId(null);
@@ -977,19 +980,31 @@ export default function DynamicDashboardPage() {
             )}
 
             {/* Cognitive Synthesis & Autonomous Agent Results */}
-            <div id="section-ai-results">
+            <div id="section-ai-results" className="space-y-6">
               <IntelligenceCard
                 data={jobState.result}
                 onRefresh={fetchCachedIntelligence}
                 isRefreshing={isCacheRefreshing}
                 onNavigateSection={scrollToSection}
               />
+              <MacroSimulatorPanel
+                isSimulating={isSimulating}
+                onSimulate={(params) => {
+                  setIsSimulating(true);
+                  setTimeout(() => {
+                    setIsSimulating(false);
+                    const baseScore = jobState.result?.quant_context?.composite_score ?? 70;
+                    const impact = (params.earningsRevision * 0.5) - (params.fedRate * 0.05) - (params.vixSpike * 0.2);
+                    setSimulatedScore(Math.max(0, Math.min(100, baseScore + impact)));
+                  }, 1500);
+                }}
+              />
             </div>
 
             {/* Quantitative Technical Indicators Suite */}
             <div id="section-signals" className="space-y-6">
               {/* Composite Quantitative Technical Signal Fusion Gauge */}
-              {ticker && <CompositeSignalMeter ticker={ticker} />}
+              {ticker && <CompositeSignalMeter ticker={ticker} simulatedScore={simulatedScore} />}
 
               {/* Quantitative Technical Indicators Summary */}
               {ticker && (
