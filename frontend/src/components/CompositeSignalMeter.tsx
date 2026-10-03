@@ -1,13 +1,49 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { CompositeSignalResponse } from "@/types/api";
+
+function useNumberTicker(value: number, duration: number = 1200) {
+  const [current, setCurrent] = useState(value);
+  const currentRef = useRef(value);
+
+  useEffect(() => {
+    let start = performance.now();
+    const init = currentRef.current;
+    const diff = value - init;
+    if (diff === 0) {
+      setCurrent(value);
+      currentRef.current = value;
+      return;
+    }
+
+    let animationFrameId: number;
+    const tick = (now: number) => {
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / duration, 1);
+      const ease = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
+      const nextVal = init + diff * ease;
+      setCurrent(nextVal);
+      currentRef.current = nextVal;
+      
+      if (progress < 1) {
+        animationFrameId = requestAnimationFrame(tick);
+      }
+    };
+    animationFrameId = requestAnimationFrame(tick);
+    
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [value, duration]);
+
+  return current;
+}
 
 interface CompositeSignalMeterProps {
   ticker: string;
+  simulatedScore?: number | null;
 }
 
-export function CompositeSignalMeter({ ticker }: CompositeSignalMeterProps) {
+export function CompositeSignalMeter({ ticker, simulatedScore }: CompositeSignalMeterProps) {
   const [data, setData] = useState<CompositeSignalResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,12 +88,15 @@ export function CompositeSignalMeter({ ticker }: CompositeSignalMeterProps) {
   };
 
   const score = data?.composite_score ?? 0;
+  const animatedScore = useNumberTicker(score);
+  const animatedSimulated = useNumberTicker(simulatedScore ?? score);
   const recommendation = data?.recommendation ?? "NEUTRAL";
   const components = data?.components;
 
   const arcRadius = 60;
   const arcLength = Math.PI * arcRadius;
-  const strokeDashoffset = arcLength - (Math.min(Math.max(score, 0), 100) / 100) * arcLength;
+  const strokeDashoffset = arcLength - (Math.min(Math.max(animatedScore, 0), 100) / 100) * arcLength;
+  const ghostDashoffset = simulatedScore != null ? arcLength - (Math.min(Math.max(animatedSimulated, 0), 100) / 100) * arcLength : arcLength;
 
   return (
     <div className="hud-panel corner-reticle rounded-2xl p-5 shadow-xl text-slate-200 border border-cyan-500/25">
@@ -99,24 +138,50 @@ export function CompositeSignalMeter({ ticker }: CompositeSignalMeterProps) {
                   strokeWidth="12"
                   strokeLinecap="round"
                 />
+                {/* Ghost Value Fill Arc */}
+                {simulatedScore != null && (
+                  <path
+                    d="M 20 80 A 60 60 0 0 1 140 80"
+                    fill="none"
+                    stroke={getGaugeColor(simulatedScore)}
+                    strokeWidth="12"
+                    strokeDasharray={arcLength}
+                    strokeDashoffset={ghostDashoffset}
+                    strokeLinecap="round"
+                    className="transition-all duration-700 ease-out opacity-40 blur-[2px]"
+                  />
+                )}
                 {/* Value Fill Arc */}
                 <path
                   d="M 20 80 A 60 60 0 0 1 140 80"
                   fill="none"
-                  stroke={getGaugeColor(score)}
+                  stroke={getGaugeColor(simulatedScore != null ? simulatedScore : score)}
                   strokeWidth="12"
                   strokeDasharray={arcLength}
-                  strokeDashoffset={strokeDashoffset}
+                  strokeDashoffset={simulatedScore != null ? ghostDashoffset : strokeDashoffset}
                   strokeLinecap="round"
                   className="transition-all duration-700 ease-out"
                 />
               </svg>
 
               <div className="absolute bottom-1 text-center">
-                <div className="text-3xl font-black tracking-tight text-slate-100 font-mono">
-                  {score.toFixed(1)}
+                <div className="text-3xl font-black tracking-tight text-slate-100 font-mono flex items-baseline justify-center gap-2">
+                  {simulatedScore != null ? (
+                    <>
+                      <span className="text-slate-500 line-through text-lg">{animatedScore.toFixed(1)}</span>
+                      <span className="text-cyan-400">{animatedSimulated.toFixed(1)}</span>
+                    </>
+                  ) : (
+                    animatedScore.toFixed(1)
+                  )}
                 </div>
-                <div className="text-[9px] text-slate-500 uppercase tracking-widest font-mono">OUT OF 100</div>
+                <div className="text-[9px] text-slate-500 uppercase tracking-widest font-mono">
+                  {simulatedScore != null ? (
+                    <span className={simulatedScore >= score ? "text-green-400" : "text-red-400"}>
+                      DELTA: {simulatedScore >= score ? "+" : ""}{(animatedSimulated - animatedScore).toFixed(1)}
+                    </span>
+                  ) : "OUT OF 100"}
+                </div>
               </div>
             </div>
 
