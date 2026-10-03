@@ -24,6 +24,7 @@ class AgentState(TypedDict):
     citations: list
     rag_context_injected: bool
     stress_scenario: dict
+    debate_log: list
 
 
 # Initialize Groq LLM with guaranteed model fallback chain
@@ -225,12 +226,49 @@ def reporting_node(state: AgentState):
     logger.info("[NODE: REPORTING] Finalizing alpha signal report...")
     messages = state.get("messages", [])
     final_message = messages[-1].content if messages else "ERROR: No report generated."
+    
+    quant_context = state.get("quant_context", {})
+    citations = state.get("citations", [])
+    
+    # Synthesize the Adversarial Debate Log smartly
+    debate_log = []
+    
+    if quant_context:
+        rec = quant_context.get("recommendation", "NEUTRAL").upper()
+        score = quant_context.get("composite_score", 50)
+        vol = quant_context.get("volatility_30d_pct", 0)
+        debate_log.append({
+            "agent": "Sentinel-Q (Quant)",
+            "message": f"Technical momentum indicates {rec} posture. Composite score: {score}/100. 30D Volatility: {vol}%. Recommend algorithmic alignment.",
+            "type": "quant"
+        })
+        
+    if citations:
+        ref = citations[0].get("citation_ref", "SEC Filing")
+        excerpt = citations[0].get("excerpt", "")[:120].strip()
+        debate_log.append({
+            "agent": "Lexicon-X (Risk)",
+            "message": f"Contradiction detected: {ref} flags material risks: '{excerpt}...'. Caution advised.",
+            "type": "rag"
+        })
+        
+    clean_msg = str(final_message).replace('*', '').replace('#', '').strip()
+    summary_sentences = [s.strip() for s in clean_msg.split('.') if s.strip()]
+    arbiter_msg = '. '.join(summary_sentences[:2]) + '.' if len(summary_sentences) >= 2 else clean_msg[:150] + "..."
+    
+    debate_log.append({
+        "agent": "Arbiter Core (Consensus)",
+        "message": f"Reconciled: {arbiter_msg}",
+        "type": "consensus"
+    })
+
     return {
         "analysis_report": str(final_message),
-        "quant_context": state.get("quant_context", {}),
+        "debate_log": debate_log,
+        "quant_context": quant_context,
         "quant_context_injected": state.get("quant_context_injected", False),
         "rag_context": state.get("rag_context", []),
-        "citations": state.get("citations", []),
+        "citations": citations,
         "rag_context_injected": state.get("rag_context_injected", False),
     }
 
