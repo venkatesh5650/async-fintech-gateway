@@ -54,40 +54,49 @@ interface AgentThoughtStreamProps {
   debateLog?: DebateEvent[];
 }
 
+const EMPTY_ARRAY: DebateEvent[] = [];
+
+const FALLBACK_STEPS: DebateEvent[] = [
+  {
+    agent: "Sentinel-Q (Quant)",
+    message: `Computed 50D SMA, 14D RSI, and 20D Bollinger Bands via PostgreSQL CTE. Math verified deterministic.`,
+    type: "quant",
+  },
+  {
+    agent: "Lexicon-X (Risk)",
+    message: `Scanned SEC 10-K filings using 1536-dim pgvector HNSW cosine scan. Retrieved 5 high-relevance semantic passages.`,
+    type: "rag",
+  },
+  {
+    agent: "Arbiter Core (Consensus)",
+    message: `Consensus synthesis achieved across quantitative and qualitative vector planes. Dispatched alpha report.`,
+    type: "consensus",
+  },
+];
+
 export function AgentThoughtStream({
   ticker = "AAPL",
   traceId = "w3c_4fa812bc9001",
   rawReasoning,
   quantInjected = true,
-  debateLog = [],
+  debateLog = EMPTY_ARRAY,
 }: AgentThoughtStreamProps) {
   const [copied, setCopied] = useState(false);
   const [activeStep, setActiveStep] = useState<number>(-1);
   const [visibleLogs, setVisibleLogs] = useState<DebateEvent[]>([]);
   const { playClick, playBlip, playConsensus } = useSoundFX();
 
-  // If no debate log, fallback to mock synthetic steps
-  const fallbackSteps: DebateEvent[] = [
-    {
-      agent: "Sentinel-Q (Quant)",
-      message: `Computed 50D SMA, 14D RSI, and 20D Bollinger Bands via PostgreSQL CTE. Math verified deterministic.`,
-      type: "quant",
-    },
-    {
-      agent: "Lexicon-X (Risk)",
-      message: `Scanned SEC 10-K filings using 1536-dim pgvector HNSW cosine scan. Retrieved 5 high-relevance semantic passages.`,
-      type: "rag",
-    },
-    {
-      agent: "Arbiter Core (Consensus)",
-      message: rawReasoning
-        ? rawReasoning.slice(0, 140) + "..."
-        : `Consensus synthesis achieved across quantitative and qualitative vector planes. Dispatched alpha report.`,
-      type: "consensus",
-    },
-  ];
-
-  const activeLog = debateLog && debateLog.length > 0 ? debateLog : fallbackSteps;
+  const activeLog = React.useMemo(() => {
+    return debateLog && debateLog.length > 0 ? debateLog : (rawReasoning ? [
+      FALLBACK_STEPS[0],
+      FALLBACK_STEPS[1],
+      {
+        agent: "Arbiter Core (Consensus)",
+        message: rawReasoning.slice(0, 140) + "...",
+        type: "consensus",
+      }
+    ] : FALLBACK_STEPS);
+  }, [debateLog, rawReasoning]);
 
   useEffect(() => {
     setVisibleLogs([]);
@@ -113,7 +122,7 @@ export function AgentThoughtStream({
     });
 
     return () => timeouts.forEach(clearTimeout);
-  }, [debateLog, playBlip, playConsensus]);
+  }, [activeLog, playBlip, playConsensus]);
 
   const handleCopyTrace = () => {
     playClick();

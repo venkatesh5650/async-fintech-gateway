@@ -839,6 +839,8 @@ export default function DynamicDashboardPage() {
               <AgentThoughtStream
                 ticker={ticker || "EQUITY"}
                 traceId={traceId || "w3c_sync_pending"}
+                rawReasoning={jobState?.result?.reasoning}
+                debateLog={jobState?.result?.debate_log}
               />
             </div>
 
