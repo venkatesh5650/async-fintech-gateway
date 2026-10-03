@@ -7,7 +7,8 @@ import AgentSignalDebugger from "./AgentSignalDebugger";
 import { ConfidenceDialMeter } from "./ConfidenceDialMeter";
 import { AgentThoughtStream } from "./AgentThoughtStream";
 import { AgentSwarmDeck } from "./AgentSwarmDeck";
-import { Sparkles, Cpu, Activity, ShieldCheck, Zap, ChevronDown, ChevronUp, TrendingUp, Layers, BookOpen, Compass, ArrowUpRight } from "lucide-react";
+import { Sparkles, Cpu, Activity, ShieldCheck, Zap, ChevronDown, ChevronUp, TrendingUp, Layers, BookOpen, Compass, ArrowUpRight, FileText, Loader2 } from "lucide-react";
+import { useSoundFX } from "@/hooks/useSoundFX";
 
 export interface IntelligenceData {
   ticker?: string;
@@ -42,6 +43,51 @@ export default function IntelligenceCard({
   onNavigateSection?: (sectionId: string) => void;
 }) {
   if (!data) return null;
+
+  const { playClick, playPipelineWarp } = useSoundFX();
+  const [isGeneratingMemo, setIsGeneratingMemo] = useState(false);
+
+  const handleGenerateMemo = async () => {
+    if (!data.ticker) return;
+    playClick();
+    setIsGeneratingMemo(true);
+    
+    try {
+      const response = await fetch(`/api/intelligence/memo/${data.ticker}`);
+      if (!response.ok) {
+        throw new Error("Failed to generate memo");
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${data.ticker.toUpperCase()}_Institutional_Memo_${new Date().toISOString().split('T')[0]}.md`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      playPipelineWarp(); // Satisfying institutional pipeline sound on success
+      
+      const btnText = document.getElementById("memo-btn-text");
+      if (btnText) {
+        const originalText = btnText.innerText;
+        btnText.innerText = "Saved!";
+        btnText.className = "text-emerald-400 font-bold";
+        setTimeout(() => {
+          btnText.innerText = originalText;
+          btnText.className = "";
+        }, 2000);
+      }
+    } catch (err) {
+      console.error(err);
+      // Fallback alert on error
+      alert("Memo compilation failed. Ensure the AI analysis has completed.");
+    } finally {
+      setIsGeneratingMemo(false);
+    }
+  };
 
   const rawSignal = (data.signal || "NEUTRAL").toUpperCase();
 
@@ -281,7 +327,25 @@ export default function IntelligenceCard({
                     <span>Cognitive Synthesis & Fundamental Brief</span>
                   </h3>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-slate-500 font-mono hidden sm:inline">
+                    <button
+                      type="button"
+                      onClick={handleGenerateMemo}
+                      disabled={isGeneratingMemo}
+                      className="text-[10px] font-mono px-3 py-1 rounded-md bg-indigo-950/60 border border-indigo-500/40 text-indigo-300 hover:text-white hover:bg-indigo-900 hover:border-indigo-400 transition-all flex items-center gap-1.5 active:scale-95 disabled:opacity-50"
+                    >
+                      {isGeneratingMemo ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Generating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="w-3.5 h-3.5" />
+                          <span id="memo-btn-text">1-Click Memo</span>
+                        </>
+                      )}
+                    </button>
+                    <span className="text-[10px] text-slate-500 font-mono hidden sm:inline ml-2 border-l border-slate-700 pl-3">
                       MODEL: QWEN 2.5 32B / GROQ
                     </span>
                     {reportText.length > 200 && (
