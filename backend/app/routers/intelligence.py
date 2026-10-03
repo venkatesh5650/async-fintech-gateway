@@ -9,6 +9,7 @@ public CQRS read query routes.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, Path, Security, Request, Body
+from fastapi.responses import PlainTextResponse
 from fastapi.security.api_key import APIKeyHeader
 import uuid
 import json
@@ -991,3 +992,81 @@ async def get_ticker_rag_context(
         "rag_context": hits,
         "trace_id": trace_id,
     }
+
+
+@router.get("/memo/{ticker}", response_class=PlainTextResponse, status_code=status.HTTP_200_OK)
+async def generate_institutional_memo(
+    request: Request,
+    ticker: str = Path(..., pattern=r"^[a-zA-Z0-9.\-=^]{1,16}$"),
+):
+    """
+    1-Click Institutional Research Memo Generator.
+    Aggregates AI synthesis, quant context, and RAG citations into a professional Markdown memo.
+    """
+    trace_id = getattr(request.state, "trace_id", None) or "memo-gen"
+    
+    result = await cache_aside_manager.get_cached_result(
+        ticker=ticker,
+        trace_id=trace_id,
+        force_refresh=False,
+    )
+    
+    t = ticker.upper()
+    date_str = time.strftime("%Y-%m-%d %H:%M:%S UTC")
+    
+    signal = result.get("signal", "UNKNOWN")
+    report = result.get("analysis_report") or result.get("reasoning") or "No cognitive synthesis available."
+    quant = result.get("quant_context", {})
+    citations = result.get("citations", [])
+    
+    score = quant.get("composite_score", "N/A")
+    if isinstance(score, (int, float)):
+        score = f"{score:.1f}"
+        
+    sharpe = quant.get("sharpe_ratio", "N/A")
+    if isinstance(sharpe, (int, float)):
+        sharpe = f"{sharpe:.2f}"
+        
+    vol = quant.get("volatility_30d_pct", "N/A")
+    if isinstance(vol, (int, float)):
+        vol = f"{vol:.1f}"
+        
+    risk = quant.get("risk_level", "UNKNOWN")
+    
+    md = f"""# INSTITUTIONAL RESEARCH MEMO: {t}
+**Date:** {date_str}
+**Analyst:** Autonomous Quant Swarm (W3C Linked)
+**Conviction Signal:** {signal}
+**Composite Score:** {score} / 100
+
+---
+
+## 1. Executive Summary & Cognitive Synthesis
+{report}
+
+---
+
+## 2. Quantitative Factor Breakdown
+| Metric | Value |
+| --- | --- |
+| **Risk Level** | {risk} |
+| **Sharpe Ratio** | {sharpe} |
+| **30-Day Volatility** | {vol}% |
+
+---
+
+## 3. Qualitative Grounding (SEC RAG Citations)
+"""
+    if not citations:
+        md += "*No SEC filings cited in this report.*\n"
+    else:
+        for idx, c in enumerate(citations):
+            ref = c.get("citation_ref", f"Citation {idx+1}")
+            excerpt = c.get("excerpt", "").strip().replace('\n', ' ')
+            md += f"**{ref}**\n> {excerpt}\n\n"
+            
+    md += """
+---
+*Disclaimer: This report was generated autonomously by an AI agent ensemble. It does not constitute financial advice. For institutional demonstration purposes only.*
+"""
+    return md
