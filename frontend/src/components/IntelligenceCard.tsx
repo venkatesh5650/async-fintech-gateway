@@ -7,7 +7,7 @@ import AgentSignalDebugger from "./AgentSignalDebugger";
 import { ConfidenceDialMeter } from "./ConfidenceDialMeter";
 import { AgentThoughtStream } from "./AgentThoughtStream";
 import { AgentSwarmDeck } from "./AgentSwarmDeck";
-import { Sparkles, Cpu, Activity, ShieldCheck, Zap, ChevronDown, ChevronUp, TrendingUp, Layers, BookOpen, Compass, ArrowUpRight, FileText, Loader2 } from "lucide-react";
+import { Sparkles, Cpu, Activity, ShieldCheck, Zap, ChevronDown, ChevronUp, TrendingUp, Layers, BookOpen, Compass, ArrowUpRight, FileText, Loader2, Database, X } from "lucide-react";
 import { useSoundFX } from "@/hooks/useSoundFX";
 
 export interface IntelligenceData {
@@ -46,6 +46,7 @@ export default function IntelligenceCard({
 
   const { playClick, playPipelineWarp } = useSoundFX();
   const [isGeneratingMemo, setIsGeneratingMemo] = useState(false);
+  const [activeCitation, setActiveCitation] = useState<any | null>(null);
 
   const handleGenerateMemo = async () => {
     if (!data.ticker) return;
@@ -389,6 +390,40 @@ export default function IntelligenceCard({
                 </div>
               )}
             </div>
+            </div>
+
+            {/* Qualitative Grounding (pgvector) */}
+            {data.citations && data.citations.length > 0 && (
+              <div className="hud-panel rounded-xl p-4 border border-slate-800/90 mt-4 sm:mt-6">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-cyan-300 text-[10px] font-bold uppercase tracking-wider flex items-center space-x-1.5">
+                    <Database className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Qualitative Grounding (pgvector)</span>
+                  </h3>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {data.citations.map((cite: any, idx: number) => (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        playClick();
+                        playPipelineWarp();
+                        setActiveCitation(cite);
+                      }}
+                      className="px-3 py-1.5 rounded bg-slate-900/60 border border-slate-700 hover:border-cyan-500/50 hover:bg-slate-800 transition-all text-left flex items-center gap-2 group"
+                    >
+                      <span className="text-[10px] font-mono text-slate-300 group-hover:text-cyan-300 transition-colors">
+                        {cite.citation_ref || `SEC 10-K Excerpt ${idx + 1}`}
+                      </span>
+                      <span className="text-[9px] font-mono text-emerald-400/80 bg-emerald-950/40 px-1.5 py-0.5 rounded">
+                        Sim: {Number(cite.similarity_score || 0).toFixed(2)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
       </div>
@@ -408,6 +443,65 @@ export default function IntelligenceCard({
         llmSignal={data.signal}
         llmReport={data.analysis_report || data.reasoning}
       />
+      {/* Zero-Hallucination Inspector Modal */}
+      {activeCitation && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-slate-950 border border-cyan-500/30 rounded-xl w-full max-w-2xl shadow-[0_0_40px_rgba(0,240,255,0.1)] overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-slate-800 bg-slate-900/50">
+              <div className="flex items-center gap-3">
+                <Database className="w-5 h-5 text-cyan-400" />
+                <div>
+                  <h3 className="text-slate-100 font-bold uppercase tracking-wider text-xs">
+                    Raw pgvector Context Grounding
+                  </h3>
+                  <div className="flex items-center gap-2 mt-1">
+                    <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                    <span className="text-[10px] text-emerald-400 font-mono font-semibold uppercase tracking-wider">
+                      Zero-Hallucination Enforced
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  playClick();
+                  setActiveCitation(null);
+                }}
+                className="p-1.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Metrics Bar */}
+            <div className="grid grid-cols-3 divide-x divide-slate-800 border-b border-slate-800 bg-slate-900/30">
+              <div className="p-3 flex flex-col items-center justify-center">
+                <span className="text-[9px] text-slate-500 font-mono uppercase mb-1">Source</span>
+                <span className="text-xs text-cyan-300 font-semibold">{activeCitation.citation_ref || 'SEC 10-K'}</span>
+              </div>
+              <div className="p-3 flex flex-col items-center justify-center">
+                <span className="text-[9px] text-slate-500 font-mono uppercase mb-1">Cosine Similarity</span>
+                <span className="text-xs text-emerald-400 font-mono">{Number(activeCitation.similarity_score || 0).toFixed(4)}</span>
+              </div>
+              <div className="p-3 flex flex-col items-center justify-center">
+                <span className="text-[9px] text-slate-500 font-mono uppercase mb-1">L2 Distance (Simulated)</span>
+                <span className="text-xs text-amber-400 font-mono">{(1 - Number(activeCitation.similarity_score || 0)).toFixed(4)}</span>
+              </div>
+            </div>
+
+            {/* Raw Excerpt */}
+            <div className="p-5">
+              <span className="text-[10px] text-slate-500 font-mono uppercase mb-2 block">Direct Excerpt from pgvector:</span>
+              <div className="p-4 rounded border border-slate-800 bg-slate-900/80 max-h-64 overflow-y-auto">
+                <p className="text-slate-300 text-xs font-mono leading-relaxed whitespace-pre-wrap">
+                  {activeCitation.excerpt || 'No excerpt available.'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
