@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Terminal, Copy, Check, Cpu, Sparkles, ChevronRight, Activity } from "lucide-react";
 import { useSoundFX } from "@/hooks/useSoundFX";
+import { InfrastructureTelemetry } from "@/components/InfrastructureTelemetry";
 
 const TypewriterText = ({ text, delay = 0, onComplete }: { text: string; delay?: number, onComplete?: () => void }) => {
   const [displayed, setDisplayed] = useState("");
@@ -221,14 +222,8 @@ export function AgentThoughtStream({
         )}
       </div>
 
-      {/* Footer Subtext */}
-      <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-[10px] text-slate-500">
-        <span className="flex items-center space-x-1">
-          <Sparkles className="w-3 h-3 text-cyan-400 inline" />
-          <span>Zero LLM Math Hallucination Invariant Enforced</span>
-        </span>
-        <span className="text-emerald-400 font-mono">POSTGRES CTE LATENCY: 12ms</span>
-      </div>
+      {/* Telemetry Footer */}
+      <InfrastructureTelemetry />
     </div>
   );
 }
