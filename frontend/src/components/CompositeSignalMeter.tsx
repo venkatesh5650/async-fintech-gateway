@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { CompositeSignalResponse } from "@/types/api";
+import { SectionSkeleton } from "@/components/SectionSkeleton";
 
 function useNumberTicker(value: number, duration: number = 1200) {
   const [current, setCurrent] = useState(value);
@@ -90,6 +91,11 @@ export function CompositeSignalMeter({ ticker, simulatedScore }: CompositeSignal
   const score = data?.composite_score ?? 0;
   const animatedScore = useNumberTicker(score);
   const animatedSimulated = useNumberTicker(simulatedScore ?? score);
+
+  if (loading && !data) {
+    return <SectionSkeleton height="280px" label="Composite Technical Signal" />;
+  }
+
   const recommendation = data?.recommendation ?? "NEUTRAL";
   const components = data?.components;
 
@@ -99,7 +105,7 @@ export function CompositeSignalMeter({ ticker, simulatedScore }: CompositeSignal
   const ghostDashoffset = simulatedScore != null ? arcLength - (Math.min(Math.max(animatedSimulated, 0), 100) / 100) * arcLength : arcLength;
 
   return (
-    <div className="hud-panel corner-reticle rounded-2xl p-5 shadow-xl text-slate-200 border border-cyan-500/25">
+    <div className="hud-panel corner-reticle rounded-2xl p-5 shadow-xl text-slate-200 border border-cyan-500/25 animate-in fade-in duration-500">
       <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
         <div className="flex items-center space-x-2.5">
           <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -116,11 +122,7 @@ export function CompositeSignalMeter({ ticker, simulatedScore }: CompositeSignal
         </button>
       </div>
 
-      {loading && !data ? (
-        <div className="py-8 text-center text-xs text-slate-500 animate-pulse">
-          Fusing SMA, RSI, Bollinger Bands & Sharpe ratio into composite score...
-        </div>
-      ) : error ? (
+      {error ? (
         <div className="py-4 text-center text-xs text-rose-400 bg-rose-950/20 rounded-lg border border-rose-900/40">
           {error}
         </div>

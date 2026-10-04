@@ -390,7 +390,6 @@ export default function IntelligenceCard({
                 </div>
               )}
             </div>
-            </div>
 
             {/* Qualitative Grounding (pgvector) */}
             {data.citations && data.citations.length > 0 && (
@@ -428,7 +427,7 @@ export default function IntelligenceCard({
         </div>
       </div>
 
-      {/* 3. Live Cognitive Reasoning Stream HUD */}
+      {/* Section 3: Live Cognitive Reasoning Stream HUD */}
       <AgentThoughtStream
         ticker={data.ticker}
         traceId={data.trace_id || "w3c_4fa812bc9001"}
@@ -476,11 +475,13 @@ export default function IntelligenceCard({
 
             {/* Metrics Bar */}
             <div className="grid grid-cols-3 divide-x divide-slate-800 border-b border-slate-800 bg-slate-900/30">
-              <div className="p-3 flex flex-col items-center justify-center">
+              <div className="p-3 flex flex-col items-center justify-center min-w-0">
                 <span className="text-[9px] text-slate-500 font-mono uppercase mb-1">Source</span>
-                <span className="text-xs text-cyan-300 font-semibold">{activeCitation.citation_ref || 'SEC 10-K'}</span>
+                <span className="text-xs text-cyan-300 font-semibold truncate w-full text-center px-1" title={activeCitation.citation_ref || 'SEC 10-K'}>
+                  {activeCitation.citation_ref || 'SEC 10-K'}
+                </span>
               </div>
-              <div className="p-3 flex flex-col items-center justify-center">
+              <div className="p-3 flex flex-col items-center justify-center min-w-0">
                 <span className="text-[9px] text-slate-500 font-mono uppercase mb-1">Cosine Similarity</span>
                 <span className="text-xs text-emerald-400 font-mono">{Number(activeCitation.similarity_score || 0).toFixed(4)}</span>
               </div>

@@ -175,7 +175,7 @@ export function AgentThoughtStream({
       </div>
 
       {/* Stream Items */}
-      <div className="space-y-2.5 min-h-[160px]">
+      <div className="space-y-2.5 min-h-[160px] max-h-[300px] overflow-y-auto pr-2 overscroll-contain" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(6, 182, 212, 0.3) transparent' }}>
         {visibleLogs.map((step, idx) => {
           const isSelected = activeStep === idx;
           return (

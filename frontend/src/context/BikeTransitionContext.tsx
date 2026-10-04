@@ -111,9 +111,6 @@ export function BikeTransitionProvider({ children }: { children: React.ReactNode
       if (typeof document !== "undefined") {
         document.body.style.overflow = "";
       }
-      if (typeof window !== "undefined") {
-        window.scrollTo({ top: 0, left: 0, behavior: "instant" });
-      }
     }
     return () => {
       if (typeof document !== "undefined") {

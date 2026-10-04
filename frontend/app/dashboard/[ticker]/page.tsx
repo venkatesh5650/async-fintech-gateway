@@ -23,6 +23,7 @@ import TickerSearchModal from "@/components/TickerSearchModal";
 import { Search } from "lucide-react";
 import { useBikeTransition } from "@/context/BikeTransitionContext";
 import MacroSimulatorPanel from "@/components/MacroSimulatorPanel";
+import { SectionSkeleton } from "@/components/SectionSkeleton";
 
 interface JobState {
   status: "processing" | "completed" | "failed";
@@ -135,15 +136,8 @@ export default function DynamicDashboardPage() {
     }
   }, [fetchHistory, ticker, fetchCachedIntelligence]);
 
-  // Reset window scroll position cleanly to the top whenever ticker route changes or mounts
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      if ("scrollRestoration" in window.history) {
-        window.history.scrollRestoration = "manual";
-      }
-      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
-    }
-  }, [ticker]);
+
+
 
   // Controlled smooth scrolling to key dashboard sections without window jumps
   const scrollToSection = useCallback((sectionId: string) => {
@@ -822,14 +816,20 @@ export default function DynamicDashboardPage() {
             </div>
 
             {/* Show chart immediately if we have data, even when AI is reasoning */}
-            {ticker && chartData.length > 0 && (
-              <div id="section-chart">
-                <MarketChart
-                  ticker={ticker}
-                  data={chartData}
-                  selectedTimeframe={timeframe}
-                  onTimeframeChange={handleTimeframeChange}
-                />
+            {ticker && (
+              <div id="section-chart" style={{ minHeight: '420px' }}>
+                {chartData.length === 0 ? (
+                  <SectionSkeleton height="420px" label="Market Chart" />
+                ) : (
+                  <div className="animate-in fade-in duration-500 h-full">
+                    <MarketChart
+                      ticker={ticker}
+                      data={chartData}
+                      selectedTimeframe={timeframe}
+                      onTimeframeChange={handleTimeframeChange}
+                    />
+                  </div>
+                )}
               </div>
             )}
 
@@ -971,36 +971,48 @@ export default function DynamicDashboardPage() {
 
             {/* Candlestick Chart Visualization — Anchored at Top (Zero Layout Shift) */}
             {ticker && (
-              <div id="section-chart">
-                <MarketChart
-                  ticker={ticker}
-                  data={chartData}
-                  selectedTimeframe={timeframe}
-                  onTimeframeChange={handleTimeframeChange}
-                />
+              <div id="section-chart" style={{ minHeight: '420px' }}>
+                {chartData.length === 0 ? (
+                  <SectionSkeleton height="420px" label="Market Chart" />
+                ) : (
+                  <div className="animate-in fade-in duration-500 h-full">
+                    <MarketChart
+                      ticker={ticker}
+                      data={chartData}
+                      selectedTimeframe={timeframe}
+                      onTimeframeChange={handleTimeframeChange}
+                    />
+                  </div>
+                )}
               </div>
             )}
 
             {/* Cognitive Synthesis & Autonomous Agent Results */}
-            <div id="section-ai-results" className="space-y-6">
-              <IntelligenceCard
-                data={jobState.result}
-                onRefresh={fetchCachedIntelligence}
-                isRefreshing={isCacheRefreshing}
-                onNavigateSection={scrollToSection}
-              />
-              <MacroSimulatorPanel
-                isSimulating={isSimulating}
-                onSimulate={(params) => {
-                  setIsSimulating(true);
-                  setTimeout(() => {
-                    setIsSimulating(false);
-                    const baseScore = jobState.result?.quant_context?.composite_score ?? 70;
-                    const impact = (params.earningsRevision * 0.5) - (params.fedRate * 0.05) - (params.vixSpike * 0.2);
-                    setSimulatedScore(Math.max(0, Math.min(100, baseScore + impact)));
-                  }, 1500);
-                }}
-              />
+            <div id="section-ai-results" style={{ minHeight: '600px' }}>
+              {!jobState.result ? (
+                <SectionSkeleton height="600px" label="AI Cognitive Synthesis" />
+              ) : (
+                <div className="space-y-6 animate-in fade-in duration-500 h-full">
+                  <IntelligenceCard
+                    data={jobState.result}
+                    onRefresh={fetchCachedIntelligence}
+                    isRefreshing={isCacheRefreshing}
+                    onNavigateSection={scrollToSection}
+                  />
+                  <MacroSimulatorPanel
+                    isSimulating={isSimulating}
+                    onSimulate={(params) => {
+                      setIsSimulating(true);
+                      setTimeout(() => {
+                        setIsSimulating(false);
+                        const baseScore = jobState.result?.quant_context?.composite_score ?? 70;
+                        const impact = (params.earningsRevision * 0.5) - (params.fedRate * 0.05) - (params.vixSpike * 0.2);
+                        setSimulatedScore(Math.max(0, Math.min(100, baseScore + impact)));
+                      }, 1500);
+                    }}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Quantitative Technical Indicators Suite */}

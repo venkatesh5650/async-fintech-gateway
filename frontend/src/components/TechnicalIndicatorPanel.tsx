@@ -3,6 +3,8 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { TickerAnalyticsResponse } from "@/types/api";
 
+import { SectionSkeleton } from "@/components/SectionSkeleton";
+
 interface TechnicalIndicatorPanelProps {
   ticker: string;
 }
@@ -52,13 +54,17 @@ export function TechnicalIndicatorPanel({ ticker }: TechnicalIndicatorPanelProps
     return `$${val.toFixed(2)}`;
   };
 
+  if (loading && !data) {
+    return <SectionSkeleton height="200px" label="Technical Oscillators" />;
+  }
+
   const rsiVal = data?.indicators?.rsi_14;
   const rsiStatus = data?.indicators?.rsi_status || "NEUTRAL";
   const bb = data?.indicators?.bollinger_bands;
   const bbStatus = bb?.status || "WITHIN_BANDS";
 
   return (
-    <div className="hud-panel corner-reticle rounded-2xl p-5 shadow-xl text-slate-200 border border-cyan-500/25">
+    <div className="hud-panel corner-reticle rounded-2xl p-5 shadow-xl text-slate-200 border border-cyan-500/25 animate-in fade-in duration-500">
       <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
         <div className="flex items-center space-x-2.5">
           <div className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-pulse" />
@@ -75,11 +81,7 @@ export function TechnicalIndicatorPanel({ ticker }: TechnicalIndicatorPanelProps
         </button>
       </div>
 
-      {loading && !data ? (
-        <div className="py-8 text-center text-xs text-slate-500 animate-pulse">
-          Calculating 14-day RSI & 20-day Bollinger Bands...
-        </div>
-      ) : error ? (
+      {error ? (
         <div className="py-4 text-center text-xs text-rose-400 bg-rose-950/20 rounded-lg border border-rose-900/40">
           {error}
         </div>

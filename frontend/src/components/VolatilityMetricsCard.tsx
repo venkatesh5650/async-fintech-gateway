@@ -3,6 +3,8 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { VolatilityMetricsResponse } from "@/types/api";
 
+import { SectionSkeleton } from "@/components/SectionSkeleton";
+
 interface VolatilityMetricsCardProps {
   ticker: string;
 }
@@ -48,8 +50,12 @@ export function VolatilityMetricsCard({ ticker }: VolatilityMetricsCardProps) {
     return "bg-slate-500/10 text-slate-400 border-slate-500/30";
   };
 
+  if (loading && !data) {
+    return <SectionSkeleton height="180px" label="Risk & Volatility Profile" />;
+  }
+
   return (
-    <div className="hud-panel corner-reticle rounded-2xl p-5 shadow-xl text-slate-200 border border-cyan-500/25">
+    <div className="hud-panel corner-reticle rounded-2xl p-5 shadow-xl text-slate-200 border border-cyan-500/25 animate-in fade-in duration-500">
       <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
         <div className="flex items-center space-x-2.5">
           <div className="w-2.5 h-2.5 rounded-full bg-purple-400 animate-pulse" />
@@ -66,11 +72,7 @@ export function VolatilityMetricsCard({ ticker }: VolatilityMetricsCardProps) {
         </button>
       </div>
 
-      {loading && !data ? (
-        <div className="py-8 text-center text-xs text-slate-500 animate-pulse">
-          Computing 30-day std dev, Sharpe ratio & maximum drawdown...
-        </div>
-      ) : error ? (
+      {error ? (
         <div className="py-4 text-center text-xs text-rose-400 bg-rose-950/20 rounded-lg border border-rose-900/40">
           {error}
         </div>

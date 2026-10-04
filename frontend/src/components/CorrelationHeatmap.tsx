@@ -3,6 +3,8 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { CorrelationMatrixResponse } from "@/types/api";
 
+import { SectionSkeleton } from "@/components/SectionSkeleton";
+
 interface CorrelationHeatmapProps {
   initialSymbols?: string[];
   activeTicker?: string;
@@ -73,11 +75,15 @@ export function CorrelationHeatmap({ initialSymbols, activeTicker }: Correlation
     return "Weak Negative Relationship";
   };
 
+  if (loading && !data) {
+    return <SectionSkeleton height="400px" label="Cross-Ticker Correlation Matrix" />;
+  }
+
   const symbols = data?.symbols || [];
   const matrix = data?.matrix || {};
 
   return (
-    <div className="hud-panel corner-reticle rounded-2xl p-5 shadow-xl text-slate-200 border border-cyan-500/25">
+    <div className="hud-panel corner-reticle rounded-2xl p-5 shadow-xl text-slate-200 border border-cyan-500/25 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-800 pb-3 mb-4 gap-3">
         <div className="flex items-center space-x-2.5">
           <div className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse" />
@@ -115,11 +121,7 @@ export function CorrelationHeatmap({ initialSymbols, activeTicker }: Correlation
         </div>
       </div>
 
-      {loading && !data ? (
-        <div className="py-8 text-center text-xs text-slate-500 animate-pulse">
-          Executing PostgreSQL CORR() window computations across price vectors...
-        </div>
-      ) : error ? (
+      {error ? (
         <div className="py-4 text-center text-xs text-rose-400 bg-rose-950/20 rounded-lg border border-rose-900/40">
           {error}
         </div>
