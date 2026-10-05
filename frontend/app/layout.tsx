@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import CyberBackgroundCanvas from "@/components/CyberBackgroundCanvas";
 import FounderDemoHotkeys from "@/components/FounderDemoHotkeys";
+import AiAssistant from "@/components/AiAssistant";
 import { BikeTransitionProvider } from "@/context/BikeTransitionContext";
 
 const geistSans = Geist({
@@ -50,6 +51,8 @@ export default function RootLayout({
         </BikeTransitionProvider>
         {/* Founder Presentation Quick-Dock & Keyboard Navigation */}
         <FounderDemoHotkeys />
+        {/* AI Educational Tutor */}
+        <AiAssistant />
       </body>
     </html>
   );
