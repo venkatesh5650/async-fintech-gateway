@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   const { path } = await params;
-  const targetUrl = `http://127.0.0.1:8000/${path.join("/")}`;
+  const backendBaseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+  const targetUrl = `${backendBaseUrl}/${path.join("/")}`;
   const contentType = req.headers.get("content-type") || "";
 
   try {
