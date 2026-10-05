@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request, Response, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import CONTENT_TYPE_LATEST
 from app.core.telemetry_metrics import MetricsRegistryManager
 import logging
@@ -24,6 +25,7 @@ from app.core.openapi import (
 from app.core.health_probes import CloudReadinessProbeManager
 from app.core.telemetry import StructuredLoggingMiddleware
 from app.routers import (
+    ai_bot,
     analytics,
     architecture,
     auth,
@@ -239,10 +241,20 @@ app = FastAPI(
 
 app.openapi = lambda: custom_openapi(app)
 
+# 0. Configure CORS for Frontend React App
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # 1. Register Cloud-Native Structured Logging Middleware
 app.add_middleware(StructuredLoggingMiddleware)
 
 # 2. Mounting Enterprise Microservice Routers
+app.include_router(ai_bot.router)
 app.include_router(auth.router)
 app.include_router(intelligence.router)
 app.include_router(market.router)
