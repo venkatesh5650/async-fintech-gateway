@@ -132,6 +132,7 @@ class StreamConsumerWorker:
                     "quarantined_at": int(time.time() * 1000),
                 }
                 await self.redis_client.set(job_id, json.dumps(dead_letter_payload), ex=3600)
+                await self.redis_client.zadd("audit:active_jobs", {job_id: time.time() + 3600})
 
                 last_err = await self.redis_client.get(f"job:{job_id}:last_error")
                 actual_reason = last_err or f"Exceeded max delivery attempts ({delivery_count}/{MAX_DELIVERY_ATTEMPTS})"
@@ -177,6 +178,7 @@ class StreamConsumerWorker:
                     state_obj = json.loads(raw_state)
                     state_obj["status"] = "processing"
                     await self.redis_client.set(job_id, json.dumps(state_obj), ex=3600)
+                    await self.redis_client.zadd("audit:active_jobs", {job_id: time.time() + 3600})
                 except Exception:
                     pass
 

@@ -179,6 +179,7 @@ async def run_intelligence_worker(
         }
         # Cache completed state in Redis with a 3600-second expiration TTL
         await redis_client.set(job_id, json.dumps(payload), ex=3600)
+        await redis_client.zadd("audit:active_jobs", {job_id: time.time() + 3600})
 
         # Maintain trace index for O(1) distributed trace waterfall lookups
         if trace_id:
@@ -231,6 +232,7 @@ async def run_intelligence_worker(
         error_payload = {"job_id": job_id, "status": "failed", "result": None, "error": str(e)}
         # Persist failure state to Redis for upstream client diagnostics
         await redis_client.set(job_id, json.dumps(error_payload), ex=3600)
+        await redis_client.zadd("audit:active_jobs", {job_id: time.time() + 3600})
         await manager.send_personal_message(error_payload, job_id=job_id)
         await manager.broadcast(error_payload)
 
@@ -292,6 +294,7 @@ async def submit_analysis_job(
         "server_timestamp": int(time.time() * 1000),
     }
     await redis_client.set(job_id, json.dumps(initial_payload), ex=3600)
+    await redis_client.zadd("audit:active_jobs", {job_id: time.time() + 3600})
 
     # Publish event to durable Redis Stream with trace context
     await enqueue_intelligence_job(
@@ -323,6 +326,7 @@ async def submit_batch_analysis_jobs(
     span_id = getattr(request.state, "span_id", None)
     job_items: list[BatchJobItem] = []
     stream_jobs: list[dict[str, Any]] = []
+    job_zadd_mapping = {}
 
     # Map individual UUIDs and pre-warm Redis states for instant WebSocket subscriptions
     for ticker in payload.tickers:
@@ -342,6 +346,10 @@ async def submit_batch_analysis_jobs(
             "server_timestamp": int(time.time() * 1000),
         }
         await redis_client.set(job_id, json.dumps(initial_job_payload), ex=3600)
+        job_zadd_mapping[job_id] = time.time() + 3600
+        
+    if job_zadd_mapping:
+        await redis_client.zadd("audit:active_jobs", job_zadd_mapping)
 
     # Pre-warm batch status state in Redis
     initial_batch_payload = {
@@ -430,17 +438,16 @@ async def get_live_job_audit():
     audit_entries: list[JobAuditEntry] = []
     processing_count = completed_count = failed_count = 0
 
-    # --- Redis SCAN: Non-blocking key discovery ---
-    # KEYS * is O(N) and blocks the Redis event loop — never use in production.
-    # SCAN iterates in small batches and is safe under concurrent load.
-    cursor = 0
-    job_keys: list[str] = []
-    while True:
-        cursor, keys = await redis_client.scan(cursor, match="*", count=200)
-        # Filter to UUID-shaped keys only — excludes batch:*, rate_limit:*, etc.
-        job_keys.extend(k for k in keys if _UUID_PATTERN.match(k))
-        if cursor == 0:
-            break
+    # --- Redis ZSET: Efficient active job discovery ---
+    # SCAN across the entire keyspace timeouts if Redis is heavily loaded.
+    # We now maintain a ZSET 'audit:active_jobs' scored by expiry time.
+    current_time = time.time()
+    
+    # 1. Clean up expired jobs (lazy expiration)
+    await redis_client.zremrangebyscore("audit:active_jobs", 0, current_time)
+    
+    # 2. Retrieve remaining active job UUIDs
+    job_keys = await redis_client.zrange("audit:active_jobs", 0, -1)
 
     if not job_keys:
         return SystemAuditResponse(
