@@ -10,6 +10,7 @@ import {
   HistogramSeries,
   AreaSeries,
   CrosshairMode,
+  TickMarkType,
 } from "lightweight-charts";
 import { useSoundFX } from "@/hooks/useSoundFX";
 
@@ -29,6 +30,8 @@ interface MarketChartProps {
   data: ChartDataPoint[];
   selectedTimeframe?: Timeframe;
   onTimeframeChange?: (tf: Timeframe) => void;
+  isLoading?: boolean;
+  loadingTimeframe?: Timeframe | null;
 }
 
 interface HoverLegendData {
@@ -47,6 +50,8 @@ export default function MarketChart({
   data,
   selectedTimeframe = "5m",
   onTimeframeChange,
+  isLoading = false,
+  loadingTimeframe = null,
 }: MarketChartProps) {
   const { playClick, playBlip } = useSoundFX();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -62,6 +67,7 @@ export default function MarketChart({
   const previousTimeframeRef = useRef<Timeframe>(selectedTimeframe);
   const previousChartTypeRef = useRef<"candlestick" | "area">("candlestick");
   const previousDataLengthRef = useRef<number>(0);
+  const previousFirstTimeRef = useRef<number | null>(null);
 
   // Active chart type state
   const [chartType, setChartType] = useState<"candlestick" | "area">("candlestick");
@@ -69,22 +75,43 @@ export default function MarketChart({
   // Hovered or latest OHLCV legend data for top-left overlay
   const [legendData, setLegendData] = useState<HoverLegendData | null>(null);
 
-  // Sort and deduplicate dataset
+  // Sort and deduplicate dataset (Strictly 1 candle per calendar day for 1D timeframe, like TradingView)
   const cleanData = useMemo(() => {
     if (!data || data.length === 0) return [];
 
     const sorted = [...data].sort((a, b) => a.time - b.time);
     const unique: ChartDataPoint[] = [];
     const seenTimes = new Set<number>();
+    const seenDays = new Set<string>();
 
     for (const p of sorted) {
-      if (!seenTimes.has(p.time) && p.open > 0 && p.close > 0) {
-        seenTimes.add(p.time);
+      if (p.open <= 0 || p.close <= 0) continue;
+
+      if (selectedTimeframe === "1d") {
+        const dt = new Date(p.time * 1000);
+        const dayKey = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+        if (seenDays.has(dayKey)) {
+          // If multiple candles exist for the same day, replace with the latest update
+          const existingIdx = unique.findIndex((u) => {
+            const uDt = new Date(u.time * 1000);
+            return `${uDt.getUTCFullYear()}-${String(uDt.getUTCMonth() + 1).padStart(2, "0")}-${String(uDt.getUTCDate()).padStart(2, "0")}` === dayKey;
+          });
+          if (existingIdx !== -1) {
+            unique[existingIdx] = p;
+          }
+          continue;
+        }
+        seenDays.add(dayKey);
         unique.push(p);
+      } else {
+        if (!seenTimes.has(p.time)) {
+          seenTimes.add(p.time);
+          unique.push(p);
+        }
       }
     }
     return unique;
-  }, [data]);
+  }, [data, selectedTimeframe]);
 
   // Overall session change telemetry (first candle vs last candle)
   const priceTelemetry = useMemo(() => {
@@ -100,6 +127,37 @@ export default function MarketChart({
       isUp: diff >= 0,
     };
   }, [cleanData]);
+
+  // Detected user local timezone with UTC offset for display
+  const userTimeZone = useMemo(() => {
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const offsetMinutes = -new Date().getTimezoneOffset();
+      const sign = offsetMinutes >= 0 ? "+" : "-";
+      const hours = Math.floor(Math.abs(offsetMinutes) / 60);
+      const mins = Math.abs(offsetMinutes) % 60;
+      const offsetStr = `UTC${sign}${hours}${mins > 0 ? `:${mins.toString().padStart(2, "0")}` : ""}`;
+      const city = tz.split("/").pop()?.replace(/_/g, " ") || tz;
+      return `${city} (${offsetStr})`;
+    } catch {
+      return "Local Time";
+    }
+  }, []);
+
+  // Format timestamp into 24-hour time and date for tooltip overlays (TradingView standard)
+  const formatTimeStr = (timestampSec: number, tf: Timeframe) => {
+    const dt = new Date(timestampSec * 1000);
+    if (tf === "1d") {
+      return dt.toLocaleDateString([], {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+    }
+    const time = dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+    const date = dt.toLocaleDateString([], { month: "short", day: "numeric" });
+    return `${date}, ${time}`;
+  };
 
   // Initialize TradingView-styled Lightweight Chart Instance
   useEffect(() => {
@@ -131,6 +189,27 @@ export default function MarketChart({
           labelBackgroundColor: "#21262d",
         },
       },
+      localization: {
+        dateFormat: "yyyy-MM-dd",
+        timeFormatter: (time: any) => {
+          if (!time) return "";
+          const ts = typeof time === "number" ? time : Number(time?.timestamp || time);
+          if (isNaN(ts)) return String(time);
+          const date = new Date(ts * 1000);
+          if (previousTimeframeRef.current === "1d") {
+            return date.toLocaleDateString([], {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            });
+          }
+          return (
+            date.toLocaleDateString([], { month: "short", day: "numeric" }) +
+            " " +
+            date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })
+          );
+        },
+      },
       timeScale: {
         borderColor: "#21262d",
         timeVisible: true,
@@ -138,6 +217,35 @@ export default function MarketChart({
         rightOffset: 5,
         barSpacing: 8,
         minBarSpacing: 2,
+        tickMarkFormatter: (time: Time, tickMarkType: TickMarkType, locale: string) => {
+          const ts = typeof time === "number" ? time : Number(time);
+          if (isNaN(ts)) return null;
+          const date = new Date(ts * 1000);
+
+          if (previousTimeframeRef.current === "1d") {
+            if (tickMarkType === TickMarkType.Year) {
+              return date.getFullYear().toString();
+            }
+            return date.toLocaleDateString(locale || undefined, { day: "numeric", month: "short" });
+          }
+
+          switch (tickMarkType) {
+            case TickMarkType.Year:
+              return date.getFullYear().toString();
+            case TickMarkType.Month:
+              return date.toLocaleDateString(locale || undefined, { month: "short" });
+            case TickMarkType.DayOfMonth:
+              return date.toLocaleDateString(locale || undefined, { day: "numeric", month: "short" });
+            case TickMarkType.Time:
+            case TickMarkType.TimeWithSeconds:
+            default:
+              return date.toLocaleTimeString(locale || undefined, {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false,
+              });
+          }
+        },
       },
       rightPriceScale: {
         borderColor: "#21262d",
@@ -175,7 +283,6 @@ export default function MarketChart({
           const last = cleanData[cleanData.length - 1];
           const diff = last.close - last.open;
           const pct = last.open > 0 ? (diff / last.open) * 100 : 0;
-          const dt = new Date(last.time * 1000);
           setLegendData({
             open: last.open,
             high: last.high,
@@ -184,7 +291,7 @@ export default function MarketChart({
             volume: last.volume || 0,
             change: diff,
             changePercent: pct,
-            timeStr: dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            timeStr: formatTimeStr(last.time, previousTimeframeRef.current),
           });
         }
         return;
@@ -201,7 +308,6 @@ export default function MarketChart({
       if (candleData) {
         const diff = candleData.close - candleData.open;
         const pct = candleData.open > 0 ? (diff / candleData.open) * 100 : 0;
-        const dt = new Date((param.time as number) * 1000);
         setLegendData({
           open: candleData.open,
           high: candleData.high,
@@ -210,10 +316,9 @@ export default function MarketChart({
           volume: volData?.value || 0,
           change: diff,
           changePercent: pct,
-          timeStr: dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          timeStr: formatTimeStr(param.time as number, previousTimeframeRef.current),
         });
       } else if (areaData) {
-        const dt = new Date((param.time as number) * 1000);
         setLegendData({
           open: areaData.value,
           high: areaData.value,
@@ -222,7 +327,7 @@ export default function MarketChart({
           volume: volData?.value || 0,
           change: 0,
           changePercent: 0,
-          timeStr: dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          timeStr: formatTimeStr(param.time as number, previousTimeframeRef.current),
         });
       }
     });
@@ -252,19 +357,32 @@ export default function MarketChart({
   useEffect(() => {
     if (!chartRef.current || !volumeSeriesRef.current || cleanData.length === 0) return;
 
+    const firstPointTime = cleanData[0]?.time ?? null;
     const isTickerChanged = previousTickerRef.current !== ticker;
     const isTimeframeChanged = previousTimeframeRef.current !== selectedTimeframe;
     const isChartTypeChanged = previousChartTypeRef.current !== chartType;
+    const isDatasetReplaced =
+      previousFirstTimeRef.current !== null &&
+      firstPointTime !== null &&
+      previousFirstTimeRef.current !== firstPointTime;
+    const isLargeLengthDelta =
+      previousDataLengthRef.current > 0 &&
+      Math.abs(cleanData.length - previousDataLengthRef.current) > 2;
+
     const isFullReload =
       isTickerChanged ||
       isTimeframeChanged ||
       isChartTypeChanged ||
-      previousDataLengthRef.current === 0;
+      isDatasetReplaced ||
+      isLargeLengthDelta ||
+      previousDataLengthRef.current === 0 ||
+      (!candlestickSeriesRef.current && !areaSeriesRef.current);
 
     previousTickerRef.current = ticker;
     previousTimeframeRef.current = selectedTimeframe;
     previousChartTypeRef.current = chartType;
     previousDataLengthRef.current = cleanData.length;
+    previousFirstTimeRef.current = firstPointTime;
 
     // Full Series Re-mount on chart style change, ticker change, or timeframe change
     if (isFullReload || (!candlestickSeriesRef.current && !areaSeriesRef.current)) {
@@ -327,6 +445,9 @@ export default function MarketChart({
       // Only fit content on initial reload to prevent resetting user pan/zoom
       requestAnimationFrame(() => {
         if (chartRef.current && cleanData.length > 0) {
+          chartRef.current.timeScale().applyOptions({
+            timeVisible: selectedTimeframe !== "1d",
+          });
           chartRef.current.timeScale().fitContent();
         }
       });
@@ -393,7 +514,6 @@ export default function MarketChart({
     const last = cleanData[cleanData.length - 1];
     const diff = last.close - last.open;
     const pct = last.open > 0 ? (diff / last.open) * 100 : 0;
-    const dt = new Date(last.time * 1000);
     setLegendData({
       open: last.open,
       high: last.high,
@@ -402,7 +522,7 @@ export default function MarketChart({
       volume: last.volume || 0,
       change: diff,
       changePercent: pct,
-      timeStr: dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      timeStr: formatTimeStr(last.time, selectedTimeframe),
     });
   }, [cleanData, chartType, ticker, selectedTimeframe]);
 
@@ -449,23 +569,33 @@ export default function MarketChart({
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
           {/* Timeframe Selector Pills */}
           <div className="flex bg-slate-900/90 border border-slate-800 rounded-lg p-0.5 text-xs overflow-x-auto max-w-full">
-            {timeframes.map((tf) => (
-              <button
-                key={tf.value}
-                type="button"
-                onClick={() => {
-                  playClick();
-                  onTimeframeChange?.(tf.value);
-                }}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition shrink-0 ${
-                  selectedTimeframe === tf.value
-                    ? "bg-cyan-500 text-black shadow-[0_0_10px_rgba(0,240,255,0.4)]"
-                    : "text-slate-400 hover:text-white"
-                }`}
-              >
-                {tf.label}
-              </button>
-            ))}
+            {timeframes.map((tf) => {
+              const isActive = selectedTimeframe === tf.value;
+              const isTargetLoading = isLoading && loadingTimeframe === tf.value;
+              return (
+                <button
+                  key={tf.value}
+                  type="button"
+                  disabled={isTargetLoading}
+                  onClick={() => {
+                    playClick();
+                    onTimeframeChange?.(tf.value);
+                  }}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition shrink-0 flex items-center space-x-1.5 cursor-pointer disabled:cursor-wait ${
+                    isTargetLoading
+                      ? "bg-cyan-500/30 text-cyan-300 border border-cyan-400 shadow-[0_0_12px_rgba(0,240,255,0.6)] animate-pulse"
+                      : isActive
+                      ? "bg-cyan-500 text-black shadow-[0_0_10px_rgba(0,240,255,0.4)]"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+                  }`}
+                >
+                  {isTargetLoading && (
+                    <span className="w-2 h-2 rounded-full border-2 border-cyan-300 border-t-transparent animate-spin inline-block" />
+                  )}
+                  <span>{tf.label}</span>
+                </button>
+              );
+            })}
           </div>
 
           <div className="h-4 w-[1px] bg-slate-800 hidden sm:block" />
@@ -508,8 +638,45 @@ export default function MarketChart({
 
       {/* Chart Canvas Area with Floating TradingView Top-Left Legend */}
       <div className="relative w-full max-w-full bg-slate-950/80 rounded-xl overflow-hidden border border-slate-800/80">
+        {/* Sleek Cyberpunk / Fintech Timeframe Transition Loader Overlay */}
+        {isLoading && (
+          <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
+            {/* Glowing HUD Radar / Pulse Spinner */}
+            <div className="relative flex items-center justify-center mb-4">
+              {/* Outer pulsing aura */}
+              <div className="absolute w-20 h-20 rounded-full bg-cyan-500/20 animate-ping opacity-60" />
+              {/* Rotating outer reticle ring */}
+              <div className="w-16 h-16 rounded-full border-2 border-dashed border-cyan-400/50 animate-[spin_6s_linear_infinite]" />
+              {/* Fast inner spinner */}
+              <div className="absolute w-12 h-12 rounded-full border-2 border-transparent border-t-cyan-400 border-r-cyan-400 animate-spin" />
+              {/* Center glowing core with symbol */}
+              <div className="absolute w-6 h-6 rounded-full bg-cyan-500/30 border border-cyan-400 flex items-center justify-center shadow-[0_0_15px_rgba(0,240,255,0.8)]">
+                <span className="text-cyan-300 text-[10px] font-black">⚡</span>
+              </div>
+            </div>
+
+            {/* Futuristic Telemetry Status Messages */}
+            <div className="text-center space-y-1.5 px-4 font-mono">
+              <div className="text-cyan-300 font-extrabold text-sm sm:text-base tracking-wider flex items-center justify-center space-x-2">
+                <span>⚡</span>
+                <span>
+                  Switching to{" "}
+                  <span className="text-white bg-cyan-500/20 px-2 py-0.5 rounded border border-cyan-500/40 font-black shadow-[0_0_10px_rgba(0,240,255,0.4)]">
+                    {(loadingTimeframe || selectedTimeframe).toUpperCase()}
+                  </span>{" "}
+                  timeframe...
+                </span>
+              </div>
+              <div className="text-slate-400 text-xs flex items-center justify-center space-x-2">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                <span>Fetching real-time candlestick telemetry & OHLCV bars</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Floating TradingView Top-Left Crosshair OHLCV Tooltip Overlay */}
-        {legendData && (
+        {legendData && !isLoading && (
           <div className="absolute top-2 left-2 z-10 pointer-events-none bg-[#161b22]/90 backdrop-blur-md border border-[#30363d] px-2 py-1 sm:px-3 sm:py-1.5 rounded-lg text-[10px] sm:text-xs flex flex-wrap sm:flex-nowrap gap-x-2.5 gap-y-0.5 sm:space-x-3 items-center shadow-lg font-mono max-w-[calc(100%-1rem)] overflow-hidden">
             <span className="text-[#8b949e] shrink-0">{legendData.timeStr}</span>
             <span className="text-[#8b949e] shrink-0">
@@ -535,9 +702,14 @@ export default function MarketChart({
       </div>
 
       {/* Chart Footer Telemetry Legend */}
-      <div className="flex flex-col sm:flex-row justify-between text-[10px] text-[#8b949e] border-t border-[#21262d] pt-2 gap-2 flex-wrap">
-        <div>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center text-[10px] text-[#8b949e] border-t border-[#21262d] pt-2 gap-2 flex-wrap">
+        <div className="flex items-center space-x-2 flex-wrap gap-y-1">
           <span>Drag to pan | Scroll to zoom | Double click canvas to reset scale</span>
+          <span className="text-slate-600 hidden sm:inline">•</span>
+          <span className="inline-flex items-center space-x-1 text-cyan-400 font-semibold bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-800/40">
+            <span>🕒</span>
+            <span>24H Time ({userTimeZone})</span>
+          </span>
         </div>
         <div className="flex space-x-4">
           <span className="flex items-center">

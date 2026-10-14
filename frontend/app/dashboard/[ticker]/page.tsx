@@ -48,6 +48,8 @@ export default function DynamicDashboardPage() {
   const [activeOpsTab, setActiveOpsTab] = useState<OpsTab>("registry");
   const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
   const [timeframe, setTimeframe] = useState<Timeframe>("5m");
+  const [isTimeframeLoading, setIsTimeframeLoading] = useState(false);
+  const [targetTimeframe, setTargetTimeframe] = useState<Timeframe | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isSimulating, setIsSimulating] = useState(false);
   const [simulatedScore, setSimulatedScore] = useState<number | null>(null);
@@ -70,32 +72,54 @@ export default function DynamicDashboardPage() {
   const batchIdRef = useRef<string | null>(null);
   const batchAssetsRef = useRef<BatchAssetStatus[]>([]);
   const syncChannelRef = useRef<BroadcastChannel | null>(null);
+  const timeframeRef = useRef<Timeframe>(timeframe);
 
   useEffect(() => { jobStateRef.current = jobState; }, [jobState]);
   useEffect(() => { jobIdRef.current = jobId; }, [jobId]);
   useEffect(() => { batchIdRef.current = batchId; }, [batchId]);
   useEffect(() => { batchAssetsRef.current = batchAssets; }, [batchAssets]);
+  useEffect(() => { timeframeRef.current = timeframe; }, [timeframe]);
 
   // Fetch historical price points
-  const fetchHistory = useCallback(async (tf: Timeframe = timeframe) => {
-    if (!ticker) return;
+  const fetchHistory = useCallback(async (tf: Timeframe = timeframeRef.current): Promise<boolean> => {
+    if (!ticker) return false;
     try {
-      const res = await fetch(`/api/market-data/${ticker}?interval=${tf}`);
+      const res = await fetch(`/api/market-data/${ticker}?interval=${tf}&_t=${Date.now()}`, {
+        cache: "no-store",
+      });
       if (res.ok) {
         const history = await res.json();
-        setChartData(history);
+        if (Array.isArray(history) && history.length > 0) {
+          setChartData(history);
+          return true;
+        } else {
+          console.warn(`[MarketChart] Received empty historical data for ${ticker} (${tf})`);
+          return false;
+        }
       } else {
         const errPayload = await res.json().catch(() => ({}));
         console.warn("Failed to fetch historical market data:", res.status, errPayload);
+        return false;
       }
     } catch (err) {
       console.warn("Error fetching historical market data:", err);
+      return false;
     }
-  }, [ticker, timeframe]);
+  }, [ticker]);
 
-  const handleTimeframeChange = (tf: Timeframe) => {
-    setTimeframe(tf);
-    fetchHistory(tf);
+  const handleTimeframeChange = async (tf: Timeframe) => {
+    if (isTimeframeLoading && targetTimeframe === tf) return;
+    setIsTimeframeLoading(true);
+    setTargetTimeframe(tf);
+    try {
+      const success = await fetchHistory(tf);
+      if (success) {
+        setTimeframe(tf);
+      }
+    } finally {
+      setIsTimeframeLoading(false);
+      setTargetTimeframe(null);
+    }
   };
 
   // Cache-Aside intelligence fetching state
@@ -398,21 +422,70 @@ export default function DynamicDashboardPage() {
       // 3. Real-Time Telemetry Broadcast update for the chart
       if (data && data.type === "market_data" && data.ticker === ticker) {
         setChartData((prev) => {
+          if (!prev || prev.length === 0) return prev;
+          const currentTf = timeframeRef.current;
+          const isIntraday = currentTf !== "1d";
+          const tfSec =
+            currentTf === "5m"
+              ? 300
+              : currentTf === "15m"
+              ? 900
+              : currentTf === "1h"
+              ? 3600
+              : 14400;
+
+          const lastCandle = prev[prev.length - 1];
+          const newTime = Math.floor(new Date(data.timestamp).getTime() / 1000);
+          const timeGap = newTime - lastCandle.time;
+
+          // If off-hours or closed session (time gap larger than 1 candle step), do not append a new bar
+          if (isIntraday && timeGap > tfSec) {
+            return prev;
+          }
+
+          // For 1D daily charts: enforce strictly ONE candle per calendar day
+          if (!isIntraday) {
+            const lastDate = new Date(lastCandle.time * 1000).toISOString().split("T")[0];
+            const newDate = new Date(newTime * 1000).toISOString().split("T")[0];
+            if (lastDate === newDate) {
+              const updated = [...prev];
+              updated[updated.length - 1] = {
+                ...lastCandle,
+                high: Math.max(lastCandle.high, data.close),
+                low: Math.min(lastCandle.low, data.close),
+                close: data.close,
+                volume: Math.max(lastCandle.volume || 0, data.volume || 0),
+              };
+              return updated;
+            }
+          }
+
+          const index = prev.findIndex((p) => p.time === newTime);
+          if (index !== -1) {
+            const updated = [...prev];
+            const existing = updated[index];
+            updated[index] = {
+              ...existing,
+              high: Math.max(existing.high, data.close),
+              low: Math.min(existing.low, data.close),
+              close: data.close,
+              volume: isIntraday ? existing.volume : (data.volume ?? existing.volume),
+            };
+            return updated;
+          }
+
+          // If within active intraday window, append new candle with realistic volume
           const newPoint = {
-            time: Math.floor(new Date(data.timestamp).getTime() / 1000),
+            time: newTime,
             open: data.open,
             high: data.high,
             low: data.low,
             close: data.close,
-            volume: data.volume,
+            volume:
+              isIntraday && lastCandle.volume && data.volume > lastCandle.volume * 5
+                ? lastCandle.volume
+                : data.volume,
           };
-
-          const index = prev.findIndex((p) => p.time === newPoint.time);
-          if (index !== -1) {
-            const updated = [...prev];
-            updated[index] = newPoint;
-            return updated;
-          }
           return [...prev, newPoint];
         });
       }
@@ -827,6 +900,8 @@ export default function DynamicDashboardPage() {
                       data={chartData}
                       selectedTimeframe={timeframe}
                       onTimeframeChange={handleTimeframeChange}
+                      isLoading={isTimeframeLoading}
+                      loadingTimeframe={targetTimeframe}
                     />
                   </div>
                 )}
@@ -981,6 +1056,8 @@ export default function DynamicDashboardPage() {
                       data={chartData}
                       selectedTimeframe={timeframe}
                       onTimeframeChange={handleTimeframeChange}
+                      isLoading={isTimeframeLoading}
+                      loadingTimeframe={targetTimeframe}
                     />
                   </div>
                 )}
@@ -1137,6 +1214,8 @@ export default function DynamicDashboardPage() {
               data={chartData}
               selectedTimeframe={timeframe}
               onTimeframeChange={handleTimeframeChange}
+              isLoading={isTimeframeLoading}
+              loadingTimeframe={targetTimeframe}
             />
           </div>
         )}
