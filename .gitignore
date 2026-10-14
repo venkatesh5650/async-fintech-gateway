@@ -21,3 +21,6 @@ __pycache__/
 
 # IDE / Agents
 .agents/
+
+# Scratch & Local Scripts
+scratch/
