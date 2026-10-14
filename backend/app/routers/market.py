@@ -2,6 +2,8 @@ from fastapi import APIRouter, BackgroundTasks, status, Depends
 import asyncio
 import math
 import logging
+import time
+import threading
 import yfinance as yf
 from datetime import datetime, timezone
 from sqlalchemy.future import select
@@ -39,6 +41,7 @@ def _fetch_yfinance_data_sync(ticker: str) -> dict:
 
     # Take the most recent row with valid data
     latest = hist.iloc[-1]
+    candle_ts = int(hist.index[-1].timestamp())
     close_p = float(latest["Close"])
     open_p = float(latest["Open"]) if not math.isnan(float(latest["Open"])) else close_p
     high_p = float(latest["High"]) if not math.isnan(float(latest["High"])) else close_p
@@ -46,6 +49,7 @@ def _fetch_yfinance_data_sync(ticker: str) -> dict:
     vol = int(latest["Volume"]) if not math.isnan(float(latest["Volume"])) else 0
 
     return {
+        "timestamp": candle_ts,
         "open": round(open_p, 4),
         "high": round(high_p, 4),
         "low": round(low_p, 4),
@@ -107,9 +111,14 @@ async def fetch_live_market_content(payload: MarketDataPayload):
                     session.add(ticker_obj)
                     await session.flush()
 
+                candle_time = (
+                    datetime.fromtimestamp(ohlcv["timestamp"], timezone.utc)
+                    if "timestamp" in ohlcv
+                    else datetime.now(timezone.utc)
+                )
                 pricing_record = MarketPricing(
                     ticker_id=ticker_obj.id,
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=candle_time,
                     open_price=ohlcv["open"],
                     high_price=ohlcv["high"],
                     low_price=ohlcv["low"],
@@ -130,6 +139,7 @@ async def fetch_live_market_content(payload: MarketDataPayload):
                     "close": float(pricing_record.close_price),
                     "volume": int(pricing_record.volume),
                     "data_source": "Yahoo_Finance_yfinance",
+                    "interval": "1d",
                 }
 
             await session.commit()
@@ -162,11 +172,26 @@ async def ingest_market_data(payload: MarketDataPayload, background_tasks: Backg
     }
 
 
+_YF_HISTORY_CACHE: dict[str, tuple[float, list[dict]]] = {}
+_YF_CACHE_LOCK = threading.Lock()
+
+
 def _fetch_yfinance_history_sync(ticker: str, interval: str = "5m") -> list:
     """
-    Synchronous yfinance historical candle fetcher.
+    Synchronous yfinance historical candle fetcher with high-speed in-memory TTL caching.
+    Prevents Yahoo Finance 429 throttling and enables instant, glitch-free timeframe switching.
     Supports intervals: 5m, 15m, 1h, 4h, 1d.
     """
+    cache_key = f"{ticker.upper()}:{interval.lower()}"
+    ttl = 120.0 if interval.lower() == "1d" else 30.0
+    now = time.time()
+
+    with _YF_CACHE_LOCK:
+        if cache_key in _YF_HISTORY_CACHE:
+            ts, cached_records = _YF_HISTORY_CACHE[cache_key]
+            if now - ts < ttl:
+                return cached_records
+
     is_4h = interval.lower() == "4h"
     tf_map = {
         "5m": ("5d", "5m"),
@@ -176,15 +201,23 @@ def _fetch_yfinance_history_sync(ticker: str, interval: str = "5m") -> list:
         "1d": ("6mo", "1d"),
     }
     period, inv = tf_map.get(interval.lower(), ("5d", "5m"))
-    t = yf.Ticker(ticker.upper())
-    hist = t.history(period=period, interval=inv).dropna(subset=["Close"])
 
-    if hist.empty and "." not in ticker:
-        # Smart international fallback (e.g. TCS -> TCS.NS, RELIANCE -> RELIANCE.NS)
-        t_ns = yf.Ticker(f"{ticker.upper()}.NS")
-        hist_ns = t_ns.history(period=period, interval=inv).dropna(subset=["Close"])
-        if not hist_ns.empty:
-            hist = hist_ns
+    try:
+        t = yf.Ticker(ticker.upper())
+        hist = t.history(period=period, interval=inv).dropna(subset=["Close"])
+
+        if hist.empty and "." not in ticker:
+            # Smart international fallback (e.g. TCS -> TCS.NS, RELIANCE -> RELIANCE.NS)
+            t_ns = yf.Ticker(f"{ticker.upper()}.NS")
+            hist_ns = t_ns.history(period=period, interval=inv).dropna(subset=["Close"])
+            if not hist_ns.empty:
+                hist = hist_ns
+    except Exception as fetch_err:
+        logging.warning(f"⚠️ [YFINANCE FETCH ERR] {ticker} ({interval}): {fetch_err}")
+        with _YF_CACHE_LOCK:
+            if cache_key in _YF_HISTORY_CACHE:
+                return _YF_HISTORY_CACHE[cache_key][1]
+        return []
 
     raw_records = []
     for idx, row in hist.iterrows():
@@ -205,33 +238,43 @@ def _fetch_yfinance_history_sync(ticker: str, interval: str = "5m") -> list:
             }
         )
 
-    if not is_4h or not raw_records:
-        return raw_records
+    if is_4h and raw_records:
+        # Aggregate 1h candles into 4h buckets (4 x 1h bars)
+        aggregated = []
+        chunk_size = 4
+        for i in range(0, len(raw_records), chunk_size):
+            chunk = raw_records[i : i + chunk_size]
+            if not chunk:
+                continue
+            agg_open = chunk[0]["open"]
+            agg_close = chunk[-1]["close"]
+            agg_high = max(c["high"] for c in chunk)
+            agg_low = min(c["low"] for c in chunk)
+            agg_vol = sum(c["volume"] for c in chunk)
+            agg_time = chunk[0]["time"]
+            aggregated.append(
+                {
+                    "time": agg_time,
+                    "open": agg_open,
+                    "high": agg_high,
+                    "low": agg_low,
+                    "close": agg_close,
+                    "volume": agg_vol,
+                }
+            )
+        result = aggregated
+    else:
+        result = raw_records
 
-    # Aggregate 1h candles into 4h buckets (4 x 1h bars)
-    aggregated = []
-    chunk_size = 4
-    for i in range(0, len(raw_records), chunk_size):
-        chunk = raw_records[i : i + chunk_size]
-        if not chunk:
-            continue
-        agg_open = chunk[0]["open"]
-        agg_close = chunk[-1]["close"]
-        agg_high = max(c["high"] for c in chunk)
-        agg_low = min(c["low"] for c in chunk)
-        agg_vol = sum(c["volume"] for c in chunk)
-        agg_time = chunk[0]["time"]
-        aggregated.append(
-            {
-                "time": agg_time,
-                "open": agg_open,
-                "high": agg_high,
-                "low": agg_low,
-                "close": agg_close,
-                "volume": agg_vol,
-            }
-        )
-    return aggregated
+    if result:
+        with _YF_CACHE_LOCK:
+            _YF_HISTORY_CACHE[cache_key] = (now, result)
+    else:
+        with _YF_CACHE_LOCK:
+            if cache_key in _YF_HISTORY_CACHE:
+                return _YF_HISTORY_CACHE[cache_key][1]
+
+    return result
 
 
 @router.get("/history/{ticker}", status_code=status.HTTP_200_OK)
@@ -310,36 +353,27 @@ async def get_market_history(
     except Exception as db_err:
         logging.warning(f"⚠️ [DB HISTORY WARN] {db_err}")
 
-    # Merge records cleanly: yf_records provides official historical baseline;
+    # Merge records cleanly: yf_records provides official historical baseline (TradingView standard).
     # DB records provide live telemetry for current active window only.
     if not yf_records:
         merged = sorted(db_records, key=lambda x: x["time"])
         return merged
 
-    by_time = {r["time"]: r for r in yf_records}
-    latest_yf_time = yf_records[-1]["time"]
+    merged = list(yf_records)
 
-    # Only apply DB live telemetry to update/append the SINGLE active live candle
-    if raw_db_records and step_sec:
+    # Only apply DB live telemetry to update the single active live candle in place.
+    # NEVER append phantom future day/intraday candles that duplicate or pollute official history.
+    if raw_db_records and step_sec and merged:
         latest_db = raw_db_records[-1]
         live_bucket_time = latest_db["time"] - (latest_db["time"] % step_sec)
 
-        if live_bucket_time >= latest_yf_time:
-            # Overwrite or append the single active live candle
-            by_time[live_bucket_time] = {
-                "time": live_bucket_time,
-                "open": latest_db["open"],
-                "high": max(latest_db["high"], yf_records[-1]["high"])
-                if live_bucket_time == latest_yf_time
-                else latest_db["high"],
-                "low": min(latest_db["low"], yf_records[-1]["low"])
-                if live_bucket_time == latest_yf_time
-                else latest_db["low"],
-                "close": latest_db["close"],
-                "volume": latest_db["volume"],
-            }
-
-    merged = sorted(by_time.values(), key=lambda x: x["time"])
+        # Update in-place only if timestamps match the current active bar
+        if live_bucket_time == merged[-1]["time"]:
+            merged[-1]["close"] = latest_db["close"]
+            merged[-1]["high"] = max(merged[-1]["high"], latest_db["close"])
+            merged[-1]["low"] = min(merged[-1]["low"], latest_db["close"])
+            if interval.lower() == "1d" and latest_db["volume"] > 0:
+                merged[-1]["volume"] = max(merged[-1]["volume"], latest_db["volume"])
 
     # Auto-bootstrap DB historical time-series if this ticker is unseeded or has insufficient bars
     if background_tasks is not None and (not ticker_obj or len(raw_db_records) < 15) and yf_records:
