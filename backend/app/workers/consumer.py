@@ -311,8 +311,8 @@ class StreamConsumerWorker:
 
                 if target != current:
                     direction = "⬆️  SCALE UP" if target > current else "⬇️  SCALE DOWN"
-                    logger.warning(
-                        f"{direction} [{current} → {target}] "
+                    logger.info(
+                        f"📊 [CONCURRENCY CTRL] {direction} [{current} → {target}] "
                         f"lag={lag_data['lag']} pel={lag_data['pel_count']} "
                         f"total_lag={total_lag} consumers={lag_data['consumer_count']}"
                     )
@@ -392,7 +392,7 @@ class StreamConsumerWorker:
                 await self.redis_client.set(f"batch:{batch_id}", json.dumps(batch_data), ex=3600)
                 logger.info(f"🏁 [BATCH COMPLETE] Parent Batch {batch_id} fully satisfied ({completed}/{total} jobs).")
         except Exception as err:
-            logger.warning(f"Batch progress tracking warning: {err}")
+            logger.info(f"📦 [BATCH PROGRESS] Non-critical tracking update failed: {err}")
 
     async def run(self) -> None:
         """

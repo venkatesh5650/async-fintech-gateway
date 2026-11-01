@@ -19,7 +19,7 @@ async def send_to_discord_dlq(payload: dict, error_msg: str):
         }
         try:
             await client.post(DISCORD_WEBHOOK_URL, json=dlq_payload)
-            logger.warning("DLQ payload successfully routed to Discord.")
+            logger.info("✅ [DLQ] Payload successfully routed to Discord.")
         except Exception as e:
             logger.error(f"FATAL: DLQ also failed. {e}")
 
