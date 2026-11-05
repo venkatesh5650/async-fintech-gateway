@@ -32,7 +32,7 @@ export default function LoginPage() {
       }
 
       // 4. The Unlocking Redirect
-      window.location.href = "/dashboard/AAPL";
+      window.location.href = "/dashboard";
     } catch (err: any) {
       setError(err.message);
     } finally {
