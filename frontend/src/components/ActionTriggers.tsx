@@ -10,6 +10,7 @@ interface ActionTriggersProps {
   onBatchDispatch?: (tickers: string[]) => void;
   isProcessing: boolean;
   cooldown: number;
+  modeLock?: "single" | "batch";
 }
 
 const PRESET_BASKETS = [
@@ -24,10 +25,11 @@ export default function ActionTriggers({
   onBatchDispatch,
   isProcessing,
   cooldown,
+  modeLock,
 }: ActionTriggersProps) {
   const { playClick, playBlip } = useSoundFX();
   const [overrideActive, setOverrideActive] = useState(false);
-  const [mode, setMode] = useState<"single" | "batch">("single");
+  const [mode, setMode] = useState<"single" | "batch">(modeLock ?? "single");
   const [customTickers, setCustomTickers] = useState("");
 
   const handleCustomBatchSubmit = (e: React.FormEvent) => {
@@ -57,7 +59,7 @@ export default function ActionTriggers({
         </div>
 
         {/* Mode Switcher */}
-        <div className="flex bg-slate-900/90 border border-slate-800 rounded-lg p-0.5 text-xs">
+        {modeLock ? null : <div className="flex bg-slate-900/90 border border-slate-800 rounded-lg p-0.5 text-xs">
           <button
             type="button"
             onClick={() => {
@@ -88,7 +90,7 @@ export default function ActionTriggers({
             <Layers className="w-3 h-3" />
             <span>Multi-Asset Batch</span>
           </button>
-        </div>
+        </div>}
       </div>
 
       {/* Mode 1: Single Ticker Mode */}

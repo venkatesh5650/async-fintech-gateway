@@ -2,28 +2,12 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams } from "next/navigation";
-import { AnalyticsSummaryCard } from "@/components/AnalyticsSummaryCard";
-import { TechnicalIndicatorPanel } from "@/components/TechnicalIndicatorPanel";
-import { VolatilityMetricsCard } from "@/components/VolatilityMetricsCard";
-import { CorrelationHeatmap } from "@/components/CorrelationHeatmap";
-import { CompositeSignalMeter } from "@/components/CompositeSignalMeter";
-import IntelligenceCard from "@/components/IntelligenceCard";
-import LogoutButton from "@/components/LogoutButton";
-import ActionTriggers from "@/components/ActionTriggers";
-import BatchCommandCenter from "@/components/BatchCommandCenter";
 import TraceWaterfallModal from "@/components/TraceWaterfallModal";
-import OperationsConsole, { OpsTab } from "@/components/OperationsConsole";
-import MarketChart, { Timeframe } from "@/components/MarketChart";
-import { AgentSwarmDeck } from "@/components/AgentSwarmDeck";
-import { AgentThoughtStream } from "@/components/AgentThoughtStream";
+import { Timeframe } from "@/components/MarketChart";
 import useWebSocket from "@/hooks/useWebSocket";
 import { BatchAssetStatus, BatchJobAcceptedResponse } from "@/types/api";
-import CyberTopNav from "@/components/CyberTopNav";
 import TickerSearchModal from "@/components/TickerSearchModal";
-import { Search } from "lucide-react";
-import { useBikeTransition } from "@/context/BikeTransitionContext";
-import MacroSimulatorPanel from "@/components/MacroSimulatorPanel";
-import { SectionSkeleton } from "@/components/SectionSkeleton";
+import StockWorkspace, { WorkspaceTab } from "@/components/StockWorkspace";
 
 interface JobState {
   status: "processing" | "completed" | "failed";
@@ -34,7 +18,6 @@ interface JobState {
 
 export default function DynamicDashboardPage() {
   const params = useParams();
-  const { launchBikeTransition } = useBikeTransition();
 
   const rawTicker = params?.ticker;
   const ticker = typeof rawTicker === "string" ? rawTicker.toUpperCase() : null;
@@ -45,8 +28,8 @@ export default function DynamicDashboardPage() {
   const [cooldown, setCooldown] = useState<number>(0);
   const [jobId, setJobId] = useState<string | undefined>(undefined);
   const [traceId, setTraceId] = useState<string | undefined>(undefined);
-  const [activeOpsTab, setActiveOpsTab] = useState<OpsTab>("registry");
   const [selectedTraceId, setSelectedTraceId] = useState<string | null>(null);
+  const [tab, setTab] = useState<WorkspaceTab>("summary");
   const [timeframe, setTimeframe] = useState<Timeframe>("5m");
   const [isTimeframeLoading, setIsTimeframeLoading] = useState(false);
   const [targetTimeframe, setTargetTimeframe] = useState<Timeframe | null>(null);
@@ -162,23 +145,6 @@ export default function DynamicDashboardPage() {
 
 
 
-
-  // Controlled smooth scrolling to key dashboard sections without window jumps
-  const scrollToSection = useCallback((sectionId: string) => {
-    if (typeof document !== "undefined") {
-      const el = document.getElementById(sectionId);
-      if (el) {
-        const offset = 80;
-        const bodyRect = document.body.getBoundingClientRect().top;
-        const elementRect = el.getBoundingClientRect().top;
-        const offsetPosition = elementRect - bodyRect - offset;
-        window.scrollTo({
-          top: Math.max(0, offsetPosition),
-          behavior: "smooth",
-        });
-      }
-    }
-  }, []);
 
   // REST API status checker for job recovery and batch reconciliation
   const fetchJobStatus = useCallback(async (targetJobId: string) => {
@@ -779,504 +745,46 @@ export default function DynamicDashboardPage() {
     );
   }
 
-  // --------------------------------------------------
-  // CIRCUIT BREAKER STATE
-  // --------------------------------------------------
-  if (isExhausted) {
-    return (
-      <div className="px-4 py-8 sm:p-10 flex flex-col items-center justify-center min-h-screen bg-black font-mono">
-        <div className="max-w-md w-full bg-gray-900 border border-orange-500/30 rounded-xl p-8 shadow-2xl text-center space-y-4">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-orange-500/10 text-orange-500 mb-2 text-xl">
-            🔌
-          </div>
-          <h2 className="text-white font-bold text-xl tracking-wide">
-            Real-Time Feed Exhausted
-          </h2>
-          <p className="text-gray-400 text-sm leading-relaxed">
-            The secure TCP tunnel to the server was dropped, and maximum
-            reconnection attempts have been reached.
-          </p>
-          <div className="bg-black/50 p-3 rounded-lg border border-gray-800 text-xs text-gray-500 text-left">
-            <span className="text-orange-400 font-bold">System Action:</span>{" "}
-            Reconnection loop halted to protect browser memory. Please check
-            your network firewall or manually dispatch a new job.
-          </div>
-          <div className="pt-4">
-            {ticker && (
-              <ActionTriggers
-                ticker={ticker}
-                onDispatch={handleManualDispatch}
-                onBatchDispatch={handleBatchDispatch}
-                isProcessing={isBatchProcessing}
-                cooldown={cooldown}
-              />
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // --------------------------------------------------
-  // PROCESSING / LOADING STATE
-  // --------------------------------------------------
-  if (!ticker || !jobState || jobState.status === "processing") {
-    return (
-      <div className="min-h-screen bg-black flex flex-col [overflow-anchor:none] w-full max-w-full overflow-x-hidden">
-        <CyberTopNav />
-        <div className="px-2.5 py-3 sm:px-6 sm:py-6 md:p-10 relative flex flex-col items-center flex-1 w-full max-w-full overflow-x-hidden">
-          {/* TCP Connection Indicator */}
-          <div className="w-full max-w-4xl flex items-center justify-end mb-2 sm:mb-0 sm:absolute sm:top-8 sm:right-8 space-x-2 text-xs font-mono">
-            <span
-              className={`w-2 h-2 rounded-full ${
-                isConnected
-                  ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]"
-                  : "bg-yellow-500 animate-pulse"
-              }`}
-            />
-            <span className={isConnected ? "text-green-500" : "text-yellow-500"}>
-              {isConnected ? "TCP Stream Active" : "Establishing Handshake..."}
-            </span>
-          </div>
-
-          <div className="w-full max-w-4xl space-y-6 mt-2 sm:mt-8 min-w-0">
-            <h1 className="text-xl sm:text-3xl font-bold text-white mb-4 sm:mb-6 border-b border-gray-800 pb-3 font-mono flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
-                <span>{ticker || "Asset"} AI Analysis</span>
-                <button
-                  type="button"
-                  onClick={() => setIsSearchOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono rounded-xl bg-gray-900/90 border border-gray-800 hover:border-cyan-500/50 text-gray-300 hover:text-cyan-300 transition-all shadow-sm active:scale-95"
-                >
-                  <Search className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Switch Asset</span>
-                  <kbd className="hidden sm:inline text-[9px] px-1 py-0.2 bg-black/60 border border-gray-800 rounded text-cyan-400 font-mono">⌘K</kbd>
-                </button>
-              </div>
-              <LogoutButton />
-            </h1>
-
-            {/* Quick Strategic View Navigator */}
-            <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-none py-1.5 px-2 sm:px-2.5 bg-gray-950/70 border border-gray-800/80 rounded-xl backdrop-blur-md sticky top-16 z-30 shadow-lg w-full max-w-full">
-              <span className="text-[10px] text-gray-500 font-mono uppercase tracking-wider shrink-0 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-                <span className="hidden sm:inline">QUICK NAV:</span>
-              </span>
-              <button
-                type="button"
-                onClick={() => scrollToSection("section-chart")}
-                className="px-2.5 py-1 rounded-lg text-xs font-mono font-medium text-gray-400 hover:text-cyan-300 hover:bg-gray-900 border border-transparent hover:border-cyan-500/30 transition-all shrink-0 flex items-center gap-1.5 active:scale-95"
-              >
-                <span>📊</span>
-                <span>Market Chart</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollToSection("section-swarm")}
-                className="px-2.5 py-1 rounded-lg text-xs font-mono font-medium text-cyan-300 bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-500/40 hover:border-cyan-400/60 transition-all shrink-0 flex items-center gap-1.5 active:scale-95 shadow-sm"
-              >
-                <span>🧠</span>
-                <span>Live Swarm Stream</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollToSection("section-operations")}
-                className="px-2.5 py-1 rounded-lg text-xs font-mono font-medium text-gray-400 hover:text-cyan-300 hover:bg-gray-900 border border-transparent hover:border-cyan-500/30 transition-all shrink-0 flex items-center gap-1.5 active:scale-95"
-              >
-                <span>⚙️</span>
-                <span>Ops Matrix</span>
-              </button>
-            </div>
-
-            {/* Show chart immediately if we have data, even when AI is reasoning */}
-            {ticker && (
-              <div id="section-chart" style={{ minHeight: '420px' }}>
-                {chartData.length === 0 ? (
-                  <SectionSkeleton height="420px" label="Market Chart" />
-                ) : (
-                  <div className="animate-in fade-in duration-500 h-full">
-                    <MarketChart
-                      ticker={ticker}
-                      data={chartData}
-                      selectedTimeframe={timeframe}
-                      onTimeframeChange={handleTimeframeChange}
-                      isLoading={isTimeframeLoading}
-                      loadingTimeframe={targetTimeframe}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Living Swarm Persona Deck & Real-Time Thought Stream */}
-            <div id="section-swarm" className="space-y-6">
-              <AgentSwarmDeck />
-              <AgentThoughtStream
-                ticker={ticker || "EQUITY"}
-                traceId={traceId || "w3c_sync_pending"}
-                rawReasoning={jobState?.result?.reasoning}
-                debateLog={jobState?.result?.debate_log}
-              />
-            </div>
-
-            <ActionTriggers
-              ticker={ticker || ""}
-              onDispatch={handleManualDispatch}
-              onBatchDispatch={handleBatchDispatch}
-              isProcessing={isBatchProcessing}
-              cooldown={cooldown}
-            />
-
-            {/* Real-time Multi-Asset Batch Matrix */}
-            {batchId && batchAssets.length > 0 && (
-              <BatchCommandCenter
-                batchId={batchId}
-                assets={batchAssets}
-                onSelectAsset={(selectedTicker) => {
-                  launchBikeTransition(selectedTicker);
-                }}
-                onClearBatch={() => {
-                  setBatchId(null);
-                  setBatchAssets([]);
-                  if (syncChannelRef.current) {
-                    syncChannelRef.current.postMessage({
-                      type: "BATCH_UPDATE",
-                      payload: null
-                    });
-                  }
-                }}
-              />
-            )}
-
-            {/* Operational Observability Console */}
-            <div id="section-operations">
-              <OperationsConsole
-                activeOpsTab={activeOpsTab}
-                setActiveOpsTab={setActiveOpsTab}
-                onSelectTrace={(tId) => setSelectedTraceId(tId)}
-                ticker={ticker}
-                traceId={traceId}
-              />
-            </div>
-
-          <TraceWaterfallModal
-            traceId={selectedTraceId}
-            onClose={handleCloseTraceModal}
-          />
-          <TickerSearchModal
-            isOpen={isSearchOpen}
-            onClose={() => setIsSearchOpen(false)}
-          />
-        </div>
-      </div>
-    </div>
-  );
-  }
-
-  // --------------------------------------------------
-  // COMPLETED STATE
-  // --------------------------------------------------
-  if (jobState.status === "completed") {
-    return (
-      <div className="min-h-screen bg-black flex flex-col [overflow-anchor:none] w-full max-w-full overflow-x-hidden">
-        <CyberTopNav />
-        <div className="px-2.5 py-3 sm:px-6 sm:py-6 md:p-10 flex-1 w-full max-w-full overflow-x-hidden">
-          <div className="w-full max-w-4xl mx-auto space-y-6 min-w-0">
-            <h1 className="text-xl sm:text-3xl font-bold text-white border-b border-gray-800 pb-3 font-mono flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
-                <span>{ticker} AI Analysis</span>
-                <button
-                  type="button"
-                  onClick={() => setIsSearchOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono rounded-xl bg-gray-900/90 border border-gray-800 hover:border-cyan-500/50 text-gray-300 hover:text-cyan-300 transition-all shadow-sm active:scale-95"
-                >
-                  <Search className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Switch Asset</span>
-                  <kbd className="hidden sm:inline text-[9px] px-1 py-0.2 bg-black/60 border border-gray-800 rounded text-cyan-400 font-mono">⌘K</kbd>
-                </button>
-              </div>
-              <div className="flex items-center justify-between sm:justify-end space-x-3 w-full sm:w-auto">
-                <span className="text-xs text-green-500 flex items-center border border-green-500/30 px-3 py-1 rounded bg-green-500/5">
-                  <span className="w-1.5 h-1.5 bg-green-500 rounded-full mr-2 shadow-[0_0_5px_rgba(34,197,94,1)]" />
-                  Live Data
-                </span>
-                <LogoutButton />
-              </div>
-            </h1>
-
-            {/* Quick Strategic View Navigator */}
-            <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto scrollbar-none py-1.5 px-2 sm:px-2.5 bg-gray-950/70 border border-gray-800/80 rounded-xl backdrop-blur-md sticky top-16 z-30 shadow-lg w-full max-w-full">
-              <span className="text-[10px] text-gray-500 font-mono uppercase tracking-wider shrink-0 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-                <span className="hidden sm:inline">QUICK NAV:</span>
-              </span>
-              <button
-                type="button"
-                onClick={() => scrollToSection("section-chart")}
-                className="px-2.5 py-1 rounded-lg text-xs font-mono font-medium text-gray-400 hover:text-cyan-300 hover:bg-gray-900 border border-transparent hover:border-cyan-500/30 transition-all shrink-0 flex items-center gap-1.5 active:scale-95"
-              >
-                <span>📊</span>
-                <span>Market Chart</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollToSection("section-ai-results")}
-                className="px-2.5 py-1 rounded-lg text-xs font-mono font-medium text-cyan-300 bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-500/40 hover:border-cyan-400/60 transition-all shrink-0 flex items-center gap-1.5 active:scale-95 shadow-sm"
-              >
-                <span>🧠</span>
-                <span>AI Synthesis Results</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollToSection("section-signals")}
-                className="px-2.5 py-1 rounded-lg text-xs font-mono font-medium text-gray-400 hover:text-cyan-300 hover:bg-gray-900 border border-transparent hover:border-cyan-500/30 transition-all shrink-0 flex items-center gap-1.5 active:scale-95"
-              >
-                <span>⚡</span>
-                <span>Quant Signals</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => scrollToSection("section-operations")}
-                className="px-2.5 py-1 rounded-lg text-xs font-mono font-medium text-gray-400 hover:text-cyan-300 hover:bg-gray-900 border border-transparent hover:border-cyan-500/30 transition-all shrink-0 flex items-center gap-1.5 active:scale-95"
-              >
-                <span>⚙️</span>
-                <span>Ops Matrix</span>
-              </button>
-            </div>
-
-            {/* Candlestick Chart Visualization — Anchored at Top (Zero Layout Shift) */}
-            {ticker && (
-              <div id="section-chart" style={{ minHeight: '420px' }}>
-                {chartData.length === 0 ? (
-                  <SectionSkeleton height="420px" label="Market Chart" />
-                ) : (
-                  <div className="animate-in fade-in duration-500 h-full">
-                    <MarketChart
-                      ticker={ticker}
-                      data={chartData}
-                      selectedTimeframe={timeframe}
-                      onTimeframeChange={handleTimeframeChange}
-                      isLoading={isTimeframeLoading}
-                      loadingTimeframe={targetTimeframe}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Cognitive Synthesis & Autonomous Agent Results */}
-            <div id="section-ai-results" style={{ minHeight: '600px' }}>
-              {!jobState.result ? (
-                <SectionSkeleton height="600px" label="AI Cognitive Synthesis" />
-              ) : (
-                <div className="space-y-6 animate-in fade-in duration-500 h-full">
-                  <IntelligenceCard
-                    data={jobState.result}
-                    onRefresh={fetchCachedIntelligence}
-                    isRefreshing={isCacheRefreshing}
-                    onNavigateSection={scrollToSection}
-                  />
-                  <MacroSimulatorPanel
-                    isSimulating={isSimulating}
-                    onSimulate={(params) => {
-                      setIsSimulating(true);
-                      setTimeout(() => {
-                        setIsSimulating(false);
-                        const baseScore = jobState.result?.quant_context?.composite_score ?? 70;
-                        const impact = (params.earningsRevision * 0.5) - (params.fedRate * 0.05) - (params.vixSpike * 0.2);
-                        setSimulatedScore(Math.max(0, Math.min(100, baseScore + impact)));
-                      }, 1500);
-                    }}
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Quantitative Technical Indicators Suite */}
-            <div id="section-signals" className="space-y-6">
-              {/* Composite Quantitative Technical Signal Fusion Gauge */}
-              {ticker && <CompositeSignalMeter ticker={ticker} simulatedScore={simulatedScore} />}
-
-              {/* Quantitative Technical Indicators Summary */}
-              {ticker && (
-                <AnalyticsSummaryCard
-                  ticker={ticker}
-                  onSelectTrace={(tId) => setSelectedTraceId(tId)}
-                />
-              )}
-
-              {/* Technical Oscillators — RSI & Bollinger Bands */}
-              {ticker && <TechnicalIndicatorPanel ticker={ticker} />}
-
-              {/* Risk & Volatility Profile — 30D Rolling Volatility, Sharpe & Max Drawdown */}
-              {ticker && <VolatilityMetricsCard ticker={ticker} />}
-
-              {/* Cross-Ticker Pairwise Correlation Matrix */}
-              {ticker && <CorrelationHeatmap activeTicker={ticker} />}
-            </div>
-
-        {/* Distributed trace context */}
-        {traceId && (
-          <button
-            onClick={() => setSelectedTraceId(traceId)}
-            className="flex items-center gap-2 bg-[#0a0a0a] border border-gray-800 hover:border-gray-700 rounded-lg px-4 py-2 transition-colors"
-            title="View distributed trace waterfall"
-          >
-            <span className="text-[10px] text-gray-600 uppercase tracking-widest">Trace ID</span>
-            <span className="text-xs text-blue-400 font-mono flex items-center gap-1">
-              <span>⤢</span>
-              <span>{traceId.slice(0, 16)}…</span>
-            </span>
-          </button>
-        )}
-        
-        <ActionTriggers
+  return (
+    <>
+      {ticker && (
+        <StockWorkspace
           ticker={ticker}
+          tab={tab}
+          onTabChange={setTab}
+          jobState={jobState}
+          chartData={chartData}
+          timeframe={timeframe}
+          isTimeframeLoading={isTimeframeLoading}
+          targetTimeframe={targetTimeframe}
+          onTimeframeChange={handleTimeframeChange}
+          onRefreshMemo={() => fetchCachedIntelligence(true)}
+          isCacheRefreshing={isCacheRefreshing}
+          isSimulating={isSimulating}
+          simulatedScore={simulatedScore}
+          onSimulate={(params) => {
+            setIsSimulating(true);
+            setTimeout(() => {
+              setIsSimulating(false);
+              const baseScore = jobState?.result?.quant_context?.composite_score ?? 70;
+              const impact = params.earningsRevision * 0.5 - params.fedRate * 0.05 - params.vixSpike * 0.2;
+              setSimulatedScore(Math.max(0, Math.min(100, baseScore + impact)));
+            }, 1500);
+          }}
           onDispatch={handleManualDispatch}
           onBatchDispatch={handleBatchDispatch}
-          isProcessing={isBatchProcessing}
+          isBatchProcessing={isBatchProcessing}
           cooldown={cooldown}
-        />
-
-        {/* Real-time Multi-Asset Batch Matrix */}
-        <BatchCommandCenter
+          isConnected={isConnected}
+          isExhausted={isExhausted}
+          traceId={traceId}
           batchId={batchId}
-          assets={batchAssets}
-          onSelectAsset={(selectedTicker) => {
-            launchBikeTransition(selectedTicker);
-          }}
-          onClearBatch={() => {
-            setBatchId(null);
-            setBatchAssets([]);
-            if (syncChannelRef.current) {
-              syncChannelRef.current.postMessage({
-                type: "BATCH_UPDATE",
-                payload: null
-              });
-            }
-          }}
+          onOpenSearch={() => setIsSearchOpen(true)}
+          onSelectTrace={setSelectedTraceId}
         />
-
-        {/* Operational Observability Console */}
-        <div id="section-operations">
-          <OperationsConsole
-            activeOpsTab={activeOpsTab}
-            setActiveOpsTab={setActiveOpsTab}
-            onSelectTrace={(tId) => setSelectedTraceId(tId)}
-            ticker={ticker}
-            traceId={traceId}
-          />
-        </div>
-
-          <TraceWaterfallModal
-            traceId={selectedTraceId}
-            onClose={handleCloseTraceModal}
-          />
-          <TickerSearchModal
-            isOpen={isSearchOpen}
-            onClose={() => setIsSearchOpen(false)}
-          />
-        </div>
-      </div>
-    </div>
+      )}
+      <TraceWaterfallModal traceId={selectedTraceId} onClose={handleCloseTraceModal} />
+      <TickerSearchModal isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+    </>
   );
-  }
-
-  // --------------------------------------------------
-  // FAILURE STATE
-  // --------------------------------------------------
-  return (
-    <div className="min-h-screen bg-black flex flex-col font-mono [overflow-anchor:none] w-full max-w-full overflow-x-hidden">
-      <CyberTopNav />
-      <div className="px-2.5 py-3 sm:px-6 sm:py-6 md:p-10 flex-1 w-full max-w-full overflow-x-hidden">
-        <div className="w-full max-w-4xl mx-auto space-y-6 min-w-0">
-          <h1 className="text-xl sm:text-3xl font-bold text-white border-b border-gray-800 pb-3 font-mono flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap">
-              <span>{ticker || "Asset"} AI Analysis</span>
-              <button
-                type="button"
-                onClick={() => setIsSearchOpen(true)}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono rounded-xl bg-gray-900/90 border border-gray-800 hover:border-cyan-500/50 text-gray-300 hover:text-cyan-300 transition-all shadow-sm active:scale-95"
-              >
-                <Search className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Switch Asset</span>
-                <kbd className="hidden sm:inline text-[9px] px-1 py-0.2 bg-black/60 border border-gray-800 rounded text-cyan-400 font-mono">⌘K</kbd>
-              </button>
-            </div>
-            <LogoutButton />
-          </h1>
-
-        {/* Always display MarketChart even if background AI job fails or times out */}
-        {ticker && (
-          <div id="section-chart">
-            <MarketChart
-              ticker={ticker}
-              data={chartData}
-              selectedTimeframe={timeframe}
-              onTimeframeChange={handleTimeframeChange}
-              isLoading={isTimeframeLoading}
-              loadingTimeframe={targetTimeframe}
-            />
-          </div>
-        )}
-
-        <div className="p-4 bg-red-950/40 border border-red-500/40 rounded-xl text-center space-y-2">
-          <div className="text-red-400 font-bold text-base">
-            ⚠️ Background AI Worker Analysis Timeout or Error
-          </div>
-          <p className="text-gray-400 text-xs">
-            The multi-agent reasoning graph encountered a timeout or rate-limit. Your live market chart remains active above. You can retry the AI analysis below.
-          </p>
-        </div>
-
-        {ticker && (
-          <ActionTriggers
-            ticker={ticker}
-            onDispatch={handleManualDispatch}
-            onBatchDispatch={handleBatchDispatch}
-            isProcessing={isBatchProcessing}
-            cooldown={cooldown}
-          />
-        )}
-        <BatchCommandCenter
-          batchId={batchId}
-          assets={batchAssets}
-          onSelectAsset={(selectedTicker) => {
-            launchBikeTransition(selectedTicker);
-          }}
-          onClearBatch={() => {
-            setBatchId(null);
-            setBatchAssets([]);
-            if (syncChannelRef.current) {
-              syncChannelRef.current.postMessage({
-                type: "BATCH_UPDATE",
-                payload: null
-              });
-            }
-          }}
-        />
-
-        {/* Operational Observability Console */}
-        <div id="section-operations">
-          <OperationsConsole
-            activeOpsTab={activeOpsTab}
-            setActiveOpsTab={setActiveOpsTab}
-            onSelectTrace={(tId) => setSelectedTraceId(tId)}
-            ticker={ticker}
-            traceId={traceId}
-          />
-        </div>
-
-        <TraceWaterfallModal
-          traceId={selectedTraceId}
-          onClose={handleCloseTraceModal}
-        />
-        <TickerSearchModal
-          isOpen={isSearchOpen}
-          onClose={() => setIsSearchOpen(false)}
-        />
-      </div>
-    </div>
-  </div>
-);
 }
