@@ -92,6 +92,7 @@ interface OperationsConsoleProps {
   onSelectTrace?: (traceId: string) => void;
   ticker?: string | null;
   traceId?: string | null;
+  allowedPillars?: OpsPillarId[];
 }
 
 export interface TabConfig {
@@ -273,6 +274,7 @@ export default function OperationsConsole({
   onSelectTrace,
   ticker,
   traceId,
+  allowedPillars,
 }: OperationsConsoleProps) {
   const { playClick, playBlip } = useSoundFX();
   const [searchQuery, setSearchQuery] = useState("");
@@ -282,25 +284,35 @@ export default function OperationsConsole({
   const subRailContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Determine active pillar based on activeOpsTab
+  const visiblePillars = useMemo(() => {
+    if (!allowedPillars || allowedPillars.length === 0) return COMMAND_PILLARS;
+    return COMMAND_PILLARS.filter((pillar) => allowedPillars.includes(pillar.id));
+  }, [allowedPillars]);
+
+  const visibleTabs = useMemo(
+    () => visiblePillars.flatMap((pillar) => pillar.tabs),
+    [visiblePillars]
+  );
+
   const activePillar = useMemo(() => {
-    const pillar = COMMAND_PILLARS.find((p) =>
+    const pillar = visiblePillars.find((p) =>
       p.tabs.some((t) => t.id === activeOpsTab)
     );
-    return pillar || COMMAND_PILLARS[0];
-  }, [activeOpsTab]);
+    return pillar || visiblePillars[0] || COMMAND_PILLARS[0];
+  }, [activeOpsTab, visiblePillars]);
 
   // Search filter results across all 32 tabs
   const filteredTabs = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return [];
-    return ALL_TABS.filter(
+    return visibleTabs.filter(
       (t) =>
         t.label.toLowerCase().includes(q) ||
         t.shortLabel.toLowerCase().includes(q) ||
         t.description.toLowerCase().includes(q) ||
         t.id.toLowerCase().includes(q)
     );
-  }, [searchQuery]);
+  }, [searchQuery, visibleTabs]);
 
   // Auto-scroll active sub-tab horizontally within its sub-rail without touching window scroll
   useEffect(() => {
@@ -347,8 +359,14 @@ export default function OperationsConsole({
   };
 
   const activeTabMeta = useMemo(() => {
-    return ALL_TABS.find((t) => t.id === activeOpsTab) || ALL_TABS[0];
-  }, [activeOpsTab]);
+    return visibleTabs.find((t) => t.id === activeOpsTab) || visibleTabs[0] || ALL_TABS[0];
+  }, [activeOpsTab, visibleTabs]);
+
+  useEffect(() => {
+    if (!visibleTabs.some((tab) => tab.id === activeOpsTab) && visibleTabs[0]) {
+      setActiveOpsTab(visibleTabs[0].id);
+    }
+  }, [activeOpsTab, visibleTabs, setActiveOpsTab]);
 
   return (
     <div className="mt-6 sm:mt-8 space-y-4">
@@ -371,7 +389,7 @@ export default function OperationsConsole({
               </span>
               <span className="text-gray-600 font-mono text-[10px] sm:text-xs">/</span>
               <span className="font-mono text-[10px] sm:text-xs text-gray-400 whitespace-nowrap">
-                32 Subsystems
+                {visibleTabs.length} Subsystems
               </span>
             </div>
 
@@ -398,7 +416,7 @@ export default function OperationsConsole({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Jump to 32 modules... (e.g. chaos, rag)"
+                placeholder="Jump to a module..."
                 className="w-full pl-9 pr-8 py-2 rounded-xl bg-gray-950/80 border border-gray-800 text-xs font-mono text-gray-200 placeholder:text-gray-500 focus:outline-none focus:border-cyan-500/60 focus:ring-1 focus:ring-cyan-500/40 transition-all"
               />
               {searchQuery && (
@@ -512,7 +530,7 @@ export default function OperationsConsole({
             } items-center gap-2 overflow-x-auto scrollbar-none snap-x snap-mandatory py-1 w-full max-w-full touch-pan-x`}
             style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
           >
-            {COMMAND_PILLARS.map((pillar) => {
+            {visiblePillars.map((pillar) => {
               const isPillarActive = activePillar.id === pillar.id;
               const IconComponent = pillar.icon;
               return (
@@ -560,7 +578,7 @@ export default function OperationsConsole({
               mobilePillarViewMode === "grid" ? "grid" : "hidden sm:grid"
             } grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2`}
           >
-            {COMMAND_PILLARS.map((pillar) => {
+            {visiblePillars.map((pillar) => {
               const isPillarActive = activePillar.id === pillar.id;
               const IconComponent = pillar.icon;
               return (
