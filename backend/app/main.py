@@ -43,7 +43,6 @@ from app.routers import (
 import os
 import asyncio
 from app.core.broker import ensure_consumer_group, close_redis_client
-from app.workers.consumer import StreamConsumerWorker
 from app.workers.market_poller import MarketPollerWorker
 
 
@@ -194,18 +193,6 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logging.warning(f"⚠️ [BROKER INIT WARNING] Redis Streams group initialization deferred: {e}")
 
-    # Embedded Stream Consumer: ensures jobs are processed seamlessly in single-process mode
-    consumer_task = None
-    worker = None
-    if os.getenv("ENABLE_EMBEDDED_CONSUMER", "true").lower() == "true":
-        worker = StreamConsumerWorker(consumer_id="embedded-asgi-worker")
-        try:
-            await worker.initialize()
-            consumer_task = asyncio.create_task(worker.run())
-            logging.info("🚀 [EMBEDDED WORKER] Started embedded Redis Stream consumer task.")
-        except Exception as e:
-            logging.warning(f"⚠️ Could not start embedded stream consumer: {e}")
-
     # Autonomous Market Data Poller: continuously pulls real yfinance OHLCV data
     poller_task = None
     poller = None
@@ -224,10 +211,6 @@ async def lifespan(app: FastAPI):
         await poller.shutdown()
     if poller_task:
         poller_task.cancel()
-    if worker:
-        await worker.shutdown()
-    if consumer_task:
-        consumer_task.cancel()
     await close_redis_client()
 
 
