@@ -40,3 +40,28 @@ export function clearSessionCookie(store: CookieMutator) {
     expires: new Date(0),
   });
 }
+
+function decodeJwtPayload(token: string): { exp?: number } | null {
+  const parts = token.split(".");
+  if (parts.length < 2) return null;
+  try {
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+    const json =
+      typeof Buffer !== "undefined"
+        ? Buffer.from(padded, "base64").toString("utf8")
+        : atob(padded);
+    return JSON.parse(json);
+  } catch {
+    return null;
+  }
+}
+
+/** Cookie presence plus unexpired JWT exp. Signature is still checked by FastAPI. */
+export function hasLiveSessionToken(token?: string | null): boolean {
+  if (!token) return false;
+  const payload = decodeJwtPayload(token);
+  if (!payload) return false;
+  if (typeof payload.exp !== "number") return true;
+  return payload.exp * 1000 > Date.now() + 5000;
+}

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { clearSessionCookie } from "@/lib/sessionCookie";
 
 type Context = { params: Promise<{ ticker: string }> };
 
@@ -46,7 +47,7 @@ export async function POST(request: Request, context: Context) {
         { status: response.status }
       );
       if (response.status === 401 || response.status === 403) {
-        res.cookies.delete("session_token");
+        clearSessionCookie(res.cookies);
       }
       return res;
     }
@@ -104,7 +105,7 @@ export async function GET(request: Request, context: Context) {
         { status: response.status }
       );
       if (response.status === 401 || response.status === 403) {
-        res.cookies.delete("session_token");
+        clearSessionCookie(res.cookies);
       }
       return res;
     }
