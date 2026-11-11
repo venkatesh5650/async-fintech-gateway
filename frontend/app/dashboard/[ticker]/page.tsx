@@ -16,6 +16,8 @@ interface JobState {
   trace_id?: string;
 }
 
+const recentJobDispatchAt = new Map<string, number>();
+
 export default function DynamicDashboardPage() {
   const params = useParams();
 
@@ -526,6 +528,11 @@ export default function DynamicDashboardPage() {
   // --------------------------------------------------
   useEffect(() => {
     if (!ticker) return;
+
+    const dispatchKey = `${ticker}:${refreshTrigger}`;
+    const lastAt = recentJobDispatchAt.get(dispatchKey) ?? 0;
+    if (Date.now() - lastAt < 2000) return;
+    recentJobDispatchAt.set(dispatchKey, Date.now());
 
     const dispatchJob = async () => {
       try {
