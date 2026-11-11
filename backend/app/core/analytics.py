@@ -911,56 +911,141 @@ class QuantitativeAnalyticsEngine:
         "Communication Services": ["GOOGL", "META", "NFLX"],
     }
 
+    # Mega-cap daily moves above this are treated as a seed/live (or poison-bar) splice,
+    # not as a tradable session. Matches the close>5 filter used on the market history path.
+    MIN_VALID_CLOSE = 5.0
+    MAX_ABS_SESSION_RETURN = 0.35
+    MIN_SESSIONS_FOR_RETURN = 2
+
+    @staticmethod
+    async def _contiguous_period_return(
+        session: AsyncSession, symbol: str, days: int
+    ) -> Dict[str, Any]:
+        """
+        Period return on the latest contiguous daily-close regime.
+
+        Synthetic seed bars and live Yahoo bars share market_pricing without a source
+        tag, so first-to-last over the raw window is not a market return. Walk back
+        from the newest valid close and cut at the last session whose absolute
+        change exceeds MAX_ABS_SESSION_RETURN.
+        """
+        res = await session.execute(
+            text(
+                """
+                WITH raw_p AS (
+                    SELECT mp.close_price, DATE(mp.timestamp) AS p_date, mp.timestamp
+                    FROM market_pricing mp
+                    JOIN tickers t ON mp.ticker_id = t.id
+                    WHERE t.symbol = :sym
+                      AND mp.close_price > :min_close
+                ),
+                distinct_daily AS (
+                    SELECT DISTINCT ON (p_date)
+                        p_date,
+                        close_price
+                    FROM raw_p
+                    ORDER BY p_date DESC, timestamp DESC
+                ),
+                with_ret AS (
+                    SELECT
+                        p_date,
+                        close_price,
+                        (close_price - LAG(close_price) OVER (ORDER BY p_date))
+                            / NULLIF(LAG(close_price) OVER (ORDER BY p_date), 0) AS dret
+                    FROM distinct_daily
+                ),
+                breaks AS (
+                    SELECT COALESCE(
+                        MAX(p_date) FILTER (WHERE ABS(dret) > :max_gap),
+                        DATE '1900-01-01'
+                    ) AS last_break
+                    FROM with_ret
+                ),
+                regime AS (
+                    SELECT d.p_date, d.close_price
+                    FROM distinct_daily d
+                    CROSS JOIN breaks b
+                    WHERE d.p_date >= b.last_break
+                    ORDER BY d.p_date DESC
+                    LIMIT :days
+                ),
+                bounds AS (
+                    SELECT
+                        MIN(p_date) AS oldest_date,
+                        MAX(p_date) AS newest_date,
+                        COUNT(*) AS days_used
+                    FROM regime
+                )
+                SELECT
+                    CASE
+                        WHEN b.days_used >= :min_sessions
+                        THEN (n.close_price - o.close_price)
+                             / NULLIF(o.close_price, 0) * 100.0
+                        ELSE NULL
+                    END AS period_return_pct,
+                    b.days_used
+                FROM bounds b
+                LEFT JOIN regime n ON n.p_date = b.newest_date
+                LEFT JOIN regime o ON o.p_date = b.oldest_date;
+                """
+            ),
+            {
+                "sym": symbol,
+                "days": days,
+                "min_close": QuantitativeAnalyticsEngine.MIN_VALID_CLOSE,
+                "max_gap": QuantitativeAnalyticsEngine.MAX_ABS_SESSION_RETURN,
+                "min_sessions": QuantitativeAnalyticsEngine.MIN_SESSIONS_FOR_RETURN,
+            },
+        )
+        row = res.fetchone()
+        days_used = int(row[1]) if row and row[1] is not None else 0
+        ret_pct = safe_float(row[0]) if row else None
+        return {"return_pct": ret_pct, "days_used": days_used}
+
     @staticmethod
     async def compute_sector_rotation(session: AsyncSession, days: int = 30) -> Dict[str, Any]:
         sectors = []
         for sector_name, symbols in QuantitativeAnalyticsEngine.SECTOR_MAP.items():
             ticker_scores = []
             sector_returns = []
+            ticker_days = []
             top_ticker = None
-            top_return = -999.0
+            top_return = None
 
             for sym in symbols:
                 comp = await QuantitativeAnalyticsEngine.compute_composite_signal(session, sym)
-
-                res = await session.execute(
-                    text("""
-                    WITH raw_p AS (
-                        SELECT mp.close_price, DATE(mp.timestamp) as p_date
-                        FROM market_pricing mp JOIN tickers t ON mp.ticker_id = t.id
-                        WHERE t.symbol = :sym
-                        ORDER BY mp.timestamp DESC LIMIT :days
-                    )
-                    SELECT 
-                        (FIRST_VALUE(close_price) OVER (ORDER BY p_date DESC) - 
-                         LAST_VALUE(close_price) OVER (ORDER BY p_date DESC)) / 
-                         NULLIF(LAST_VALUE(close_price) OVER (ORDER BY p_date DESC), 0) * 100.0
-                    FROM raw_p LIMIT 1;
-                """),
-                    {"sym": sym, "days": days},
+                period = await QuantitativeAnalyticsEngine._contiguous_period_return(
+                    session, sym, days
                 )
-                row = res.fetchone()
-                ret_pct = safe_float(row[0]) if row else 0.0
-                if ret_pct is None:
-                    ret_pct = 0.0
+                ret_pct = period["return_pct"]
+                days_used = period["days_used"]
 
                 score = comp.get("composite_score", 50.0)
                 ticker_scores.append(score)
-                sector_returns.append(ret_pct)
-
-                if ret_pct > top_return:
-                    top_return = ret_pct
-                    top_ticker = sym
+                if ret_pct is not None:
+                    sector_returns.append(ret_pct)
+                    ticker_days.append(days_used)
+                    if top_return is None or ret_pct > top_return:
+                        top_return = ret_pct
+                        top_ticker = sym
 
             avg_score = round(sum(ticker_scores) / len(ticker_scores), 2) if ticker_scores else 50.0
-            avg_return = round(sum(sector_returns) / len(sector_returns), 2) if sector_returns else 0.0
+            avg_return = (
+                round(sum(sector_returns) / len(sector_returns), 2) if sector_returns else None
+            )
+            days_used = min(ticker_days) if ticker_days else 0
+            sample_quality = (
+                "contiguous_regime"
+                if avg_return is not None
+                else "insufficient_contiguous_history"
+            )
 
             rotation_status = "NEUTRAL"
-            if avg_score >= 65.0 and avg_return >= 2.0:
+            if avg_score >= 65.0 and avg_return is not None and avg_return >= 2.0:
                 rotation_status = "OUTPERFORMING"
             elif avg_score >= 55.0:
                 rotation_status = "INFLOW"
-            elif avg_score <= 35.0 or avg_return <= -2.0:
+            elif avg_score <= 35.0 or (avg_return is not None and avg_return <= -2.0):
                 rotation_status = "UNDERPERFORMING"
             else:
                 rotation_status = "OUTFLOW"
@@ -971,9 +1056,12 @@ class QuantitativeAnalyticsEngine:
                     "symbols": symbols,
                     "avg_composite_score": avg_score,
                     "avg_return_pct": avg_return,
+                    "days_used": days_used,
+                    "tickers_in_return": len(sector_returns),
+                    "sample_quality": sample_quality,
                     "rotation_status": rotation_status,
                     "top_performing_symbol": top_ticker or symbols[0],
-                    "top_symbol_return_pct": round(top_return, 2) if top_return != -999.0 else 0.0,
+                    "top_symbol_return_pct": round(top_return, 2) if top_return is not None else None,
                 }
             )
 

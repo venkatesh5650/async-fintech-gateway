@@ -62,7 +62,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const nav = (
     <nav className="flex flex-col gap-1 px-3">
       <ShellLink href="/dashboard" active={onOverview} icon={LayoutDashboard} label="Overview" />
-      <ShellLink href="/dashboard/analytics" active={onMarkets} icon={LineChart} label="Markets" />
+      <ShellLink href="/dashboard/analytics" active={onMarkets} icon={LineChart} label="Analytics" />
       {researchHref ? (
         <ShellLink href={researchHref} active={onResearch} icon={FileSearch} label="Research" hint={lastTicker ?? undefined} />
       ) : (

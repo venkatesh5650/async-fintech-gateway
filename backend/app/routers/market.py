@@ -6,6 +6,7 @@ import time
 import threading
 import yfinance as yf
 from datetime import datetime, timezone
+from sqlalchemy import text
 from sqlalchemy.future import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from app.database.database import AsyncSessionLocal
@@ -83,16 +84,24 @@ async def fetch_live_market_content(payload: MarketDataPayload):
             f"C={ohlcv['close']} V={ohlcv['volume']}"
         )
     except Exception as e:
+        fallback_px = float(payload.current_price)
+        # Poller sends current_price=1.0 as a dummy. Writing that as a close
+        # creates $1 poison bars and fake 10,000%+ sector returns.
+        if fallback_px <= 5.0:
+            logging.warning(
+                f"⚠️ [YFINANCE SKIP] Could not fetch live data for {payload.ticker}: {e}. "
+                f"Not persisting dummy close {fallback_px}."
+            )
+            return
         logging.warning(
             f"⚠️ [YFINANCE FALLBACK] Could not fetch live data for {payload.ticker}: {e}. "
             f"Persisting payload price as OHLC proxy."
         )
-        # Graceful fallback — persist the user-provided price if yfinance is unavailable
         ohlcv = {
-            "open": float(payload.current_price),
-            "high": float(payload.current_price),
-            "low": float(payload.current_price),
-            "close": float(payload.current_price),
+            "open": fallback_px,
+            "high": fallback_px,
+            "low": fallback_px,
+            "close": fallback_px,
             "volume": int(payload.volume),
         }
 
@@ -116,28 +125,52 @@ async def fetch_live_market_content(payload: MarketDataPayload):
                     if "timestamp" in ohlcv
                     else datetime.now(timezone.utc)
                 )
-                pricing_record = MarketPricing(
-                    ticker_id=ticker_obj.id,
-                    timestamp=candle_time,
-                    open_price=ohlcv["open"],
-                    high_price=ohlcv["high"],
-                    low_price=ohlcv["low"],
-                    close_price=ohlcv["close"],
-                    volume=ohlcv["volume"],
+                # One calendar day → one close. Seed bars at 16:00 UTC otherwise
+                # win DISTINCT ON date over the live Yahoo 05:00 bar.
+                await session.execute(
+                    text(
+                        """
+                        DELETE FROM market_pricing
+                        WHERE ticker_id = :tid
+                          AND DATE(timestamp) = DATE(:ts)
+                          AND timestamp IS DISTINCT FROM :ts
+                        """
+                    ),
+                    {"tid": ticker_obj.id, "ts": candle_time},
                 )
-                session.add(pricing_record)
-                await session.flush()
+                stmt = (
+                    pg_insert(MarketPricing)
+                    .values(
+                        ticker_id=ticker_obj.id,
+                        timestamp=candle_time,
+                        open_price=ohlcv["open"],
+                        high_price=ohlcv["high"],
+                        low_price=ohlcv["low"],
+                        close_price=ohlcv["close"],
+                        volume=ohlcv["volume"],
+                    )
+                    .on_conflict_do_update(
+                        constraint="uix_ticker_timestamp",
+                        set_={
+                            "open_price": ohlcv["open"],
+                            "high_price": ohlcv["high"],
+                            "low_price": ohlcv["low"],
+                            "close_price": ohlcv["close"],
+                            "volume": ohlcv["volume"],
+                        },
+                    )
+                )
+                await session.execute(stmt)
 
-                # Safely copy values to a dictionary within the active transaction
                 pricing_data = {
                     "type": "market_data",
                     "ticker": payload.ticker.upper(),
-                    "timestamp": pricing_record.timestamp.isoformat(),
-                    "open": float(pricing_record.open_price),
-                    "high": float(pricing_record.high_price),
-                    "low": float(pricing_record.low_price),
-                    "close": float(pricing_record.close_price),
-                    "volume": int(pricing_record.volume),
+                    "timestamp": candle_time.isoformat(),
+                    "open": float(ohlcv["open"]),
+                    "high": float(ohlcv["high"]),
+                    "low": float(ohlcv["low"]),
+                    "close": float(ohlcv["close"]),
+                    "volume": int(ohlcv["volume"]),
                     "data_source": "Yahoo_Finance_yfinance",
                     "interval": "1d",
                 }

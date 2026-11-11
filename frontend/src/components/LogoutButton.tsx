@@ -14,14 +14,15 @@ export default function LogoutButton() {
     setIsLoggingOut(true);
 
     try {
-      // Invalidate session cookie server-side via authentication gateway
-      await fetch("/api/auth/logout", { method: "POST" });
-
-      // Redirect client to login perimeter
-      window.location.href = "/login";
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+      });
     } catch (error) {
       console.error("Failed to execute logout", error);
-      setIsLoggingOut(false);
+    } finally {
+      window.location.replace("/login");
     }
   };
 

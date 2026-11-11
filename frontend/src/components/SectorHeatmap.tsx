@@ -1,13 +1,18 @@
+"use client";
+
 import React, { useState, useEffect } from "react";
 
 export interface SectorItem {
   sector: string;
   symbols: string[];
   avg_composite_score: number;
-  avg_return_pct: number;
+  avg_return_pct: number | null;
+  days_used?: number;
+  tickers_in_return?: number;
+  sample_quality?: string;
   rotation_status: "OUTPERFORMING" | "INFLOW" | "OUTFLOW" | "UNDERPERFORMING" | string;
   top_performing_symbol: string;
-  top_symbol_return_pct: number;
+  top_symbol_return_pct: number | null;
 }
 
 export interface SectorRotationResponse {
@@ -15,6 +20,11 @@ export interface SectorRotationResponse {
   total_sectors: number;
   sectors: SectorItem[];
   trace_id?: string;
+}
+
+function formatPct(value: number): string {
+  const abs = `${Math.abs(value).toFixed(2)}%`;
+  return value > 0 ? `+${abs}` : value < 0 ? `-${abs}` : `0.00%`;
 }
 
 export default function SectorHeatmap() {
@@ -27,15 +37,13 @@ export default function SectorHeatmap() {
     setLoading(true);
     setError(null);
     try {
-      const apiHost = process.env.NEXT_PUBLIC_API_URL || "https://fintech-api-gateway-m2yl.onrender.com";
-      const res = await fetch(`${apiHost}/v1/analytics/sectors?days=${days}`, {
-        headers: {
-          "X-N8N-API-KEY": "super_secure_internal_orchestration_secret_key_2026",
-        },
+      const res = await fetch(`/api/analytics/sectors?days=${days}`, {
+        cache: "no-store",
       });
 
       if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
+        const payload = await res.json().catch(() => ({}));
+        throw new Error(payload.error || `HTTP ${res.status}`);
       }
 
       const json = await res.json();
@@ -73,7 +81,8 @@ export default function SectorHeatmap() {
             <span>🌐</span> Multi-Asset Sector Rotation & Relative Strength
           </h2>
           <p className="text-xs text-gray-400 mt-1">
-            Aggregated cross-asset capital flows and sector technical momentum scores.
+            Backward lookback on the latest contiguous live closes. Seed/live price
+            splices are dropped. This is not a forecast.
           </p>
         </div>
 
@@ -133,14 +142,25 @@ export default function SectorHeatmap() {
                 {/* Metrics */}
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="bg-gray-950 p-2.5 rounded border border-gray-800/80">
-                    <div className="text-gray-500 text-[10px] uppercase">Avg Return ({days}D)</div>
-                    <div
-                      className={`text-sm font-bold mt-0.5 ${
-                        sec.avg_return_pct >= 0 ? "text-green-400" : "text-red-400"
-                      }`}
-                    >
-                      {sec.avg_return_pct >= 0 ? `+${sec.avg_return_pct}%` : `${sec.avg_return_pct}%`}
+                    <div className="text-gray-500 text-[10px] uppercase">
+                      Avg Return ({sec.days_used ?? 0} sessions)
                     </div>
+                    {sec.avg_return_pct === null ? (
+                      <div className="text-sm font-bold mt-0.5 text-gray-500">n/a</div>
+                    ) : (
+                      <div
+                        className={`text-sm font-bold mt-0.5 ${
+                          sec.avg_return_pct >= 0 ? "text-green-400" : "text-red-400"
+                        }`}
+                      >
+                        {formatPct(sec.avg_return_pct)}
+                      </div>
+                    )}
+                    {sec.sample_quality === "insufficient_contiguous_history" && (
+                      <div className="text-[10px] text-amber-400/80 mt-1">
+                        Need more contiguous live closes
+                      </div>
+                    )}
                   </div>
 
                   <div className="bg-gray-950 p-2.5 rounded border border-gray-800/80">
@@ -158,10 +178,14 @@ export default function SectorHeatmap() {
                     <span className="text-purple-300">{sec.top_performing_symbol}</span>
                     <span
                       className={`text-[10px] ${
-                        sec.top_symbol_return_pct >= 0 ? "text-green-400" : "text-red-400"
+                        sec.top_symbol_return_pct === null
+                          ? "text-gray-500"
+                          : sec.top_symbol_return_pct >= 0
+                            ? "text-green-400"
+                            : "text-red-400"
                       }`}
                     >
-                      ({sec.top_symbol_return_pct >= 0 ? `+${sec.top_symbol_return_pct}%` : `${sec.top_symbol_return_pct}%`})
+                      ({sec.top_symbol_return_pct === null ? "n/a" : formatPct(sec.top_symbol_return_pct)})
                     </span>
                   </div>
                 </div>

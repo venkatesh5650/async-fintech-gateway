@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { setSessionCookie } from '@/lib/sessionCookie';
 
 export async function POST(request: Request) {
   try {
@@ -43,18 +44,8 @@ export async function POST(request: Request) {
     const data = await backendRes.json();
     const token = data.access_token;
 
-    // In Next.js 15 Route Handlers, cookies() is read-only.
-    // Cookie mutation must happen on the NextResponse object directly.
     const response = NextResponse.json({ success: true });
-    response.cookies.set({
-      name: 'session_token',
-      value: token,
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 24 * 7,
-    });
+    setSessionCookie(response.cookies, token);
 
     return response;
 
