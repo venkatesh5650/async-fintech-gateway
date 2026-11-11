@@ -98,7 +98,7 @@ elif "redis://fintech_redis:" in REDIS_URL:
         "redis://fintech_redis:", "redis://localhost:" if not os.path.exists("/.dockerenv") else "redis://redis:"
     )
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
-limiter = RateLimiter(requests_per_minute=5)
+limiter = RateLimiter(requests_per_minute=20)
 
 
 async def run_intelligence_worker(
