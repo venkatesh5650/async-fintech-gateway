@@ -2,29 +2,34 @@ import Link from "next/link";
 
 const SECTIONS = [
   {
+    href: "/dashboard/platform/runtime",
+    title: "Runtime",
+    body: "How the stack boots, then how each request moves: login, jobs, analytics, filings, memo reads, and the assistant. A sequence, not a live probe.",
+  },
+  {
     href: "/dashboard/platform/agents",
     title: "Agents",
-    body: "LangGraph topology, job registry, and traces.",
+    body: "Live research jobs and the LangGraph path they run (reason → tools → memo → gate).",
   },
   {
     href: "/dashboard/platform/telemetry",
     title: "Telemetry",
-    body: "Prometheus metrics, Grafana specs, probes, and stream health.",
+    body: "Request counters for this API process, Redis stream lag, and Postgres/Redis probes.",
   },
   {
     href: "/dashboard/platform/resilience",
     title: "Resilience",
-    body: "Load tests, circuit breaker, dead-letter queue, and pool pressure.",
+    body: "Groq circuit, Redis DLQ, Postgres pool, and Redis memory for this process.",
   },
   {
     href: "/dashboard/platform/cache",
     title: "Cache",
-    body: "Cache health and per-ticker inspector.",
+    body: "Redis cache:intel keys, this process hit/miss counters, and per-ticker lookup.",
   },
   {
     href: "/dashboard/platform/governance",
     title: "Governance",
-    body: "Go-live certificate, architecture, code quality, and API docs.",
+    body: "Runtime env (masked), live probes, Postgres seed counts, and OpenAPI.",
   },
 ];
 

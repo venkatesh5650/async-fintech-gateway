@@ -3,12 +3,19 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import OperationsConsole, { OpsPillarId, OpsTab } from "@/components/OperationsConsole";
+import AgentsWorkbench from "@/components/AgentsWorkbench";
+import TelemetryWorkbench from "@/components/TelemetryWorkbench";
+import ResilienceWorkbench from "@/components/ResilienceWorkbench";
+import CacheWorkbench from "@/components/CacheWorkbench";
+import GovernanceWorkbench from "@/components/GovernanceWorkbench";
+import RuntimeFlow from "@/components/RuntimeFlow";
 import TraceWaterfallModal from "@/components/TraceWaterfallModal";
 
 const SECTIONS: Record<
   string,
   { title: string; pillar: OpsPillarId; tab: OpsTab }
 > = {
+  runtime: { title: "Runtime", pillar: "telemetry", tab: "metrics" },
   agents: { title: "Agents", pillar: "intelligence", tab: "langgraph" },
   telemetry: { title: "Telemetry", pillar: "telemetry", tab: "metrics" },
   resilience: { title: "Resilience", pillar: "resilience", tab: "stress" },
@@ -43,12 +50,26 @@ export default function PlatformSection({ section }: { section: string }) {
           <h1 className="mt-1 text-2xl font-semibold text-slate-50">{config.title}</h1>
         </div>
       </div>
-      <OperationsConsole
-        activeOpsTab={tab}
-        setActiveOpsTab={setTab}
-        allowedPillars={allowed}
-        onSelectTrace={setSelectedTraceId}
-      />
+      {section === "runtime" ? (
+        <RuntimeFlow />
+      ) : section === "agents" ? (
+        <AgentsWorkbench onSelectTrace={setSelectedTraceId} />
+      ) : section === "telemetry" ? (
+        <TelemetryWorkbench />
+      ) : section === "resilience" ? (
+        <ResilienceWorkbench onSelectTrace={setSelectedTraceId} />
+      ) : section === "cache" ? (
+        <CacheWorkbench onSelectTrace={setSelectedTraceId} />
+      ) : section === "governance" ? (
+        <GovernanceWorkbench />
+      ) : (
+        <OperationsConsole
+          activeOpsTab={tab}
+          setActiveOpsTab={setTab}
+          allowedPillars={allowed}
+          onSelectTrace={setSelectedTraceId}
+        />
+      )}
       <TraceWaterfallModal
         traceId={selectedTraceId}
         onClose={() => setSelectedTraceId(null)}
