@@ -101,7 +101,16 @@ export default function StockWorkspace({
   onSelectTrace,
 }: StockWorkspaceProps) {
   const [mounted, setMounted] = useState(false);
+  const [showRunResults, setShowRunResults] = useState(false);
   useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    if (tab !== "run") {
+      setShowRunResults(false);
+    }
+  }, [tab]);
+  useEffect(() => {
+    setShowRunResults(false);
+  }, [ticker]);
   const lastClose = mounted && chartData.length > 0 ? chartData[chartData.length - 1]?.close : undefined;
   const signal = mounted ? readSignal(jobState?.result?.analysis_report) : null;
   const status = mounted ? jobState?.status ?? "starting" : "starting";
@@ -253,7 +262,7 @@ export default function StockWorkspace({
               The live connection stopped after repeated retries. Dispatch the run again from this tab.
             </p>
           )}
-          {(status === "processing" || status === "starting") && (
+          {showRunResults && (
             <div className="space-y-6">
               <AgentSwarmDeck />
               <AgentThoughtStream
@@ -266,8 +275,14 @@ export default function StockWorkspace({
           )}
           <ActionTriggers
             ticker={ticker}
-            onDispatch={onDispatch}
-            onBatchDispatch={onBatchDispatch}
+            onDispatch={() => {
+              setShowRunResults(true);
+              onDispatch();
+            }}
+            onBatchDispatch={(tickers) => {
+              setShowRunResults(true);
+              onBatchDispatch(tickers);
+            }}
             isProcessing={isBatchProcessing || status === "processing"}
             cooldown={cooldown}
           />
