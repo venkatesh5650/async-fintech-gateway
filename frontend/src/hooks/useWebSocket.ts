@@ -45,6 +45,7 @@ export default function useWebSocket({
     let cancelled = false;
     let pingInterval: ReturnType<typeof setInterval> | null = null;
     let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+    let stableTimer: ReturnType<typeof setTimeout> | null = null;
 
     let rawHost = process.env.NEXT_PUBLIC_WS_HOST || "127.0.0.1:8000";
     let isSecure = window.location.protocol === "https:";
@@ -75,9 +76,15 @@ export default function useWebSocket({
       if (cancelled) return;
       setIsConnected(true);
       setIsExhausted(false);
-      retryCount.current = 0;
       lastSequenceNumber.current = 0;
       console.log(`[WS] Secure handshake established for Job ID: ${jobId}`);
+
+      // Only reset retry count after connection stays open, preventing infinite 1/10 loops on immediate proxy drops
+      stableTimer = setTimeout(() => {
+        if (!cancelled) {
+          retryCount.current = 0;
+        }
+      }, 3000);
 
       pingInterval = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
@@ -131,6 +138,8 @@ export default function useWebSocket({
 
     ws.onclose = (event) => {
       if (cancelled) return;
+      if (stableTimer) clearTimeout(stableTimer);
+      if (pingInterval) clearInterval(pingInterval);
 
       console.log("[WS] CLOSED", {
         code: event.code,
@@ -164,6 +173,7 @@ export default function useWebSocket({
       cancelled = true;
       if (pingInterval) clearInterval(pingInterval);
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
+      if (stableTimer) clearTimeout(stableTimer);
 
       ws.onclose = null;
       if (
